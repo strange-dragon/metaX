@@ -157,7 +157,6 @@ func (p *FC2Club) ParseMovieIDFromURL(rawURL string) (string, error) {
 	return "FC2-" + match[1], nil
 }
 
-
 func (p *FC2Club) validOrigin(u *url.URL) bool {
 	if u == nil || u.User != nil || u.Host == "" {
 		return false
