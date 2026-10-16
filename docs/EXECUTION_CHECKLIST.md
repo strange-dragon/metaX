@@ -85,3 +85,10 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Added deterministic tests for prefixed and unprefixed canonical URLs.
 - [x] Combined patch application, formatting, JavBus focused tests, and AVBase focused test passed in [CI run 38880331157](https://github.com/strange-dragon/metaX/actions/runs/38880331157).
 - [ ] Live-site behavior, full SDK regression, and end-to-end integration remain unverified.
+
+
+### Task 4c — DAHLIA / FALENO exact slug validation review
+- [x] Compared Amane's shared WordPress Works crawler with SDK shared `provider/dahlia/core`.
+- [x] Identified a correctness risk: SDK HTML detail parsing does not confirm that the returned page matches the requested slug; Amane's REST lookup requires an exact slug match because the site can redirect unknown slugs to another work.
+- [ ] Implement a narrow identity validation fix with deterministic missing-slug / redirect regression tests; preserve existing metadata extraction until equivalence is demonstrated.
+- [ ] Run full SDK regression and live-site checks; end-to-end integration remains unverified.
