@@ -1,0 +1,114 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH 1/1] javbus: validate detail URL origin and path
+
+Reject non-HTTPS URLs, unexpected hosts/ports, userinfo, and non-detail
+paths before the provider derives an ID or fetches the page. Keep support
+for both root-level and /ja/{id} detail paths used by JavBus.
+
+Add deterministic URL parsing tests. This patch is based on
+metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+
+---
+ provider/javbus/javbus.go      | 27 ++++++++++++++++++++++++++-
+ provider/javbus/javbus_test.go | 27 +++++++++++++++++++++++++++
+ 2 files changed, 53 insertions(+), 1 deletion(-)
+
+diff --git a/provider/javbus/javbus.go b/provider/javbus/javbus.go
+index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..0000000000000000000000000000000000000000 100644
+--- a/provider/javbus/javbus.go
++++ b/provider/javbus/javbus.go
+@@ -72,11 +72,36 @@ func (bus *JavBus) GetMovieInfoByID(id string) (info *model.MovieInfo, err error
+ }
+ 
+ func (bus *JavBus) ParseMovieIDFromURL(rawURL string) (string, error) {
+-	homepage, err := url.Parse(rawURL)
++	homepage, err := url.Parse(rawURL)
+ 	if err != nil {
+ 		return "", err
+ 	}
+-	return bus.NormalizeMovieID(path.Base(homepage.Path)), nil
++	if !homepage.IsAbs() || homepage.Host == "" || !strings.EqualFold(homepage.Scheme, "https") {
++		return "", fmt.Errorf("javbus: expected an absolute HTTPS detail URL")
++	}
++	if homepage.User != nil {
++		return "", fmt.Errorf("javbus: userinfo is not allowed in detail URLs")
++	}
++	host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), ".")
++	if host != "javbus.com" && host != "www.javbus.com" {
++		return "", fmt.Errorf("javbus: unexpected detail host %q", homepage.Hostname())
++	}
++	if port := homepage.Port(); port != "" && port != "443" {
++		return "", fmt.Errorf("javbus: unexpected detail port %q", port)
++	}
++
++	parts := strings.Split(strings.Trim(homepage.Path, "/"), "/")
++	var id string
++	switch {
++	case len(parts) == 1 && parts[0] != "":
++		id = parts[0]
++	case len(parts) == 2 && parts[0] == "ja" && parts[1] != "":
++		id = parts[1]
++	default:
++		return "", fmt.Errorf("javbus: URL is not a supported detail path")
++	}
++	return bus.NormalizeMovieID(id), nil
+ }
+ 
+ func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
+diff --git a/provider/javbus/javbus_test.go b/provider/javbus/javbus_test.go
+index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
+--- a/provider/javbus/javbus_test.go
++++ b/provider/javbus/javbus_test.go
+@@ -1,8 +1,35 @@
+ package javbus
+ 
+ import (
++	"strings"
+ 	"testing"
+ 
+ 	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
+ )
+ 
++func TestJavBus_ParseMovieIDFromURL(t *testing.T) {
++	bus := New()
++	tests := []struct {
++		name    string
++		url     string
++		wantID  string
++		wantErr bool
++	}{
++		{name: "root detail", url: "https://www.javbus.com/ssni-776", wantID: "SSNI-776"},
++		{name: "Japanese detail", url: "https://www.javbus.com/ja/ssni-776", wantID: "SSNI-776"},
++		{name: "canonical host", url: "https://javbus.com/SSNI-776", wantID: "SSNI-776"},
++		{name: "reject HTTP downgrade", url: "http://www.javbus.com/SSNI-776", wantErr: true},
++		{name: "reject lookalike host", url: "https://www.javbus.com.evil.example/SSNI-776", wantErr: true},
++		{name: "reject unexpected port", url: "https://www.javbus.com:8443/SSNI-776", wantErr: true},
++		{name: "reject userinfo", url: "https://javbus.com@evil.example/SSNI-776", wantErr: true},
++		{name: "reject search path", url: "https://www.javbus.com/ja/search/SSNI-776", wantErr: true},
++		{name: "reject relative URL", url: "/SSNI-776", wantErr: true},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			got, err := bus.ParseMovieIDFromURL(tt.url)
++			if tt.wantErr {
++				if err == nil {
++					t.Fatalf("ParseMovieIDFromURL(%q) error = nil, want error", tt.url)
++				}
++				return
++			}
++			if err != nil {
++				t.Fatalf("ParseMovieIDFromURL(%q) error = %v", tt.url, err)
++			}
++			if !strings.EqualFold(got, tt.wantID) {
++				t.Errorf("ParseMovieIDFromURL(%q) = %q, want %q", tt.url, got, tt.wantID)
++			}
++		})
++	}
++}
++
+ func TestJavBus_GetMovieInfoByID(t *testing.T) {
+ 	testkit.Test(t, New, []string{
+-- 
+2.46.0
