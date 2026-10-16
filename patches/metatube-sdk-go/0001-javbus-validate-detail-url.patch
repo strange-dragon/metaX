@@ -154,7 +154,7 @@ index 20319f9553716a14eee8e162efb4872b3d926c6e..00000000000000000000000000000000
 +	}{
 +		{keyword: "SSNI-776", candidate: "SSNI-776", want: true},
 +		{keyword: "ssni-776", candidate: "SSNI776", want: true},
-		{keyword: "ssni_776", candidate: "SSNI-776", want: false},
++		{keyword: "ssni_776", candidate: "SSNI-776", want: false},
 +		{keyword: "SSNI-776", candidate: "SSNI-777", want: false},
 +		{keyword: "ABP-331", candidate: "ABP-33", want: false},
 +		{keyword: "SSNI-776", candidate: "", want: false},
