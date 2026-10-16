@@ -60,7 +60,8 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Hardened URL validation against HTTP downgrade, unexpected ports, userinfo, and lookalike hosts.
 - [x] Restricted redirects to the configured origin with a 10-redirect limit.
 - [x] Added deterministic tests for unsafe detail origins, the allowed `www` alias, and cross-origin redirects.
-- [ ] Re-run Go tests after formatter changes; live-site behavior and end-to-end MetaTube integration remain unverified.
+- [x] Full metaX Go test workflow passed after formatting in [run 38884644252](https://github.com/strange-dragon/metaX/actions/runs/38884644252); formatting passed in [run 38884644417](https://github.com/strange-dragon/metaX/actions/runs/38884644417).
+- [ ] Live-site behavior and end-to-end MetaTube integration remain unverified.
 
 ### Task 5 — Add uncovered providers in small increments
 - [ ] Prioritize sites with a clear mapping to existing SDK interfaces and manageable network behavior.
