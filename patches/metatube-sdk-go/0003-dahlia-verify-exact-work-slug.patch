@@ -1,0 +1,185 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] dahlia: verify exact work slug before accepting detail pages
+
+The shared DAHLIA/FALENO scraper previously trusted the requested detail URL.
+WordPress can redirect a missing work slug to a different work, which makes
+the scraper return unrelated metadata under the requested ID. Query the
+WordPress REST API for the exact slug first, then validate the final detail
+URL after redirects. Keep the existing HTML field parser unchanged.
+
+Based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+
+---
+ provider/dahlia/core/core.go      | 55 ++++++++++++++++++++++++++++++++
+ provider/dahlia/core/core_test.go | 87 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 142 insertions(+)
+
+diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
+index 59c9eb417151fea4f4bcef38931a1088541d541f..0000000000000000000000000000000000000000 100644
+--- a/provider/dahlia/core/core.go
++++ b/provider/dahlia/core/core.go
+@@ -1,6 +1,7 @@
+ package core
+ 
+ import (
++	"encoding/json"
+ 	"fmt"
+ 	"net/http"
+ 	"net/url"
+@@ -56,6 +57,10 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+ 		return
+ 	}
+ 
++	if err = core.verifyMovieSlug(id); err != nil {
++		return nil, err
++	}
++
+ 	info = &model.MovieInfo{
+ 		ID:            id,
+ 		Number:        parser.ParseIDToNumber(id),
+@@ -72,6 +77,13 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+ 	// Title
+ 	c.OnXML(`//div[@class="bar02_works"]/h1/text()`, func(e *colly.XMLElement) {
+ 		info.Title = strings.TrimSpace(e.Text)
+@@ -127,6 +139,58 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+ 		}
+ 	})
+ 
++	var identityErr error
++	c.OnResponse(func(r *colly.Response) {
++		resolvedID := strings.TrimSuffix(path.Base(r.Request.URL.Path), "/")
++		if core.NormalizeMovieID(resolvedID) != id {
++			identityErr = fmt.Errorf("requested work %q resolved to different work %q", id, resolvedID)
++		}
++	})
++
+ 	err = c.Visit(info.Homepage)
++	if err == nil {
++		err = identityErr
++	}
++	if err != nil {
++		return nil, err
++	}
+ 	return
+ }
+ 
++// verifyMovieSlug checks the WordPress REST API before scraping the detail
++// page. A missing slug may otherwise redirect to an unrelated work page.
++func (core *Core) verifyMovieSlug(id string) error {
++	endpoint := strings.TrimRight(core.BaseURL, "/") + "/wp-json/wp/v2/works?slug=" + url.QueryEscape(id)
++	c := core.ClonedCollector()
++	c.ParseHTTPErrorResponse = true
++	var slugs []struct {
++		Slug string `json:"slug"`
++	}
++	var decodeErr error
++	c.OnResponse(func(r *colly.Response) {
++		if r.StatusCode < http.StatusOK || r.StatusCode >= http.StatusMultipleChoices {
++			decodeErr = fmt.Errorf("work slug lookup returned HTTP %d", r.StatusCode)
++			return
++		}
++		decodeErr = json.Unmarshal(r.Body, &slugs)
++	})
++	if err := c.Visit(endpoint); err != nil {
++		return err
++	}
++	if decodeErr != nil {
++		return decodeErr
++	}
++	for _, post := range slugs {
++		if core.NormalizeMovieID(post.Slug) == id {
++			return nil
++		}
++	}
++	return fmt.Errorf("work slug %q not found", id)
++}
++
+ func (core *Core) NormalizeMovieKeyword(keyword string) string {
+ 	return strings.ToLower(strings.ReplaceAll(keyword, "-", ""))
+ }
+diff --git a/provider/dahlia/core/core_test.go b/provider/dahlia/core/core_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
+--- /dev/null
++++ b/provider/dahlia/core/core_test.go
+@@ -0,0 +1,87 @@
++package core
++
++import (
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++)
++
++func testCore(serverURL string) *Core {
++	return (&Core{
++		BaseURL:         serverURL + "/",
++		MovieURL:        serverURL + "/works/%s/",
++		SearchURL:       serverURL + "/?s=%s",
++		DefaultName:     "test",
++		DefaultPriority: 1,
++	}).Init()
++}
++
++func TestGetMovieInfoByURLVerifiesExactSlug(t *testing.T) {
++	tests := []struct {
++		name       string
++		restBody   string
++		redirect   bool
++		wantErr    bool
++	}{
++		{name: "exact slug", restBody: `[{"slug":"target"}]`},
++		{name: "missing slug", restBody: `[]`, wantErr: true},
++		{name: "mismatched slug", restBody: `[{"slug":"other"}]`, wantErr: true},
++		{name: "redirect to another work", restBody: `[{"slug":"target"}]`, redirect: true, wantErr: true},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			var detailRequested bool
++			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++				switch {
++				case strings.HasPrefix(r.URL.Path, "/wp-json/wp/v2/works"):
++					w.Header().Set("Content-Type", "application/json")
++					_, _ = fmt.Fprint(w, tt.restBody)
++				case r.URL.Path == "/works/target/":
++					detailRequested = true
++					if tt.redirect {
++						http.Redirect(w, r, "/works/other/", http.StatusFound)
++						return
++					}
++					_, _ = fmt.Fprint(w, `<html><div class="bar02_works"><h1>Target title</h1></div></html>`)
++				case r.URL.Path == "/works/other/":
++					_, _ = fmt.Fprint(w, `<html><div class="bar02_works"><h1>Wrong title</h1></div></html>`)
++				default:
++					http.NotFound(w, r)
++				}
++			}))
++			defer server.Close()
++
++			info, err := testCore(server.URL).GetMovieInfoByURL(server.URL + "/works/target/")
++			if (err != nil) != tt.wantErr {
++				t.Fatalf("GetMovieInfoByURL() error = %v, wantErr %v", err, tt.wantErr)
++			}
++			if tt.wantErr {
++				if info != nil {
++					t.Fatalf("expected nil info on identity failure, got %#v", info)
++				}
++				return
++			}
++			if !detailRequested {
++				t.Fatal("detail page was not requested after exact slug match")
++			}
++			if info == nil || info.Title != "Target title" {
++				t.Fatalf("unexpected movie info: %#v", info)
++			}
++		})
++	}
++}
++
+-- 
+2.46.0
