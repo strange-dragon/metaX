@@ -69,27 +69,92 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
  }
  
  func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
-@@ -173,4 +173,13 @@
+@@ -173,4 +173,81 @@
  	return strings.ToUpper(keyword)
  }
  
-+func matchesMovieNumber(keyword, candidate string) bool {
-+	normalize := func(s string) string {
-+		return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), "-", ""))
++// foldMovieNumber follows Amane's JavBus matching rules: case, hyphens, and
++// spaces are ignored, but underscores remain significant.
++func foldMovieNumber(s string) string {
++	return strings.ToLower(strings.NewReplacer("-", "", " ", "").Replace(strings.TrimSpace(s)))
++}
++
++func splitLeadingDigits(s string) (string, string) {
++	i := 0
++	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
++		i++
 +	}
-+	keyword = normalize(keyword)
-+	candidate = normalize(candidate)
-+	return keyword != "" && candidate != "" && keyword == candidate
++	return s[:i], s[i:]
++}
++
++func movieNumberMatch(found, query string) int {
++	if strings.TrimSpace(found) == "" || strings.TrimSpace(query) == "" {
++		return 0
++	}
++	found, query = foldMovieNumber(found), foldMovieNumber(query)
++	if found == query {
++		return 2
++	}
++	foundDigits, foundRest := splitLeadingDigits(found)
++	queryDigits, queryRest := splitLeadingDigits(query)
++	if foundRest == queryRest && !(foundDigits != "" && queryDigits != "") {
++		return 1
++	}
++	return 0
++}
++
++func movieNumberVariants(number string) []string {
++	variants := []string{number}
++	digits, _ := splitLeadingDigits(number)
++	if digits != "" {
++		variants = append(variants, number[len(digits):])
++	} else {
++		for _, item := range []struct{ label, digits string }{
++			{"LUXU-", "259"}, {"ARA-", "261"}, {"MIUM-", "300"}, {"NTK-", "300"}, {"MAAN-", "300"},
++		} {
++			if strings.HasPrefix(strings.ToUpper(number), item.label) {
++				variants = append(variants, item.digits+number)
++				break
++			}
++		}
++	}
++	seen := make(map[string]bool, len(variants))
++	out := make([]string, 0, len(variants))
++	for _, variant := range variants {
++		if !seen[variant] {
++			seen[variant] = true
++			out = append(out, variant)
++		}
++	}
++	return out
++}
++
++func selectMovieNumberResult(results []*model.MovieSearchResult, query string) []*model.MovieSearchResult {
++	exact, loose, looseCount := -1, -1, 0
++	for i, result := range results {
++		switch movieNumberMatch(result.Number, query) {
++		case 2:
++			if exact == -1 {
++				exact = i
++			}
++		case 1:
++			loose, looseCount = i, looseCount+1
++		}
++	}
++	if exact >= 0 {
++		return []*model.MovieSearchResult{results[exact]}
++	}
++	if looseCount == 1 {
++		return []*model.MovieSearchResult{results[loose]}
++	}
++	return nil
 +}
 +
  func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
-@@ -183,6 +183,10 @@ func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error)
+@@ -183,6 +183,7 @@ func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error)
  		homepage := e.Request.AbsoluteURL(e.Attr("href"))
  		id, _ := bus.ParseMovieIDFromURL(homepage)
 +		resultNumber := strings.TrimSpace(e.ChildText(`.//div[2]/span/date[1]`))
-+		if !matchesMovieNumber(keyword, resultNumber) {
-+			return
-+		}
  		results = append(results, &model.MovieSearchResult{
  			ID:          id,
 -			Number:      e.ChildText(`.//div[2]/span/date[1]`),
@@ -99,7 +164,7 @@ diff --git a/provider/javbus/javbus_test.go b/provider/javbus/javbus_test.go
 index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus_test.go
 +++ b/provider/javbus/javbus_test.go
-@@ -1,10 +1,69 @@
+@@ -1,10 +1,123 @@
  package javbus
  
  import (
@@ -146,24 +211,78 @@ index 20319f9553716a14eee8e162efb4872b3d926c6e..00000000000000000000000000000000
 +	}
 +}
 +
-+func TestMatchesMovieNumber(t *testing.T) {
++func TestMovieNumberMatch(t *testing.T) {
 +	tests := []struct {
-+		keyword   string
-+		candidate string
-+		want      bool
++		found, query string
++		want         int
 +	}{
-+		{keyword: "SSNI-776", candidate: "SSNI-776", want: true},
-+		{keyword: "ssni-776", candidate: "SSNI776", want: true},
-+		{keyword: "ssni_776", candidate: "SSNI-776", want: false},
-+		{keyword: "SSNI-776", candidate: "SSNI-777", want: false},
-+		{keyword: "ABP-331", candidate: "ABP-33", want: false},
-+		{keyword: "SSNI-776", candidate: "", want: false},
-+		{keyword: "", candidate: "SSNI-776", want: false},
++		{"SSNI-776", "SSNI-776", 2},
++		{"ssni776", "SSNI-776", 2},
++		{"SSNI_776", "SSNI-776", 0},
++		{"261ARA-423", "ARA-423", 1},
++		{"ARA-423", "261ARA-423", 1},
++		{"200MIUM-1000", "300MIUM-1000", 0},
++		{"ABF-375", "ABF-35", 0},
++		{"", "SSNI-776", 0},
 +	}
 +	for _, tt := range tests {
-+		if got := matchesMovieNumber(tt.keyword, tt.candidate); got != tt.want {
-+			t.Errorf("matchesMovieNumber(%q, %q) = %v, want %v", tt.keyword, tt.candidate, got, tt.want)
++		if got := movieNumberMatch(tt.found, tt.query); got != tt.want {
++			t.Errorf("movieNumberMatch(%q, %q) = %d, want %d", tt.found, tt.query, got, tt.want)
 +		}
++	}
++}
++
++func TestMovieNumberVariants(t *testing.T) {
++	tests := []struct {
++		number string
++		want   []string
++	}{
++		{"261ARA-423", []string{"261ARA-423", "ARA-423"}},
++		{"ARA-423", []string{"ARA-423", "261ARA-423"}},
++		{"SSNI-776", []string{"SSNI-776"}},
++	}
++	for _, tt := range tests {
++		got := movieNumberVariants(tt.number)
++		if len(got) != len(tt.want) {
++			t.Fatalf("movieNumberVariants(%q) = %#v, want %#v", tt.number, got, tt.want)
++		}
++		for i := range got {
++			if got[i] != tt.want[i] {
++				t.Errorf("movieNumberVariants(%q) = %#v, want %#v", tt.number, got, tt.want)
++				break
++			}
++		}
++	}
++}
++
++func TestSelectMovieNumberResult(t *testing.T) {
++	result := func(number string) *model.MovieSearchResult {
++		return &model.MovieSearchResult{Number: number}
++	}
++	tests := []struct {
++		name    string
++		results []*model.MovieSearchResult
++		query   string
++		want    string
++	}{
++		{"exact beats loose", []*model.MovieSearchResult{result("261ARA-423"), result("ARA-423")}, "ARA-423", "ARA-423"},
++		{"unique loose accepted", []*model.MovieSearchResult{result("261ARA-423")}, "ARA-423", "261ARA-423"},
++		{"ambiguous loose rejected", []*model.MovieSearchResult{result("261ARA-423"), result("300ARA-423")}, "ARA-423", ""},
++		{"wrong number rejected", []*model.MovieSearchResult{result("ABF-375")}, "ABF-35", ""},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			got := selectMovieNumberResult(tt.results, tt.query)
++			if tt.want == "" {
++				if len(got) != 0 {
++					t.Fatalf("got %#v, want no result", got)
++				}
++				return
++			}
++			if len(got) != 1 || got[0].Number != tt.want {
++				t.Fatalf("got %#v, want only %q", got, tt.want)
++			}
++		})
 +	}
 +}
 +
