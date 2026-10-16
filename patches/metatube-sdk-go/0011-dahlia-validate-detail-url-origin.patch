@@ -14,7 +14,10 @@ c62584675c593816cc07e7b5b977d14c7eb505a3.
 diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 --- a/provider/dahlia/core/core.go
 +++ b/provider/dahlia/core/core.go
-@@ -51,7 +51,39 @@
+@@ -47,13 +47,45 @@
+ 	return core.GetMovieInfoByURL(fmt.Sprintf(core.MovieURL, id))
+ }
+ 
 -func (core *Core) ParseMovieIDFromURL(rawURL string) (string, error) {
 -	homepage, err := url.Parse(rawURL)
 -	if err != nil {
@@ -61,6 +64,9 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 +	}
 +	return ""
 +}
+ 
+ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
+ 	id, err := core.ParseMovieIDFromURL(rawURL)
 diff --git a/provider/dahlia/core/core_url_validation_test.go b/provider/dahlia/core/core_url_validation_test.go
 new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
