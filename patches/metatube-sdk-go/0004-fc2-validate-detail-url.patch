@@ -62,7 +62,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +	}
 +	return match[1], nil
  }
-@@ -74,1 +85,11 @@
+@@ -74,4 +85,14 @@
  	c := fc2.ClonedCollector()
 +	c.SetRedirectHandler(func(req *http.Request, via []*http.Request) error {
 +		if len(via) >= 10 {
