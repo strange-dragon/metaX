@@ -54,6 +54,14 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Add deterministic tests for leading-digit variants, exact-match priority, wrong-number rejection, ambiguous candidates, duplicate URLs, and required title/number fields. Patch application, gofmt, and focused tests passed in run [38878430661](https://github.com/strange-dragon/metaX/actions/runs/38878430661). The SDK patch-validation workflow now explicitly runs all five deterministic test groups rather than an obsolete test name.
 - [x] Compared AVBase against Amane and found that SDK search results dropped the prefix from canonical detail URLs; added a proposed SDK patch plus prefixed/unprefixed URL tests. Combined patch application, gofmt, JavBus focused tests, and AVBase URL tests passed in run [38880331157](https://github.com/strange-dragon/metaX/actions/runs/38880331157).\n- [ ] Full SDK regression suite, live-site compatibility, and end-to-end MetaTube server integration remain unverified.
 
+
+### Task 4d — FC2Club compatibility and request-origin hardening
+- [x] Compared Amane's FC2Club number lookup and field extraction with the native Go provider; confirmed SDK FC2HUB/FC2PPVDB target different sites.
+- [x] Hardened URL validation against HTTP downgrade, unexpected ports, userinfo, and lookalike hosts.
+- [x] Restricted redirects to the configured origin with a 10-redirect limit.
+- [x] Added deterministic tests for unsafe detail origins, the allowed `www` alias, and cross-origin redirects.
+- [ ] Re-run Go tests after formatter changes; live-site behavior and end-to-end MetaTube integration remain unverified.
+
 ### Task 5 — Add uncovered providers in small increments
 - [ ] Prioritize sites with a clear mapping to existing SDK interfaces and manageable network behavior.
 - [ ] Each provider gets focused tests, registration verification, and a separate commit.
