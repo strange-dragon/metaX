@@ -1,9 +1,11 @@
-# Source attribution and licensing notice
+# NOTICE
 
-This project integrates and adapts scraping capabilities whose behavior was developed in the [Amane project](https://github.com/sqzw-x/amane), Copyright the respective Amane contributors.
+## MetaTube SDK
 
-Amane's repository is distributed under the GNU General Public License v3.0 (GPL-3.0). This repository therefore uses GPL-3.0 for the migration work. Preserve this license notice and the upstream attribution when redistributing derived files. The original source project remains the authoritative source for its copyright notices, terms, and history.
+metaX is designed to integrate with the [MetaTube SDK Go](https://github.com/metatube-community/metatube-sdk-go), which is licensed under the Apache License 2.0. Any MetaTube SDK source reused here retains the applicable upstream copyright and license notices.
 
-The MetaTube SDK dependency is separately licensed under Apache-2.0. This notice does not change the license of that dependency or remove its existing notices. Before distributing a combined binary or submitting changes upstream, retain the relevant license files and verify the package's dependency and distribution obligations.
+## Amane
 
-Source attribution is not a substitute for compliance with the applicable license terms.
+The [Amane project](https://github.com/sqzw-x/amane), Copyright the respective Amane contributors, is acknowledged as a functional reference for identifying scraping coverage and edge cases. Amane's source repository is licensed under GPL-3.0. This notice is an attribution; it does not relicense Amane source code and does not replace compliance with its license.
+
+metaX's intended Apache-2.0 licensing applies to project-authored code that can be distributed under that license. Do not copy or translate Amane source files or reuse its fixtures under an Apache-only notice without resolving the licensing terms first.
