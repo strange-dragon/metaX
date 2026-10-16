@@ -90,5 +90,7 @@ This file is the durable handoff for small, independently reviewable work units.
 ### Task 4c — DAHLIA / FALENO exact slug validation review
 - [x] Compared Amane's shared WordPress Works crawler with SDK shared `provider/dahlia/core`.
 - [x] Identified a correctness risk: SDK HTML detail parsing does not confirm that the returned page matches the requested slug; Amane's REST lookup requires an exact slug match because the site can redirect unknown slugs to another work.
-- [ ] Implement a narrow identity validation fix with deterministic missing-slug / redirect regression tests; preserve existing metadata extraction until equivalence is demonstrated.
-- [ ] Run full SDK regression and live-site checks; end-to-end integration remains unverified.
+- [x] Added `patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch`: preflight the WordPress REST endpoint for the requested slug, then reject a detail response whose final URL resolves to a different work.
+- [x] Added deterministic local HTTP tests for exact slug success, missing slug, mismatched slug, and redirect to another work; existing metadata extraction is preserved.
+- [x] Patch application, formatting, and focused JavBus/AVBase/DAHLIA-FALENO tests passed in [CI run 38883877346](https://github.com/strange-dragon/metaX/actions/runs/38883877346).
+- [ ] Full SDK regression, live-site behavior, and end-to-end integration remain unverified.
