@@ -18,6 +18,8 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
+      - name: Resolve module checksums
+        run: go mod tidy
       - name: Format Go files
         run: |
           files="$(git ls-files '*.go')"
@@ -32,6 +34,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add $(git ls-files '*.go')
-          git commit -m "style: apply gofmt to Go sources"
+          git add go.mod go.sum $(git ls-files '*.go')
+          git commit -m "build: tidy dependencies and format Go sources"
           git push origin "HEAD:${GITHUB_REF_NAME}"
