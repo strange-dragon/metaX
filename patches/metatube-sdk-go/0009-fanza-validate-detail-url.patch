@@ -53,7 +53,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	for _, homepage := range fz.getHomepagesByID(id) {
  		if info, err = fz.GetMovieInfoByURL(homepage); errors.Is(err, ErrRegionNotAvailable) || err == nil && info.IsValid() {
  			return
-@@ -134,20 +148,45 @@ func (fz *FANZA) ParseMovieIDFromURL(rawURL string) (id string, err error) {
+@@ -134,19 +148,42 @@ func (fz *FANZA) ParseMovieIDFromURL(rawURL string) (id string, err error) {
  	homepage, err := url.Parse(rawURL)
  	if err != nil {
  		return
@@ -103,7 +103,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	if IsDigitalVideoURL(rawURL) {
  		return fz.getDigitalMovieInfoByURL(rawURL)
  	}
-@@ -985,8 +1024,18 @@ func IsDigitalVideoURL(url string) bool {
+@@ -988,5 +1027,12 @@ func IsDigitalVideoURL(url string) bool {
 -func IsDigitalVideoURL(url string) bool {
 -	return strings.HasPrefix(url, videoURL)
 +func IsDigitalVideoURL(rawURL string) bool {
@@ -123,7 +123,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- /dev/null
 +++ b/provider/fanza/fanza_migration_test.go
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,65 @@
 +package fanza
 +
 +import "testing"
