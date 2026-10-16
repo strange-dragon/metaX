@@ -68,6 +68,19 @@ func TestGetMovieInfoByURLMapsMetadata(t *testing.T) {
 	require.Equal(t, "2024-05-16", time.Time(info.ReleaseDate).Format("2006-01-02"))
 }
 
+func TestGetMovieInfoByIDSearchesByCatalogNumber(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/cn/vl_searchbyid.php", func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, searchHTML) })
+	mux.HandleFunc("/cn/", func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, detailHTML) })
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	info, err := newForTest(server.URL, server.Client()).GetMovieInfoByID("ABC-123")
+	require.NoError(t, err)
+	require.Equal(t, "ABC-123", info.Number)
+	require.Equal(t, "abc123", info.ID)
+}
+
 func TestParseMovieIDRejectsUnexpectedURL(t *testing.T) {
 	p := New()
 	for _, raw := range []string{
