@@ -358,20 +358,23 @@ func profileFields(profile *goquery.Selection) map[string]string {
 
 func parseNameLine(raw string) (string, []string) {
 	raw = cleanText(raw)
-	open := strings.LastIndexAny(raw, "（(")
-	if open <= 0 || len(raw) < open+2 {
+	openToken, closeToken := "（", "）"
+	open := strings.LastIndex(raw, openToken)
+	close := strings.LastIndex(raw, closeToken)
+	if open < 0 || close <= open {
+		openToken, closeToken = "(", ")"
+		open = strings.LastIndex(raw, openToken)
+		close = strings.LastIndex(raw, closeToken)
+	}
+	if open <= 0 || close <= open {
 		return stripAnnotations(raw), nil
 	}
-	close := strings.LastIndexAny(raw, "）)")
-	if close <= open {
-		return stripAnnotations(raw), nil
-	}
-	inside := raw[open+1 : close]
+	inside := raw[open+len(openToken) : close]
 	parts := strings.SplitN(inside, "/", 2)
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		return stripAnnotations(raw), nil
 	}
-	name := stripAnnotations(strings.TrimSpace(raw[:open]))
+	name := strings.TrimSpace(raw[:open])
 	return name, []string{strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])}
 }
 
