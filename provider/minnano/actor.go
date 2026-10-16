@@ -34,13 +34,13 @@ const (
 )
 
 var (
-	_ mt.ActorProvider = (*Actor)(nil)
-	_ mt.ActorSearcher = (*Actor)(nil)
-	actorIDRE          = regexp.MustCompile(`^\d+$`)
-	actressHrefRE      = regexp.MustCompile(`(?i)^/actress(\d+)\.html$`)
-	figureRE           = regexp.MustCompile(`(?i)T\s*\d+\s*/\s*B\s*(\d+)\s*(?:\(\s*([A-Z]+)(?:カップ)?\s*\))?\s*/\s*W\s*(\d+)\s*/\s*H\s*(\d+)`)
-	cupRE              = regexp.MustCompile(`(?i)([A-Z]+)\s*カップ`)
-	ageGateCookie       = &http.Cookie{Name: "age_verified", Value: "1", Path: "/"}
+	_             mt.ActorProvider = (*Actor)(nil)
+	_             mt.ActorSearcher = (*Actor)(nil)
+	actorIDRE                      = regexp.MustCompile(`^\d+$`)
+	actressHrefRE                  = regexp.MustCompile(`(?i)^/actress(\d+)\.html$`)
+	figureRE                       = regexp.MustCompile(`(?i)T\s*\d+\s*/\s*B\s*(\d+)\s*(?:\(\s*([A-Z]+)(?:カップ)?\s*\))?\s*/\s*W\s*(\d+)\s*/\s*H\s*(\d+)`)
+	cupRE                          = regexp.MustCompile(`(?i)([A-Z]+)\s*カップ`)
+	ageGateCookie                  = &http.Cookie{Name: "age_verified", Value: "1", Path: "/"}
 )
 
 // Actor implements Minnano's actor search and profile pages.
@@ -77,11 +77,11 @@ func mustParseURL(raw string) *url.URL {
 	return u
 }
 
-func (p *Actor) Name() string { return ActorProviderName }
-func (p *Actor) Priority() float64 { return p.priority }
-func (p *Actor) SetPriority(v float64) { p.priority = v }
+func (p *Actor) Name() string           { return ActorProviderName }
+func (p *Actor) Priority() float64      { return p.priority }
+func (p *Actor) SetPriority(v float64)  { p.priority = v }
 func (p *Actor) Language() language.Tag { return language.Japanese }
-func (p *Actor) URL() *url.URL { u := *p.baseURL; return &u }
+func (p *Actor) URL() *url.URL          { u := *p.baseURL; return &u }
 
 func (p *Actor) NormalizeActorID(id string) string {
 	id = strings.TrimSpace(id)
