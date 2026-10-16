@@ -376,8 +376,8 @@ diff --git a/provider/avbase/avbase.go b/provider/avbase/avbase.go
 +	"errors"
 +	"fmt"
 +	"net/url"
-+	"regexp"
 +	"path"
++	"regexp"
 +	"sort"
 +	"strings"
 +	"time"
@@ -952,7 +952,9 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 +			t.Fatalf("avbaseQueryForms(%q) = %#v, want %#v", tt.input, got, tt.want)
 +		}
 +		for i := range got {
-+			if got[i] != tt.want[i] { t.Errorf("avbaseQueryForms(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i]) }
++			if got[i] != tt.want[i] {
++				t.Errorf("avbaseQueryForms(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
++			}
 +		}
 +	}
 +}
