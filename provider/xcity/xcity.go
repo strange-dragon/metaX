@@ -395,30 +395,22 @@ func (p *XCity) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) 
 
 func (p *XCity) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	id = strings.TrimSpace(id)
-	if id == "" {
-		return nil, fmt.Errorf("xcity: empty movie ID")
-	}
-	if u, err := url.Parse(id); err == nil && u.IsAbs() {
-		return p.GetMovieInfoByURL(id)
-	}
-	// IDs from parsed detail URLs are opaque slugs; catalog numbers must go through exact search.
-	if strings.ContainsAny(id, "/\\?#") {
-		return nil, fmt.Errorf("xcity: invalid movie ID %q", id)
-	}
-	if regexp.MustCompile(`(?i)[a-z]`).MatchString(id) && !strings.Contains(id, "-") {
+	if id == "" { return nil, fmt.Errorf("xcity: empty movie ID") }
+	if u, err := url.Parse(id); err == nil && u.IsAbs() { return p.GetMovieInfoByURL(id) }
+	if strings.ContainsAny(id, "/\\\\?#") { return nil, fmt.Errorf("xcity: invalid movie ID %q", id) }
+
+	// Catalog-like input must go through search and exact detail-number matching.
+	// Opaque provider IDs are slugs parsed from /titles/{slug}.
+	if !catalogNumberRE.MatchString(id) {
 		u := *p.baseURL
 		u.Path = path.Join("/titles", id)
 		return p.GetMovieInfoByURL(u.String())
 	}
 	results, err := p.SearchMovie(id)
-	if err != nil {
-		return nil, err
-	}
+	if err != nil { return nil, err }
 	query := normalizeNumber(id)
 	for _, r := range results {
-		if normalizeNumber(r.Number) == query {
-			return p.GetMovieInfoByURL(r.Homepage)
-		}
+		if normalizeNumber(r.Number) == query { return p.GetMovieInfoByURL(r.Homepage) }
 	}
 	return nil, ErrMovieNotFound
 }
