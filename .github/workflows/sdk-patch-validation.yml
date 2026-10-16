@@ -69,10 +69,10 @@ jobs:
         run: |
           go test ./provider/javbus -run 'TestJavBus_ParseMovieIDFromURL|TestHasRequiredMovieFields|TestMovieNumberMatch|TestMovieNumberVariants|TestSelectMovieNumberResult' -count=1
 
-      - name: Run deterministic AVBase URL tests
+      - name: Run deterministic AVBase exact-search tests
         working-directory: upstream-sdk
         run: |
-          go test ./provider/avbase -run '^Test(MovieURLForWork|NormalizeAVBaseNumber|AVBaseQueryForms|PickAVBaseWorkExactAndCollision)
+          go test ./provider/avbase -run '^Test(MovieURLForWork|NormalizeAVBaseNumber|AVBaseQueryForms|PickAVBaseWorkExactAndCollision)$'
 
       - name: Run deterministic DAHLIA/FALENO identity tests
         working-directory: upstream-sdk
