@@ -126,7 +126,18 @@ jobs:
 
       - name: Run deterministic FANZA/DMM ID and URL validation tests
         working-directory: upstream-sdk
-        run: go test ./provider/fanza -run '^TestFANZA(NormalizeMovieIDValidation|ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID) -count=1
+        run: go test ./provider/fanza -run '^TestFANZA(NormalizeMovieIDValidation|ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)
+
+      - name: Run deterministic KIN8 ID normalization tests
+        working-directory: upstream-sdk
+        run: go test ./provider/kin8tengoku -run '^Test(NormalizeMovieIDMigration|GetMovieInfoByIDRejectsInvalidIDBeforeNetwork)
+ -count=1
+
+      - name: Run deterministic KIN8 ID normalization tests
+        working-directory: upstream-sdk
+        run: go test ./provider/kin8tengoku -run '^Test(NormalizeMovieIDMigration|GetMovieInfoByIDRejectsInvalidIDBeforeNetwork) -count=1
+ -count=1
+ -count=1
 
       - name: Run deterministic KIN8 ID normalization tests
         working-directory: upstream-sdk
