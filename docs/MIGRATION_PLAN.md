@@ -121,3 +121,11 @@ This is a migration workspace, not a claim that every inventoried site has shipp
 - **SDK patches:** 11 unique patch files target existing SDK providers. The maintained workflow applies the entire set to the pinned SDK, runs focused deterministic tests, and checks formatting; latest pass: [run 38932602151](https://github.com/strange-dragon/metaX/actions/runs/38932602151).
 - **Still outstanding:** finish source-by-source behavior comparison and decisions across the 24 movie and 6 actor sources; implement only justified gaps; design actor image/profile enrichment and identity resolution; run the full pinned SDK test suite; verify provider import/registration in the actual MetaTube engine; and conduct selective live-site checks plus Jellyfin/MetaTube integration validation.
 - **Do not interpret the counts as a simple percentage complete.** Some inventory rows are already covered by an SDK provider plus a hardening patch, some have native Go implementations, and others need a design decision or are blocked by site access. The acceptance checklist and per-source evidence determine completion.
+
+
+## Progress snapshot (2026-10-17, XCity)
+
+- Added native Go Provider package `provider/xcity/` with search/detail parsing, XCity's `adc=1` age-confirmation cookie, same-origin redirect restrictions, HTTPS production origin validation, bounded response reads, proxy/timeout settings, and SDK registration.
+- Search treats results as candidates only and validates each detail page's `span.kopin` against the requested catalog number after normalization. This avoids the Amane reference crawler's first-result false-positive behavior.
+- Added deterministic local HTTP tests for exact-vs-near number matching, field mapping, URL validation, cross-origin redirect blocking, cookie behavior, and registration/configuration.
+- Updated README and compatibility matrix. Go formatting has passed CI; full deterministic Go test workflow is still running. No live-site validation or runtime engine import has been claimed.
