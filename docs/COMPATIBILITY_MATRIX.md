@@ -41,9 +41,9 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | Getchu | `sites/getchu.py` | `provider/getchu` | Compare source mapping and field coverage |
 | Giga | `sites/giga.py` | Not confirmed | Search/detail and ID rules |
 | Iqqtv | `sites/iqqtv.py` | Not confirmed | Search/detail, API behavior |
-| Jav321 | `sites/jav321.py` | No existing SDK Provider found in the inspected tree | `provider/jav321` — movie search/detail | Native route implementation uses `/video/{number}`, validates host/path, normalizes number and title, and maps actors, studio, release, runtime, genres and cover |
+| Jav321 | `sites/jav321.py` | No Provider in SDK tree; metaX now has `provider/jav321` | Deterministic tests cover route, metadata mapping, not-found behavior and registration; live-site and full server integration pending |
 | JavBus | `sites/javbus.py` | `provider/javbus` | Compare redirects, cookies, special-ID rejection, previews |
-| JavDB | `sites/javdb.py` | No matching `provider/javdb` file observed in SDK tree | Confirm feasibility and whether a native Provider should be added |
+| JavDB | `sites/javdb.py` | No Provider in SDK tree; metaX now has `provider/javdb` | Deterministic tests cover search, details, number variants, foreign hosts, and registration; live-site and full server integration pending |
 | JavLibrary | `sites/javlibrary.py` | Not confirmed | Login/session, parsing, source availability |
 | Kin8 | `sites/kin8.py` | `provider/kin8tengoku` likely related; mapping must be verified | Confirm canonical domain, IDs, and output |
 | MGStage | `sites/mgstage.py` | `provider/mgstage` | Compare field coverage and request behavior |
