@@ -1,0 +1,141 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] fc2: validate detail URLs and same-work redirects
+
+The FC2 provider previously extracted the final path segment from any URL and
+used caller-supplied IDs directly in a detail URL. Validate the official HTTPS
+origin and /article/{numeric-id} path, normalize IDs before URL construction,
+and reject redirects that leave the same FC2 work. Add deterministic tests for
+malformed origins and IDs.
+
+Based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+
+---
+ provider/fc2/fc2.go      | 27 ++++++++++++++++++++++-----
+ provider/fc2/fc2_test.go | 29 +++++++++++++++++++++++++++++
+ 2 files changed, 51 insertions(+), 5 deletions(-)
+
+diff --git a/provider/fc2/fc2.go b/provider/fc2/fc2.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/provider/fc2/fc2.go
++++ b/provider/fc2/fc2.go
+@@ -3,7 +3,7 @@
+ import (
+ 	"fmt"
++	"net/http"
+ 	"net/url"
+-	"path"
+ 	"regexp"
+ 	"strings"
+ 
+@@ -42,7 +42,7 @@
+ func (fc2 *FC2) NormalizeMovieID(id string) string {
+ 	return fc2util.ParseNumber(id)
+ }
+ 
+ func (fc2 *FC2) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
+-	return fc2.GetMovieInfoByURL(fmt.Sprintf(movieURL, id))
++	number := fc2util.ParseNumber(strings.TrimSpace(id))
++	if number == "" {
++		return nil, provider.ErrInvalidID
++	}
++	return fc2.GetMovieInfoByURL(fmt.Sprintf(movieURL, number))
+ }
+ 
+ func (fc2 *FC2) ParseMovieIDFromURL(rawURL string) (string, error) {
+ 	homepage, err := url.Parse(rawURL)
+ 	if err != nil {
+ 		return "", err
+ 	}
+-	return path.Base(homepage.Path), nil
++	if !homepage.IsAbs() || homepage.User != nil ||
++		!strings.EqualFold(homepage.Scheme, "https") ||
++		!strings.EqualFold(homepage.Hostname(), "adult.contents.fc2.com") ||
++		(homepage.Port() != "" && homepage.Port() != "443") {
++		return "", provider.ErrInvalidURL
++	}
++	match := regexp.MustCompile(`^/article/(\d+)/?$`).FindStringSubmatch(homepage.Path)
++	if len(match) != 2 {
++		return "", provider.ErrInvalidURL
++	}
++	return match[1], nil
+ }
+@@ -74,6 +84,16 @@
+ 	c := fc2.ClonedCollector()
++	c.SetRedirectHandler(func(req *http.Request, via []*http.Request) error {
++		if len(via) >= 10 {
++			return fmt.Errorf("fc2: stopped after 10 redirects")
++		}
++		redirectID, redirectErr := fc2.ParseMovieIDFromURL(req.URL.String())
++		if redirectErr != nil || redirectID != id {
++			return fmt.Errorf("fc2: refusing redirect to unexpected work URL %q", req.URL)
++		}
++		return nil
++	})
+ 
+ 	// Headers
+ 	c.OnXML(`//div[@class="items_article_headerInfo"]`, func(e *colly.XMLElement) {
+diff --git a/provider/fc2/fc2_test.go b/provider/fc2/fc2_test.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/provider/fc2/fc2_test.go
++++ b/provider/fc2/fc2_test.go
+@@ -1,9 +1,38 @@
+ package fc2
+ 
+ import (
+ 	"testing"
+ 
+ 	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
+ )
+ 
++func TestFC2_ParseMovieIDFromURLValidation(t *testing.T) {
++	fc2 := New()
++	valid := []struct {
++		url string
++		id  string
++	}{
++		{"https://adult.contents.fc2.com/article/2812904/", "2812904"},
++		{"https://adult.contents.fc2.com/article/2812904", "2812904"},
++		{"https://adult.contents.fc2.com:443/article/2812904/", "2812904"},
++	}
++	for _, tt := range valid {
++		got, err := fc2.ParseMovieIDFromURL(tt.url)
++		if err != nil || got != tt.id {
++			t.Errorf("ParseMovieIDFromURL(%q) = %q, %v; want %q", tt.url, got, err, tt.id)
++		}
++	}
++
++	invalid := []string{
++		"http://adult.contents.fc2.com/article/2812904/",
++		"https://adult.contents.fc2.com:444/article/2812904/",
++		"https://user@adult.contents.fc2.com/article/2812904/",
++		"https://adult.contents.fc2.com.evil.invalid/article/2812904/",
++		"https://example.invalid/article/2812904/",
++		"https://adult.contents.fc2.com/article/../2812904/",
++		"https://adult.contents.fc2.com/article/abc/",
++		"/article/2812904/",
++	}
++	for _, rawURL := range invalid {
++		if _, err := fc2.ParseMovieIDFromURL(rawURL); err == nil {
++			t.Errorf("ParseMovieIDFromURL(%q) unexpectedly succeeded", rawURL)
++		}
++	}
++}
++
++func TestFC2_GetMovieInfoByIDRejectsInvalidID(t *testing.T) {
++	for _, id := range []string{"", "../2812904", "2812904?x=1", "https://example.invalid/article/2812904"} {
++		if _, err := New().GetMovieInfoByID(id); err == nil {
++			t.Errorf("GetMovieInfoByID(%q) unexpectedly succeeded", id)
++		}
++	}
++}
++
+ func TestFC2_GetMovieInfoByID(t *testing.T) {
+ 	testkit.Test(t, New, []string{
+ 		"2812904",
+ 		"4669533",
+ 	})
+ }
+-- 
+2.46.0
