@@ -40,97 +40,13 @@ const (
 var (
 	ErrMovieNotFound = errors.New("iqqtv: movie not found")
 	excludedWords    = []string{"克破", "无码破解", "無碼破解", "无码流出", "無碼流出"}
-	validPathPartRE  = regexp.MustCompile(`^[A-Za-z0-9._-]+// Copyright 2026 metaX contributors.
-//
-// Feature-level comparison reference: https://github.com/sqzw-x/amane.
-// Native implementation for MetaTube's Provider API; no Amane source or
-// fixtures are vendored. See ../../NOTICE.md for attribution.
-package iqqtv
-
-import (
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
-	"regexp"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/PuerkitoBio/goquery"
-	"github.com/lib/pq"
-	"golang.org/x/text/language"
-	"golang.org/x/text/unicode/norm"
-
-	"github.com/metatube-community/metatube-sdk-go/common/parser"
-	"github.com/metatube-community/metatube-sdk-go/model"
-	mt "github.com/metatube-community/metatube-sdk-go/provider"
-)
-
-const (
-	Name           = "IQQTV"
-	Priority       = 1000 - 24
-	defaultURL     = "https://iqq5.xyz"
-	defaultTimeout = 20 * time.Second
-	maxPageBytes   = 8 << 20
-)
-
-var (
-	ErrMovieNotFound = errors.New("iqqtv: movie not found")
-	excludedWords    = []string{"克破", "无码破解", "無碼破解", "无码流出", "無碼流出"}
-	)
-	catalogNumberRE  = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\\d+[A-Za-z0-9_-]*// Copyright 2026 metaX contributors.
-//
-// Feature-level comparison reference: https://github.com/sqzw-x/amane.
-// Native implementation for MetaTube's Provider API; no Amane source or
-// fixtures are vendored. See ../../NOTICE.md for attribution.
-package iqqtv
-
-import (
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
-	"regexp"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/PuerkitoBio/goquery"
-	"github.com/lib/pq"
-	"golang.org/x/text/language"
-	"golang.org/x/text/unicode/norm"
-
-	"github.com/metatube-community/metatube-sdk-go/common/parser"
-	"github.com/metatube-community/metatube-sdk-go/model"
-	mt "github.com/metatube-community/metatube-sdk-go/provider"
-)
-
-const (
-	Name           = "IQQTV"
-	Priority       = 1000 - 24
-	defaultURL     = "https://iqq5.xyz"
-	defaultTimeout = 20 * time.Second
-	maxPageBytes   = 8 << 20
-)
-
-var (
-	ErrMovieNotFound = errors.New("iqqtv: movie not found")
-	excludedWords    = []string{"克破", "无码破解", "無碼破解", "无码流出", "無碼流出"}
-	)
+	validPathPartRE  = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	catalogNumberRE  = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\\d+[A-Za-z0-9_-]*$`)
 )
 
 var (
 	_ mt.MovieProvider        = (*IQQTV)(nil)
-	_ mt.MovieSearcher        = (*IQQTV)(nil)
+	_ mt.MovieSearcher       = (*IQQTV)(nil)
 	_ mt.Fetcher              = (*IQQTV)(nil)
 	_ mt.ProxySetter          = (*IQQTV)(nil)
 	_ mt.RequestTimeoutSetter = (*IQQTV)(nil)
@@ -586,7 +502,7 @@ func (p *IQQTV) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	info := &model.MovieInfo{
 		ID: id, Number: number, Title: cleanTitle(title), Provider: p.Name(), Homepage: rawURL,
 		Actors: pq.StringArray(actors), Maker: studio, Label: studio, Series: series,
-		Genres:  pq.StringArray(uniqueTexts(doc.Find("div.tag-info a[href*='tag']"))),
+		Genres: pq.StringArray(uniqueTexts(doc.Find("div.tag-info a[href*='tag']"))),
 		Summary: plot, CoverURL: thumb, ThumbURL: thumb, PreviewImages: pq.StringArray(samples),
 	}
 	if release != "" {
