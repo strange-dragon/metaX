@@ -28,7 +28,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 
 | Amane crawler | Source file | SDK equivalent observed in tree | Next comparison |
 |---|---|---|---|
-| Airav | `sites/airav.py` | Not confirmed | Search/detail, IDs, image URLs, errors |
+| Airav | `sites/airav.py` | `provider/airav` (new native Go provider in metaX) | Exact catalog-number matching, detail IDs, metadata fields, URL/redirect handling; live-site verification pending |
 | AVBase | `sites/avbase.py` | `provider/avbase` | Compare field coverage and multi-source fallback |
 | AVSox | `sites/avsox.py` | Not confirmed | Search/detail, site status and parsing |
 | Dahlia | `sites/dahlia.py` | `provider/dahlia` | Compare output, headers, ID rules |
@@ -125,3 +125,14 @@ Compared Amane's `WordPressWorksCrawler` implementation and the pinned SDK's `pr
 - **Metadata mapping differences.** Amane uses the exact REST post's ACF fields and purpose-specific image URLs; SDK scrapes the HTML and extracts actors, runtime, release date, cover, preview video, gallery, and summary. The SDK may currently expose fields not represented in Amane's model, so replacing the whole parser is not justified by this finding alone.
 - **Decision.** Applied a targeted correctness fix rather than rewriting the metadata parser. The proposed SDK patch checks the WordPress REST API for the requested slug before scraping, then validates the final detail URL after redirects. Existing actor/runtime/release/cover/gallery/summary parsing remains unchanged.
 - **Patch status (2026-10-16).** Added `patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch` with deterministic local HTTP tests for exact slug success, missing slug, mismatched slug, and redirect to another work. Combined patch application, gofmt, JavBus/AVBase tests, and DAHLIA/FALENO identity tests passed in [CI run 38883877346](https://github.com/strange-dragon/metaX/actions/runs/38883877346). This remains a proposed SDK patch in the metaX migration workspace; no live-site requests, full SDK regression suite, or end-to-end MetaTube integration were run.
+
+## Focused comparison: Airav (2026-10-16)
+
+Compared Amane's `sites/airav.py` behavior with the native MetaTube SDK interfaces at the pinned SDK snapshot. The implementation in metaX was written independently from the observed behavior; Amane source files and fixtures were not copied.
+
+- **SDK coverage.** No Airav provider was found in the pinned SDK provider inventory, so this is a new provider rather than a patch to an existing SDK scraper.
+- **Search correctness.** Amane accepts a search card only when its leading title token matches the requested catalog number. The Go implementation follows exact normalized-number matching and rejects near matches such as an extra trailing digit; it does not select the first fuzzy result.
+- **Detail extraction.** The Go provider maps the detail page's number/title, Open Graph cover, actors, studio, release date, tags, and plot into `model.MovieInfo`. It retains the SDK's existing model contract and supports both catalog-number lookup and opaque IDs parsed from detail URLs.
+- **Request handling.** The provider validates detail origins, caps response bodies, limits redirects to the configured origin, and rejects a same-origin redirect that resolves to a different detail path.
+- **Deterministic coverage.** Local HTTP tests cover exact vs near-number results, required detail identity, field mapping, opaque detail IDs, malformed/unsafe origins, cross-origin redirects, redirected work identity, provider registration, and proxy/timeout configuration. Full metaX Go tests and formatting passed in [run 38890986424](https://github.com/strange-dragon/metaX/actions/runs/38890986424) and [format run 38890986411](https://github.com/strange-dragon/metaX/actions/runs/38890986411).
+- **Limitations.** No live Airav requests were made. Current production HTML selectors, domain availability, redirects, and metadata coverage remain unverified; the new provider is not yet registered in the pinned upstream SDK's `engine/register.go`, so it is not automatically available in an unmodified MetaTube server.
