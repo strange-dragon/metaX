@@ -1,0 +1,56 @@
+name: Pinned SDK patch regression
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sdk-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out metaX workspace
+        uses: actions/checkout@v4
+        with:
+          path: metaX
+
+      - name: Check out pinned MetaTube SDK
+        uses: actions/checkout@v4
+        with:
+          repository: metatube-community/metatube-sdk-go
+          ref: c62584675c593816cc07e7b5b977d14c7eb505a3
+          path: sdk
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+          cache-dependency-path: sdk/go.sum
+
+      - name: Check patch applicability
+        working-directory: sdk
+        run: |
+          git apply --check ../metaX/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch
+          git apply --check ../metaX/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch
+          git apply --check ../metaX/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch
+          git apply --check ../metaX/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch
+
+      - name: Apply SDK patches
+        working-directory: sdk
+        run: |
+          git apply ../metaX/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch
+          git apply ../metaX/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch
+          git apply ../metaX/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch
+          git apply ../metaX/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch
+
+      - name: Check formatting
+        working-directory: sdk
+        run: test -z "$(gofmt -l .)"
+
+      - name: Run full SDK regression suite
+        working-directory: sdk
+        run: go test ./...
