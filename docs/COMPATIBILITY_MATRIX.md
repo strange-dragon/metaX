@@ -53,7 +53,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | ThePornDB | `sites/theporndb.py` | `provider/theporndb` | Compared on 2026-10-16; patch `0008` adds HTTPS origin, collection-path, and ID validation for scenes, movies, and performers; temporary patch-application, gofmt, and deterministic test workflow passed in run 38898680550 and was deleted afterward; live API/site behavior unverified |
 | XCity | `sites/xcity.py` | Not confirmed | Search/detail and ID rules |
 
-Amane's actor registry is separate at `src/amane/crawlers/actor/sites/`; inventory it independently and compare with SDK `ActorProvider` / `ActorSearcher` implementations. The pinned SDK tree has only a direct actor implementation for ThePornDB; metaX now adds a native JavDB actor provider alongside the JavDB movie provider. Do not infer that a movie crawler also covers actor profiles or images.
+Amane's actor registry is separate at `src/amane/crawlers/actor/sites/`; inventory it independently and compare with SDK `ActorProvider` / `ActorSearcher` implementations. The pinned SDK tree has a direct actor implementation for ThePornDB; metaX now adds native JavDB and Minnano actor providers. Do not infer that a movie crawler also covers actor profiles or images.
 
 
 ## Focused comparison: JavBus (2026-10-16)
@@ -316,3 +316,13 @@ Compared Amane's JavDB actor crawler with the pinned SDK actor interfaces and Th
 - Implementation: added provider/javdb/actor.go as a separate registered JavDBActor provider. It searches JavDB's actor filter, rejects non-exact names rather than accepting substring hits, parses actor profile slugs, collects aliases while dropping gender/film-count labels, and maps profile/avatar data to existing SDK actor models. It reuses the native JavDB HTTP client and does not add SDK model fields.
 - Safety: actor detail URLs require the configured scheme, host/alias, effective port, a canonical /actors/{slug} path, and no userinfo, query, or fragment. Redirects continue to use the shared same-origin policy.
 - Verification: deterministic local tests cover exact search selection, metadata mapping, malformed/foreign origins, and actor factory registration. Full Go tests passed in [CI run 38927152300](https://github.com/strange-dragon/metaX/actions/runs/38927152300), and formatting passed in [run 38927152279](https://github.com/strange-dragon/metaX/actions/runs/38927152279). No live JavDB actor requests were made.
+
+
+## Focused comparison: Minnano actor search and profile (2026-10-16)
+
+Compared the behavior of Amane's Minnano actor crawler with the pinned SDK `ActorProvider` / `ActorSearcher` interfaces. The SDK had no Minnano actor provider.
+
+- **Search identity.** The native provider uses the actress-scoped search endpoint and only accepts exact normalized display-name matches; it does not return substring or near-name results. Actor details use the site's numeric `/actress{id}.html` route.
+- **Profile mapping.** Added a separate registered `MinnanoActor` provider mapping aliases and name readings, birthday, height, measurements, cup size, and profile image into existing SDK actor fields. The age-verification cookie is sent for search and detail requests.
+- **Input and response hardening.** Detail URLs must use the configured origin and canonical numeric actress route; query strings, fragments, userinfo, alternate ports, and foreign origins are rejected. Redirects are bounded and constrained to the configured origin, and response bodies are capped at 8 MiB.
+- **Verification.** Deterministic local HTTP tests cover exact search matching, age-cookie delivery, profile mapping, URL-origin/path rejection, and factory registration. Full Go tests passed in [CI run 38928899145](https://github.com/strange-dragon/metaX/actions/runs/38928899145), and formatting passed in [run 38928899279](https://github.com/strange-dragon/metaX/actions/runs/38928899279). Live Minnano site behavior and current selectors remain unverified.
