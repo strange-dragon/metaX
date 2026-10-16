@@ -1,0 +1,54 @@
+name: Temporary FANZA patch verification
+
+on:
+  push:
+    branches:
+      - feat/amane-provider-migration
+    paths:
+      - "patches/metatube-sdk-go/0009-fanza-validate-detail-url.patch"
+      - ".github/workflows/fanza-patch-verification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout metaX
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned MetaTube SDK
+        uses: actions/checkout@v4
+        with:
+          repository: metatube-community/metatube-sdk-go
+          ref: c62584675c593816cc07e7b5b977d14c7eb505a3
+          path: upstream-sdk
+
+      - name: Apply patch and assert files exist
+        working-directory: upstream-sdk
+        run: |
+          git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0009-fanza-validate-detail-url.patch"
+          git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0009-fanza-validate-detail-url.patch"
+          test -f provider/fanza/fanza.go
+          test -f provider/fanza/fanza_migration_test.go
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: upstream-sdk/go.mod
+          cache: true
+          cache-dependency-path: upstream-sdk/go.sum
+
+      - name: Verify formatting
+        working-directory: upstream-sdk
+        run: |
+          files="provider/fanza/fanza.go provider/fanza/fanza_migration_test.go"
+          gofmt -w $files
+          test -z "$(gofmt -l $files)"
+
+      - name: Run deterministic FANZA URL and ID tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/fanza -run '^TestFANZANormalizeMovieIDValidation$|^TestFANZAParseMovieIDFromURLValidation$|^TestFANZAGetMovieInfoByIDRejectsInvalidID$' -count=1
