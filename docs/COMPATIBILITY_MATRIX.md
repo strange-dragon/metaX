@@ -24,7 +24,7 @@ These are the `main` commit SHAs observed on 2026-10-16. Recheck them before a r
 
 ## Amane registered movie crawlers
 
-The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawler classes. This is a source inventory, not a statement that all are in scope for one release.
+The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawler classes. This is a capability inventory only; do not copy source files or fixture data into this Apache-2.0 project.
 
 | Amane crawler | Source file | SDK equivalent observed in tree | Next comparison |
 |---|---|---|---|
