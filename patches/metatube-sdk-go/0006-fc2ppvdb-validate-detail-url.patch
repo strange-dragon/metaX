@@ -27,7 +27,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	"strings"
  
  	"github.com/antchfx/htmlquery"
-@@ -33,19 +32,40 @@ func New() *FC2PPVDB {
+@@ -33,19 +32,41 @@ func New() *FC2PPVDB {
  }
  
  func (fc2ppvdb *FC2PPVDB) NormalizeMovieID(id string) string {
@@ -75,7 +75,7 @@ diff --git a/provider/fc2ppvdb/fc2ppvdb_test.go b/provider/fc2ppvdb/fc2ppvdb_tes
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- a/provider/fc2ppvdb/fc2ppvdb_test.go
 +++ b/provider/fc2ppvdb/fc2ppvdb_test.go
-@@ -1,16 +1,82 @@
+@@ -1,17 +1,82 @@
  package fc2ppvdb
  
  import (
