@@ -78,7 +78,13 @@ jobs:
       - name: Run deterministic FC2 URL and ID validation tests
         working-directory: upstream-sdk
         run: |
-          go test ./provider/fc2 -run '^TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID) -count=1
+          go test ./provider/fc2 -run '^TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)
+ 
+      - name: Run deterministic Getchu ID and URL validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/getchu -run '^Test(NormalizeMovieIDForDetailLookup|ParseMovieIDFromURLValidatesOriginAndPath) -count=1
+ -count=1
  
       - name: Run deterministic Getchu ID and URL validation tests
         working-directory: upstream-sdk
