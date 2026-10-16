@@ -353,6 +353,18 @@ func firstString(values ...string) string {
 	}
 	return ""
 }
+
+func (p *AVSOX) absoluteAssetURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	ref, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return p.baseURL.ResolveReference(ref).String()
+}
 func anyString(value any) string {
 	switch v := value.(type) {
 	case string:
@@ -443,6 +455,16 @@ func nonEmpty(values []string) []string {
 	return result
 }
 
+func (p *AVSOX) absoluteAssets(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if resolved := p.absoluteAssetURL(value); resolved != "" {
+			result = appendUnique(result, resolved)
+		}
+	}
+	return result
+}
+
 func (p *AVSOX) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
 	number := p.NormalizeMovieKeyword(keyword)
 	if number == "" {
@@ -485,8 +507,8 @@ func (p *AVSOX) searchResult(movie map[string]any, lang string) *model.MovieSear
 	title := firstString(anyString(movie["title"]), anyString(movie["title_ja"]), anyString(movie["title_en"]), anyString(movie["title_cn"]), anyString(movie["title_tw"]))
 	return &model.MovieSearchResult{
 		ID: id, Number: number, Title: title, Provider: p.Name(),
-		Homepage: p.detailURL(id, lang), CoverURL: anyString(movie["posterSmall"]),
-		ThumbURL: anyString(movie["posterLarge"]),
+		Homepage: p.detailURL(id, lang), CoverURL: p.absoluteAssetURL(anyString(movie["posterSmall"])),
+		ThumbURL: p.absoluteAssetURL(anyString(movie["posterLarge"])),
 	}
 }
 func (p *AVSOX) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
@@ -540,7 +562,7 @@ func (p *AVSOX) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	if title == "" {
 		return nil, ErrMovieNotFound
 	}
-	cover := firstString(movie.PosterSmall, movie.PosterLarge)
+	cover := p.absoluteAssetURL(firstString(movie.PosterSmall, movie.PosterLarge))
 	if cover == "" {
 		return nil, ErrMovieNotFound
 	}
