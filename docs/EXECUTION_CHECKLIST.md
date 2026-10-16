@@ -78,6 +78,13 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Added deterministic local HTTP tests for exact vs near matches, detail parsing, opaque IDs, unsafe origins, cross-origin redirects, redirected work identity, registration, proxy and timeout configuration.
 - [x] Full metaX Go tests passed in [run 38890986424](https://github.com/strange-dragon/metaX/actions/runs/38890986424); gofmt workflow passed in [run 38890986411](https://github.com/strange-dragon/metaX/actions/runs/38890986411).
 - [ ] Live Airav compatibility and end-to-end MetaTube server registration remain unverified; the pinned upstream SDK does not yet import this metaX package.
+### Task 5b — Add native AVSOX API provider
+- [x] Compared Amane's AVSOX request sequence and model mapping; confirmed the pinned SDK has no `provider/avsox` package.
+- [x] Added an independent Go implementation for the CSRF-token + JSON API flow, with exact-first number selection and separator-folded fallback.
+- [x] Mapped localized titles/descriptions, actors, studio, label, series, director, genres, release date, runtime, posters, and sample images.
+- [x] Added deterministic local API tests for CSRF headers, exact/folded search behavior, underscore significance, metadata mapping, API ID mismatch, URL validation, redirect restrictions, registration, proxy and timeout.
+- [x] Full metaX Go tests passed in [run 38892023957](https://github.com/strange-dragon/metaX/actions/runs/38892023957); gofmt passed in [run 38892023918](https://github.com/strange-dragon/metaX/actions/runs/38892023918).
+- [ ] Live AVSOX behavior and end-to-end MetaTube server registration remain unverified; this provider is not imported by the pinned upstream SDK.
 ### Task 5 — Add uncovered providers in small increments
 - [ ] Prioritize sites with a clear mapping to existing SDK interfaces and manageable network behavior.
 - [ ] Each provider gets focused tests, registration verification, and a separate commit.
