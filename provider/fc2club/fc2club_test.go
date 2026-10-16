@@ -86,7 +86,6 @@ func TestNoResultAndRegistration(t *testing.T) {
 	require.True(t, found, "FC2Club should register with MetaTube's Provider factory")
 }
 
-
 func TestParseMovieIDFromURLRejectsUnsafeOrigins(t *testing.T) {
 	p := New()
 	urls := []string{
