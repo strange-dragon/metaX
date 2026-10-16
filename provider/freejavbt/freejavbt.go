@@ -44,7 +44,7 @@ var (
 
 var (
 	_ mt.MovieProvider        = (*Freejavbt)(nil)
-	_ mt.MovieSearcher       = (*Freejavbt)(nil)
+	_ mt.MovieSearcher        = (*Freejavbt)(nil)
 	_ mt.Fetcher              = (*Freejavbt)(nil)
 	_ mt.ProxySetter          = (*Freejavbt)(nil)
 	_ mt.RequestTimeoutSetter = (*Freejavbt)(nil)
@@ -490,11 +490,11 @@ func (p *Freejavbt) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	runtimeValues := fieldValues(doc, "収録時間")
 	info := &model.MovieInfo{
 		ID: id, Number: number, Title: title, Provider: p.Name(), Homepage: rawURL,
-		Actors: pq.StringArray(fieldValues(doc, "出演者")),
-		Maker: firstValue(fieldValues(doc, "メーカー")),
-		Label: firstValue(fieldValues(doc, "レーベル")),
-		Series: firstValue(fieldValues(doc, "シリーズ")),
-		Genres: pq.StringArray(fieldValues(doc, "ジャンル")),
+		Actors:   pq.StringArray(fieldValues(doc, "出演者")),
+		Maker:    firstValue(fieldValues(doc, "メーカー")),
+		Label:    firstValue(fieldValues(doc, "レーベル")),
+		Series:   firstValue(fieldValues(doc, "シリーズ")),
+		Genres:   pq.StringArray(fieldValues(doc, "ジャンル")),
 		CoverURL: cover, ThumbURL: cover, PreviewImages: pq.StringArray(samples),
 	}
 	if len(releaseValues) > 0 {
