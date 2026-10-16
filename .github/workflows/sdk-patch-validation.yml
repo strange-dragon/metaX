@@ -88,19 +88,3 @@ jobs:
         working-directory: upstream-sdk
         run: |
           go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
- -count=1
-
-      - name: Run deterministic DAHLIA/FALENO identity tests
-        working-directory: upstream-sdk
-        run: |
-          go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug$' -count=1
-
-      - name: Run deterministic FC2 URL and ID validation tests
-        working-directory: upstream-sdk
-        run: |
-          go test ./provider/fc2 -run "TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)" -count=1
-
-      - name: Run deterministic Getchu ID and URL validation tests
-        working-directory: upstream-sdk
-        run: |
-          go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
