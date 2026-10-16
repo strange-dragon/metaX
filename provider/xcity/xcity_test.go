@@ -108,7 +108,9 @@ func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
 
 	p := newForTest(source.URL, source.Client())
 	resp, err := p.Fetch(source.URL + "/titles/exact")
-	if resp != nil { _ = resp.Body.Close() }
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 	require.Error(t, err)
 	require.Zero(t, externalHits)
 }
@@ -116,7 +118,9 @@ func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
 func TestRegistrationAndConfiguration(t *testing.T) {
 	found := false
 	for name, factory := range mt.RangeMovieFactory {
-		if name != Name { continue }
+		if name != Name {
+			continue
+		}
 		found = true
 		instance := factory()
 		require.Equal(t, Name, instance.Name())
