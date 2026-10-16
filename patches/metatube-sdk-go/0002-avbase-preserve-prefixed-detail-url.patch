@@ -20,7 +20,7 @@ diff --git a/provider/avbase/avbase.go b/provider/avbase/avbase.go
 index 7c42bc7aa0e5c338d747bd333d519e74a59c1134..0000000000000000000000000000000000000000 100644
 --- a/provider/avbase/avbase.go
 +++ b/provider/avbase/avbase.go
-@@ -245,7 +245,7 @@ func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResult
+@@ -245,8 +245,8 @@ func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResult
  					ID:          ab.JoinPrefixID(work.Prefix, work.WorkID),
  					Number:      work.WorkID,
  					Title:       work.Title,
@@ -45,7 +45,7 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 index 29135776eb23ac9c27c62aee2d6a26b454ddfb29..0000000000000000000000000000000000000000 100644
 --- a/provider/avbase/avbase_test.go
 +++ b/provider/avbase/avbase_test.go
-@@ -1,9 +1,26 @@
+@@ -1,9 +1,31 @@
  package avbase
  
  import (
