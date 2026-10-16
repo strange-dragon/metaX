@@ -30,9 +30,10 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] CI exposed an unrelated `provider/fc2club` compile error (`appendUnique` was referenced but undefined in that package); added the package-local helper in commit `ec2b52f` so the repository test job can build.
 
 ### Task 2 — Verify the integration path before expanding providers
-- [ ] Determine whether the safest target is a small SDK fork/branch, an upstream SDK change, or an explicitly imported provider package in the MetaTube server.
-- [ ] Verify actual server imports and factory discovery; do not assume a dependency's `init()` runs unless its package is imported.
-- [ ] Keep the existing Jellyfin plugin contract unchanged unless compatibility evidence requires a change.
+- [x] Verified the stock integration path in `metatube-community/metatube-sdk-go` at upstream commit `c62584675c593816cc07e7b5b977d14c7eb505a3`: `cmd/server/main.go` imports `engine`; `engine/register.go` blank-imports provider packages; `engine/init.go` initializes providers from the factory registries.
+- [x] Confirmed that adding metaX as a normal module dependency does not register its providers. The correct delivery path is to transplant reviewed provider packages and registration imports into an SDK fork or propose them upstream; do not make the SDK depend on metaX.
+- [x] Existing Jellyfin plugin contract can remain unchanged; no plugin-side change is indicated by the current architecture.
+- [x] Documented the verified path in `docs/INTEGRATION.md` (commit `9d34a3e`).
 
 ### Task 3 — Validate Jav321 independently
 - [ ] Review implementation and deterministic tests.
@@ -67,4 +68,4 @@ This file is the durable handoff for small, independently reviewable work units.
 - Branch: `feat/amane-provider-migration`
 - Existing providers: `provider/javdb`, `provider/jav321`
 - Current blocker for production use: the new providers are not automatically loaded by MetaTube merely because this repository exists; the runtime registration/import path must be verified and integrated.
-- Latest audit: 2026-10-16. JavDB redirect restrictions and regression coverage are in commits `d3b80d0` and `4dc8e86`; CI found and the follow-up commit `ec2b52f` fixed the `fc2club` compile error. GitHub Actions deterministic tests and formatting check passed on `ec2b52f` (run [38869568850](https://github.com/strange-dragon/metaX/actions/runs/38869568850)). Race checks and live-site checks remain unrun.
+- Latest audit: 2026-10-16. JavDB redirect restrictions and regression coverage are in commits `d3b80d0` and `4dc8e86`; CI found and the follow-up commit `ec2b52f` fixed the `fc2club` compile error. GitHub Actions deterministic tests and formatting check passed on `ec2b52f` (run [38869568850](https://github.com/strange-dragon/metaX/actions/runs/38869568850)). Integration path was verified against SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`; details are in `docs/INTEGRATION.md`. Race checks and live-site checks remain unrun.
