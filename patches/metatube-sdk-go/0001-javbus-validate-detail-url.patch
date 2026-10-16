@@ -11,15 +11,15 @@ metatube-community/metatube-sdk-go commit
 c62584675c593816cc07e7b5b977d14c7eb505a3.
 
 ---
- provider/javbus/javbus.go      | 27 ++++++++++++++++++++++++++-
+ provider/javbus/javbus.go      | 25 ++++++++++++++++++++++++-
  provider/javbus/javbus_test.go | 27 +++++++++++++++++++++++++++
- 2 files changed, 53 insertions(+), 1 deletion(-)
+ 2 files changed, 51 insertions(+), 1 deletion(-)
 
 diff --git a/provider/javbus/javbus.go b/provider/javbus/javbus.go
 index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus.go
 +++ b/provider/javbus/javbus.go
-@@ -72,11 +72,36 @@ func (bus *JavBus) GetMovieInfoByID(id string) (info *model.MovieInfo, err error
+@@ -72,11 +72,35 @@ func (bus *JavBus) GetMovieInfoByID(id string) (info *model.MovieInfo, err error
  }
  
  func (bus *JavBus) ParseMovieIDFromURL(rawURL string) (string, error) {
@@ -61,7 +61,7 @@ diff --git a/provider/javbus/javbus_test.go b/provider/javbus/javbus_test.go
 index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus_test.go
 +++ b/provider/javbus/javbus_test.go
-@@ -1,8 +1,35 @@
+@@ -1,9 +1,36 @@
  package javbus
  
  import (
