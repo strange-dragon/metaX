@@ -207,6 +207,10 @@ func (p *Jav321) Fetch(rawURL string) (*http.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("jav321: GET %s: %w", rawURL, err)
 	}
+	if resp.StatusCode == http.StatusNotFound {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("%w: %s", ErrMovieNotFound, rawURL)
+	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		_ = resp.Body.Close()
 		return nil, fmt.Errorf("jav321: GET %s: unexpected HTTP status %s", rawURL, resp.Status)
@@ -326,7 +330,7 @@ func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 
 func (p *Jav321) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
 	keyword = p.NormalizeMovieKeyword(keyword)
-	if keyword == "" {
+	if !movieNumberRE.MatchString(keyword) {
 		return nil, nil
 	}
 	info, err := p.GetMovieInfoByID(keyword)
@@ -353,7 +357,7 @@ func removeLeadingNumber(title, number string) string {
 func collectTexts(doc *goquery.Document, labelSelector, label, valueSelector string) []string {
 	var results []string
 	doc.Find(labelSelector).Each(func(_ int, node *goquery.Selection) {
-		if cleanText(node.Text()) != label {
+		if !strings.Contains(cleanText(node.Text()), label) {
 			return
 		}
 		node.Parent().Find(valueSelector).Each(func(_ int, value *goquery.Selection) {
@@ -368,11 +372,11 @@ func collectTexts(doc *goquery.Document, labelSelector, label, valueSelector str
 func collectFollowingText(doc *goquery.Document, label string) string {
 	var result string
 	doc.Find("b").EachWithBreak(func(_ int, node *goquery.Selection) bool {
-		if cleanText(node.Text()) != label {
+		if !strings.Contains(cleanText(node.Text()), label) {
 			return true
 		}
 		result = cleanText(node.Parent().Text())
-		result = strings.TrimSpace(strings.TrimPrefix(result, label))
+		result = strings.TrimLeft(strings.TrimSpace(strings.TrimPrefix(result, label)), ":： ")
 		return false
 	})
 	return result
