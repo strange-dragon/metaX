@@ -69,7 +69,7 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
  }
  
  func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
-@@ -165,4 +188,16 @@ func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error)
+@@ -165,4 +189,16 @@ func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error)
 -	err = c.Visit(info.Homepage)
 -	return
 +	if err = c.Visit(info.Homepage); err != nil {
