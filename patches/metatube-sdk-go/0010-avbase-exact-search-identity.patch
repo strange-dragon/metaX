@@ -1,0 +1,252 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] avbase: require exact normalized work identity in search
+
+AVBase search is fuzzy. Try the original, compact, and dashed query forms,
+then accept only candidates whose work_id matches the requested catalog
+number after separator/case/leading-zero normalization. Resolve duplicate
+work IDs deterministically: prefer a work whose products contain the number,
+otherwise prefer a unique unprefixed work; return no result for unresolved
+ambiguity. Keep the existing source-provider metadata lookup unchanged.
+
+Based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+
+---
+ provider/avbase/avbase.go      | 108 ++++++++++++++++++++++++++++++++----
+ provider/avbase/avbase_test.go |  63 ++++++++++++++++++++++
+ 2 files changed, 158 insertions(+), 13 deletions(-)
+
+diff --git a/provider/avbase/avbase.go b/provider/avbase/avbase.go
+index 7c42bc7aa0e5c338d747bd333d519e74a59c1134..0000000000000000000000000000000000000000 100644
+--- a/provider/avbase/avbase.go
++++ b/provider/avbase/avbase.go
+@@ -5,6 +5,7 @@ import (
+ 	"errors"
+ 	"fmt"
+ 	"net/url"
++	"regexp"
+ 	"path"
+ 	"sort"
+ 	"strings"
+@@ -211,7 +212,7 @@ func (ab *AVBase) NormalizeMovieKeyword(keyword string) string {
+ 	return strings.ToUpper(keyword)
+ }
+ 
+-func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
++func (ab *AVBase) searchWorks(keyword string) (works []workResponse, err error) {
+ 	buildID, err := ab.GetBuildID()
+ 	if err != nil {
+ 		return
+@@ -224,7 +225,7 @@ func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResult
+ 		data := struct {
+ 			PageProps struct {
+ 				Works []workResponse `json:"works"`
+ 			} `json:"pageProps"`
+ 		}{}
+ 		if json.Unmarshal(r.Body, &data) == nil {
+-			for _, work := range data.PageProps.Works {
++			for _, work := range data.PageProps.Works {
++				works = append(works, work)
++			}
++		}
++	})
++
++	err = c.Visit(fmt.Sprintf(searchAPIURL, buildID, url.QueryEscape(keyword)))
++	return
++}
++
++var (
++	avbaseSeparators = regexp.MustCompile(`[^A-Z0-9]+`)
++	avbaseDashable   = regexp.MustCompile(`^(.+[A-Z])(\d+)$`)
++)
++
++func normalizeAVBaseNumber(value string) string {
++	value = avbaseSeparators.ReplaceAllString(strings.ToUpper(value), "")
++	// Normalize leading zeroes in every numeric run without converting through
++	// an integer (catalog segments can be longer than a machine integer).
++	return regexp.MustCompile(`0+(\d)`).ReplaceAllString(value, "$1")
++}
++
++func avbaseQueryForms(keyword string) []string {
++	keyword = strings.TrimSpace(keyword)
++	if keyword == "" {
++		return nil
++	}
++	forms := []string{keyword}
++	compact := strings.NewReplacer("-", "", " ", "").Replace(keyword)
++	if compact != "" && compact != keyword {
++		forms = append(forms, compact)
++	}
++	if !strings.Contains(keyword, "-") {
++		if match := avbaseDashable.FindStringSubmatch(compact); len(match) == 3 {
++			dashed := match[1] + "-" + match[2]
++			found := false
++			for _, form := range forms {
++				if form == dashed {
++					found = true
++					break
++				}
++			}
++			if !found {
++				forms = append(forms, dashed)
++			}
++		}
++	}
++	return forms
++}
++
++func avbaseProductHasNumber(work workResponse, key string) bool {
++	for _, product := range work.Products {
++		if normalizeAVBaseNumber(product.ProductID) == key {
++			return true
++		}
++	}
++	return false
++}
++
++func pickAVBaseWork(works []workResponse, key string) (workResponse, bool) {
++	candidates := make([]workResponse, 0, len(works))
++	for _, work := range works {
++		if key != "" && normalizeAVBaseNumber(work.WorkID) == key {
++			candidates = append(candidates, work)
++		}
++	}
++	if len(candidates) == 0 {
++		return workResponse{}, false
++	}
++	if len(candidates) == 1 {
++		return candidates[0], true
++	}
++	matchedProducts := make([]workResponse, 0, len(candidates))
++	for _, work := range candidates {
++		if avbaseProductHasNumber(work, key) {
++			matchedProducts = append(matchedProducts, work)
++		}
++	}
++	if len(matchedProducts) == 1 {
++		return matchedProducts[0], true
++	}
++	if len(matchedProducts) > 1 {
++		candidates = matchedProducts
++	}
++	var unprefixed []workResponse
++	for _, work := range candidates {
++		if strings.TrimSpace(work.Prefix) == "" {
++			unprefixed = append(unprefixed, work)
++		}
++	}
++	if len(unprefixed) == 1 {
++		return unprefixed[0], true
++	}
++	return workResponse{}, false
++}
++
++func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
++	key := normalizeAVBaseNumber(keyword)
++	if key == "" {
++		return nil, nil
++	}
++	for _, form := range avbaseQueryForms(keyword) {
++		works, searchErr := ab.searchWorks(form)
++		if searchErr != nil {
++			err = searchErr
++			continue
++		}
++		work, ok := pickAVBaseWork(works, key)
++		if !ok {
++			continue
++		}
++		sort.SliceStable(work.Products, func(i, j int) bool {
++			return work.Products[i].Source > work.Products[j].Source
++		})
++		index := -1
++		for i, product := range work.Products {
++			if _, ok := ab.providers[product.Source]; ok {
++				index = i
++				break
++			}
++		}
++		if index < 0 {
++			continue
++		}
++		result := &model.MovieSearchResult{
++			ID:          ab.JoinPrefixID(work.Prefix, work.WorkID),
++			Number:      work.WorkID,
++			Title:       work.Title,
++			Provider:    ab.Name(),
++			Homepage:    ab.movieURLForWork(work.Prefix, work.WorkID),
++			ThumbURL:    work.Products[index].ThumbnailURL,
++			CoverURL:    work.Products[index].ImageURL,
++			ReleaseDate: parser.ParseDate(work.MinDate),
++		}
++		for _, actor := range work.Actors {
++			result.Actors = append(result.Actors, actor.Name)
++		}
++		return []*model.MovieSearchResult{result}, nil
++	}
++	return nil, err
++}
++
++func (ab *AVBase) JoinPrefixID(prefix, workID string) string {
++	if strings.TrimSpace(prefix) == "" {
++		return workID
++	}
++	return fmt.Sprintf("%s:%s", prefix, workID)
++}
++
++func (ab *AVBase) movieURLForWork(prefix, workID string) string {
++	return fmt.Sprintf(movieURL, ab.JoinPrefixID(prefix, workID))
++}
++
++func (ab *AVBase) GetBuildID() (string, error) {
++	v, err, _ := ab.single.Do(func() (any, error) {
++		return ab.getBuildID()
++	})
++	if err != nil {
++		return "", err
++	}
++	return v.(string), nil
++}
++
++func (ab *AVBase) getBuildID() (buildID string, err error) {
++	defer func() {
++		if err == nil && buildID == "" {
++			err = errors.New("empty build id")
++		}
++	}()
++
++	c := ab.ClonedCollector()
++
++	c.OnXML(`//*[@id="__NEXT_DATA__"]`, func(e *colly.XMLElement) {
++		data := struct {
++			BuildId string `json:"buildId"`
++		}{}
++		if err = json.NewDecoder(strings.NewReader(e.Text)).Decode(&data); err == nil {
++			buildID = data.BuildId
++		}
++	})
++
++	if vErr := c.Visit(baseURL); vErr != nil {
++		err = vErr
++	}
++	return
++}
++
++/*
++			for _, work := range data.PageProps.Works {
+ 				sort.SliceStable(work.Products, func(i, j int) bool {
+ 					return work.Products[i].Source > work.Products[j].Source
+ 				})
+@@ -263,6 +424,7 @@ func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResult
+ 	})
+ 
+ 	err = c.Visit(fmt.Sprintf(searchAPIURL, buildID, url.QueryEscape(keyword)))
+ 	return
++*/
+ }
+ 
+ func (ab *AVBase) JoinPrefixID(prefix, workID string) string {
+@@ -286,6 +448,76 @@ func (ab *AVBase) getBuildID() (buildID string, err error) {
+-- 
+2.46.0
