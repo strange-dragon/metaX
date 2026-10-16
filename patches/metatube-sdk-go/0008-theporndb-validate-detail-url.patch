@@ -18,10 +18,11 @@ diff --git a/provider/theporndb/video.go b/provider/theporndb/video.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- a/provider/theporndb/video.go
 +++ b/provider/theporndb/video.go
-@@ -7,6 +7,7 @@ import (
+@@ -7,7 +7,7 @@ import (
  	"net/http"
  	"net/url"
- +	"regexp"
+-	"path"
++	"regexp"
  	"strings"
  
  	"github.com/gocolly/colly/v2"
@@ -89,13 +90,14 @@ diff --git a/provider/theporndb/actor.go b/provider/theporndb/actor.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/provider/theporndb/actor.go
 +++ b/provider/theporndb/actor.go
-@@ -5,7 +5,7 @@ import (
+@@ -5,7 +5,8 @@ import (
  	"fmt"
  	"net/http"
  	"net/url"
 -	"path"
  	"regexp"
  	"strconv"
++	"strings"
  
 @@ -43,12 +42,8 @@ func (s *ThePornDBActor) SetConfig(config map[string]string) error {
  
