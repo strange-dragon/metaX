@@ -21,10 +21,12 @@ This file is the durable handoff for small, independently reviewable work units.
 - [ ] Local tests, code formatting, and server integration were not run as part of this audit.
 
 ### Task 1 — Establish a trustworthy test baseline for the existing JavDB Provider
-- [ ] Inspect the complete JavDB implementation and tests for correctness gaps and missing edge cases.
-- [ ] Confirm the exact Go toolchain and run focused tests plus formatting if a runnable environment is available.
-- [ ] Record commands and outcomes; do not claim live-site support based on fixture tests.
-- [ ] Make only targeted fixes justified by review or test evidence.
+- [x] Inspect the complete JavDB implementation and existing deterministic HTTP tests.
+- [x] Review found that the default HTTP client followed redirects without constraining the destination; this could escape the configured origin or port.
+- [x] Add a redirect policy that restricts redirects to the configured host/port, permits the canonical www alias on the same effective port, blocks HTTPS downgrade, and caps redirect hops.
+- [x] Add a deterministic regression test that redirects to a different origin/port and asserts the destination is never requested.
+- [ ] Run focused Go tests, race checks if available, and gofmt; the GitHub connector used for this task can edit/read repository files but does not execute Go commands. Do not treat the new test as passing until CI or a local Go run confirms it.
+- [x] No live-site support is claimed; live JavDB compatibility remains unverified.
 
 ### Task 2 — Verify the integration path before expanding providers
 - [ ] Determine whether the safest target is a small SDK fork/branch, an upstream SDK change, or an explicitly imported provider package in the MetaTube server.
@@ -64,4 +66,4 @@ This file is the durable handoff for small, independently reviewable work units.
 - Branch: `feat/amane-provider-migration`
 - Existing providers: `provider/javdb`, `provider/jav321`
 - Current blocker for production use: the new providers are not automatically loaded by MetaTube merely because this repository exists; the runtime registration/import path must be verified and integrated.
-- Latest audit: 2026-10-16. Repository files were inspected remotely; local Go tests and live-site checks were not run during this audit.
+- Latest audit: 2026-10-16. Task 1 review added redirect restrictions and a regression test in commits `d3b80d0`, `cc9b5ac`, and `4dc8e86`. Tests have not yet been executed; live-site checks remain unrun.
