@@ -36,9 +36,11 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Documented the verified path in `docs/INTEGRATION.md` (commit `9d34a3e`).
 
 ### Task 3 — Validate Jav321 independently
-- [ ] Review implementation and deterministic tests.
-- [ ] Check ID/URL normalization, search semantics, field extraction, malformed/not-found responses, and registration.
-- [ ] Run focused tests and update findings only with evidence.
+- [x] Reviewed implementation and deterministic redirect regression test.
+- [x] Added redirect restrictions: allowed canonical host/www alias, same effective port, no HTTPS downgrade, and a 10-hop cap; detail URL validation uses the same origin policy.
+- [x] Added `TestFetchRejectsRedirectOutsideConfiguredOrigin`; corrected the test handler to pass its actual request to `http.Redirect` (commit `66413c6`).
+- [x] GitHub Actions Go tests passed on `66413c63637b3951512a0172368319faf0059bc8` (run [38870437328](https://github.com/strange-dragon/metaX/actions/runs/38870437328)); formatting passed (run [38870437455](https://github.com/strange-dragon/metaX/actions/runs/38870437455)).
+- [ ] ID/URL normalization, search semantics, field extraction, malformed/not-found responses, and registration still need a broader review; race checks and live-site compatibility were not tested.
 
 ### Task 4 — Compare existing SDK providers against Amane, one site per task
 - [ ] Start with the highest-value uncovered behavior in an existing provider (initial candidates: JavBus, AVBase, MGStage).
@@ -68,4 +70,4 @@ This file is the durable handoff for small, independently reviewable work units.
 - Branch: `feat/amane-provider-migration`
 - Existing providers: `provider/javdb`, `provider/jav321`
 - Current blocker for production use: the new providers are not automatically loaded by MetaTube merely because this repository exists; the runtime registration/import path must be verified and integrated.
-- Latest audit: 2026-10-16. JavDB redirect restrictions and regression coverage are in commits `d3b80d0` and `4dc8e86`; CI found and the follow-up commit `ec2b52f` fixed the `fc2club` compile error. GitHub Actions deterministic tests and formatting check passed on `ec2b52f` (run [38869568850](https://github.com/strange-dragon/metaX/actions/runs/38869568850)). Integration path was verified against SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`; details are in `docs/INTEGRATION.md`. Race checks and live-site checks remain unrun.
+- Latest audit: 2026-10-16. JavDB redirect restrictions and regression coverage are in commits `d3b80d0` and `4dc8e86`; CI found and the follow-up commit `ec2b52f` fixed the `fc2club` compile error. GitHub Actions deterministic tests and formatting passed on `ec2b52f` (run [38869568850](https://github.com/strange-dragon/metaX/actions/runs/38869568850)). Jav321 redirect restrictions and regression coverage are in commits `13de277`, `43ee0c3`, and `66413c6`; Go tests passed (run [38870437328](https://github.com/strange-dragon/metaX/actions/runs/38870437328)) and formatting passed (run [38870437455](https://github.com/strange-dragon/metaX/actions/runs/38870437455)). Integration path was verified against SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`; details are in `docs/INTEGRATION.md`. Race checks and live-site checks remain unrun.
