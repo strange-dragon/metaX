@@ -81,7 +81,7 @@ func TestMinnanoActorSearchAndProfile(t *testing.T) {
 	require.Equal(t, "Example Name", info.Name)
 	require.Equal(t, ActorProviderName, info.Provider)
 	require.Equal(t, server.URL+"/actress123.html", info.Homepage)
-	require.Equal(t, []string{"えぐざんぷる", "Example Name", "Former Name", "ふぉーまー", "Former Name"}, []string(info.Aliases))
+	require.Equal(t, []string{"えぐざんぷる", "Former Name", "ふぉーまー"}, []string(info.Aliases))
 	require.Equal(t, 160, info.Height)
 	require.Equal(t, "C", info.CupSize)
 	require.Equal(t, "B:85 / W:58 / H:86", info.Measurements)
