@@ -101,7 +101,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- /dev/null
 +++ b/provider/dahlia/core/core_test.go
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,75 @@
 +package core
 +
 +import (
