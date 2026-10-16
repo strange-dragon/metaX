@@ -37,45 +37,7 @@ const (
 
 var (
 	ErrMovieNotFound                         = errors.New("xcity: movie not found")
-	catalogNumberRE                          = regexp.MustCompile(`(?i)^[a-z]+[- ]?\\d+[a-z0-9_-]*// Copyright 2026 metaX contributors.
-//
-// Feature-level comparison reference: https://github.com/sqzw-x/amane.
-// Native implementation for MetaTube's Provider API; no Amane source or
-// fixtures are vendored. See NOTICE.md for attribution.
-package xcity
-
-import (
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"path"
-	"regexp"
-	"strings"
-	"sync"
-	"time"
-
-	"github.com/PuerkitoBio/goquery"
-	"github.com/lib/pq"
-	"golang.org/x/text/language"
-	"golang.org/x/text/unicode/norm"
-
-	"github.com/metatube-community/metatube-sdk-go/common/parser"
-	"github.com/metatube-community/metatube-sdk-go/model"
-	mt "github.com/metatube-community/metatube-sdk-go/provider"
-)
-
-const (
-	Name           = "XCity"
-	Priority       = 1000 - 30
-	defaultURL     = "https://xcity.jp"
-	defaultTimeout = 20 * time.Second
-	maxPageBytes   = 8 << 20
-)
-
-var (
-	)
+	catalogNumberRE = regexp.MustCompile(`(?i)^[a-z]+[- ]?\d+[a-z0-9_-]*$`)
 	_                mt.MovieProvider        = (*XCity)(nil)
 	_                mt.MovieSearcher        = (*XCity)(nil)
 	_                mt.Fetcher              = (*XCity)(nil)
