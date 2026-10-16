@@ -48,7 +48,8 @@ This file is the durable handoff for small, independently reviewable work units.
 ### Task 4 — Compare existing SDK providers against Amane, one site per task
 - [x] First comparison completed: JavBus at SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3` vs Amane commit `a2d45880e83df7047d461452965919692701e8c9`; findings and porting decision are recorded in `docs/COMPATIBILITY_MATRIX.md`.
 - [x] Recorded differences before changing code: Amane's exact number-candidate matching and required-field validation are stronger; SDK JavBus URL parsing does not validate the origin. No live-site requests were made.
-- [ ] Implement the JavBus improvements in the SDK integration target/fork, with deterministic tests, before moving to the next site.
+- [x] Prepared a focused upstream patch for JavBus detail-URL origin/path validation plus deterministic parsing tests: `patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch` (commit `c857f4b`, formatting correction `8732aa7`).
+- [ ] Apply the patch to a clean checkout of pinned SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`, run `gofmt` and focused tests, then run the SDK regression suite. The patch is not yet applied or test-verified because no SDK fork/worktree is available.
 - [ ] Reuse or improve existing SDK code where it is better; avoid duplicate provider stacks.
 - [ ] Update the compatibility matrix after each completed comparison.
 
