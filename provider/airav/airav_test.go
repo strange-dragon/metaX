@@ -194,3 +194,20 @@ func TestGetMovieInfoByIDAcceptsOpaqueDetailID(t *testing.T) {
 	require.Equal(t, "target", info.ID)
 	require.Equal(t, "ABC-123", info.Number)
 }
+
+func TestDetailRedirectRejectsNoncanonicalRouteWithSameID(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/video/target", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/not-video/target", http.StatusFound)
+	})
+	mux.HandleFunc("/not-video/target", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, detailFixture)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByURL(server.URL + "/video/target")
+	require.ErrorIs(t, err, ErrMovieNotFound)
+	require.Nil(t, info)
+}
