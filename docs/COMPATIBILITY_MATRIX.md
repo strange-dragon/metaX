@@ -53,7 +53,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | ThePornDB | `sites/theporndb.py` | `provider/theporndb` | Compared on 2026-10-16; patch `0008` adds HTTPS origin, collection-path, and ID validation for scenes, movies, and performers; temporary patch-application, gofmt, and deterministic test workflow passed in run 38898680550 and was deleted afterward; live API/site behavior unverified |
 | XCity | `sites/xcity.py` | Not confirmed | Search/detail and ID rules |
 
-Amane's actor registry is separate at `src/amane/crawlers/actor/sites/`; inventory it independently and compare with SDK `ActorProvider` / `ActorSearcher` implementations. Do not infer that a movie crawler also covers actor profiles or images.
+Amane's actor registry is separate at `src/amane/crawlers/actor/sites/`; inventory it independently and compare with SDK `ActorProvider` / `ActorSearcher` implementations. The pinned SDK tree has only a direct actor implementation for ThePornDB; metaX now adds a native JavDB actor provider alongside the JavDB movie provider. Do not infer that a movie crawler also covers actor profiles or images.
 
 
 ## Focused comparison: JavBus (2026-10-16)
@@ -306,3 +306,13 @@ Compared Amane `src/amane/crawlers/sites/javdb.py` with native metaX `provider/j
 - **Gap found.** The native provider checked JavDB's hostname but did not require the configured scheme or effective port and accepted userinfo and fragments. Consequently, URLs such as `http://javdb.com/v/id`, `https://javdb.com:8443/v/id`, or `https://user@javdb.com/v/id` could pass detail URL parsing even though they do not represent the configured origin.
 - **Fix.** Detail URL parsing now requires the configured scheme, the configured host or documented `www` alias, the same effective port, and no userinfo or fragment. Query parameters remain allowed because JavDB detail links can legitimately include locale parameters. The configured test-server scheme is honored so local HTTP tests remain deterministic while production's configured origin is HTTPS.
 - **Verification.** Added deterministic rejection cases for HTTP downgrade, non-default port, userinfo, lookalike host, and fragment. Full Go tests passed in [CI run 38926808936](https://github.com/strange-dragon/metaX/actions/runs/38926808936), and formatting passed in [run 38926808957](https://github.com/strange-dragon/metaX/actions/runs/38926808957). No live JavDB requests were made.
+
+
+## Focused comparison: JavDB actor search and profile (2026-10-16)
+
+Compared Amane's JavDB actor crawler with the pinned SDK actor interfaces and ThePornDB actor implementation.
+
+- Coverage gap: the pinned SDK exposes ActorProvider / ActorSearcher, but its provider tree has no JavDB actor implementation. Amane's JavDB actor crawler provides exact canonical-name/alias matching, profile IDs, aliases, and avatar extraction.
+- Implementation: added provider/javdb/actor.go as a separate registered JavDBActor provider. It searches JavDB's actor filter, rejects non-exact names rather than accepting substring hits, parses actor profile slugs, collects aliases while dropping gender/film-count labels, and maps profile/avatar data to existing SDK actor models. It reuses the native JavDB HTTP client and does not add SDK model fields.
+- Safety: actor detail URLs require the configured scheme, host/alias, effective port, a canonical /actors/{slug} path, and no userinfo, query, or fragment. Redirects continue to use the shared same-origin policy.
+- Verification: deterministic local tests cover exact search selection, metadata mapping, malformed/foreign origins, and actor factory registration. CI for the new actor provider is pending. No live JavDB actor requests were made.
