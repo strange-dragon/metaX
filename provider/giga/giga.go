@@ -40,15 +40,15 @@ const (
 )
 
 var (
-	ErrMovieNotFound = errors.New("giga: movie not found")
+	ErrMovieNotFound   = errors.New("giga: movie not found")
 	ErrAgeVerification = errors.New("giga: age-verification session was not accepted")
-	productIDRE      = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-	numberTokenRE    = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\d+[A-Za-z0-9_-]*$`)
+	productIDRE        = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+	numberTokenRE      = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\d+[A-Za-z0-9_-]*$`)
 )
 
 var (
 	_ mt.MovieProvider        = (*Giga)(nil)
-	_ mt.MovieSearcher       = (*Giga)(nil)
+	_ mt.MovieSearcher        = (*Giga)(nil)
 	_ mt.Fetcher              = (*Giga)(nil)
 	_ mt.ProxySetter          = (*Giga)(nil)
 	_ mt.RequestTimeoutSetter = (*Giga)(nil)
@@ -59,12 +59,12 @@ type Giga struct {
 
 	// The site's age-gate flow mutates the session cookie. Serialize all
 	// requests, not only session initialization, to avoid overwriting it.
-	requestMu sync.Mutex
-	client    *http.Client
-	ageClient *http.Client
-	jar       http.CookieJar
-	timeout   time.Duration
-	proxyURL  string
+	requestMu      sync.Mutex
+	client         *http.Client
+	ageClient      *http.Client
+	jar            http.CookieJar
+	timeout        time.Duration
+	proxyURL       string
 	sessionClaimed bool
 
 	priorityMu sync.RWMutex
