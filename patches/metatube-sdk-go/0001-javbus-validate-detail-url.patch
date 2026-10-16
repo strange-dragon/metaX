@@ -11,7 +11,7 @@ metatube-community/metatube-sdk-go commit
 c62584675c593816cc07e7b5b977d14c7eb505a3.
 
 ---
- provider/javbus/javbus.go      | 28 +++++++++++++++++++++++++++-
+ provider/javbus/javbus.go      | 28 ++++++++++++++++++++++++++--
  provider/javbus/javbus_test.go | 38 ++++++++++++++++++++++++++++++++++++++
  2 files changed, 64 insertions(+), 2 deletions(-)
 
