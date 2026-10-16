@@ -80,6 +80,16 @@ Compared Amane `src/amane/crawlers/sites/fc2club.py` at commit `a2d45880e83df704
 - **Security gap found and fixed.** Detail URL parsing previously accepted non-default ports and userinfo on the expected hostname, and the default HTTP client could follow redirects off-site. The native provider now requires the configured scheme/host/effective port, rejects userinfo and spoofed hosts, and limits redirects to the same origin with a 10-hop cap.
 - **Deterministic coverage.** Added tests for HTTPS downgrade, unusual port, userinfo, lookalike host, allowed `www` alias, and a cross-origin redirect that must not reach its target. The initial test run stopped at the formatting gate; after gofmt normalized the tracked Go files, the full metaX Go test workflow passed on the updated branch head in [CI run 38884644252](https://github.com/strange-dragon/metaX/actions/runs/38884644252). Formatting also passed in [run 38884644417](https://github.com/strange-dragon/metaX/actions/runs/38884644417). No live FC2Club requests were made.
 
+
+## Focused comparison: official FC2 article pages (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/fc2.py` with the pinned SDK's `provider/fc2/fc2.go` at `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+
+- **Metadata coverage — SDK is broader.** Amane extracts title, sample images, cover/poster, release date, seller/studio, tags, and description. The SDK additionally parses actor/genre information, runtime, score, iframe summary, and checks Product ID consistency. Preserve those existing fields.
+- **URL and ID correctness — SDK gap found.** SDK `ParseMovieIDFromURL` previously accepted any URL and used its final path segment; `GetMovieInfoByID` interpolated the caller's ID directly into the URL. This allowed unrelated origins and malformed IDs to enter the detail-fetch path.
+- **Decision and patch.** Added `patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch`: validate HTTPS, exact official host, default HTTPS port, no userinfo, and the `/article/{numeric-id}` path; normalize numeric IDs before constructing URLs; reject redirects unless they remain on the same FC2 article, with a 10-hop cap. Existing metadata extraction remains unchanged.
+- **Verification.** Combined patch application, formatting, and deterministic JavBus, AVBase, DAHLIA/FALENO, and FC2 tests passed in [CI run 38885581605](https://github.com/strange-dragon/metaX/actions/runs/38885581605). The full metaX Go test workflow also passed in [run 38885581539](https://github.com/strange-dragon/metaX/actions/runs/38885581539). No live FC2 requests or full upstream SDK regression suite were run.
+
 ## Per-site acceptance checklist
 
 - [ ] Site registry, aliases, and supported roles confirmed.
