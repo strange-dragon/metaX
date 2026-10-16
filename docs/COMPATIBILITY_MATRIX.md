@@ -296,3 +296,13 @@ Compared Amane `src/amane/crawlers/sites/airav.py` with the native Go provider i
 - **URL validation gap.** The native Go parser validated origin but previously treated the final path segment of any same-origin URL as a movie ID. That allowed unrelated paths such as `/not-video/{id}` to be used as detail pages; query and fragment components were also accepted even though they are not part of the canonical detail identity.
 - **Fix.** Detail URLs now require exactly the `/video/{id}` route (an optional trailing slash is tolerated) and reject query/fragment components. Redirect validation still requires the final path's ID to match the originally requested ID, in addition to the same-origin redirect policy.
 - **Verification.** Added deterministic parser tests for wrong route, extra path segments, query, and fragment. CI results are pending for this update. No live Airav requests were made.
+
+
+## Focused comparison: JavDB detail URL origin validation (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/javdb.py` with native metaX `provider/javdb`.
+
+- **Search behavior.** Amane retries alternate Western date-number forms and selects an exact or uniquely accepted leading-digit variant. The native provider already implements number variants and rejects ambiguous leading-digit collisions; this work leaves search behavior unchanged.
+- **Gap found.** The native provider checked JavDB's hostname but did not require the configured scheme or effective port and accepted userinfo and fragments. Consequently, URLs such as `http://javdb.com/v/id`, `https://javdb.com:8443/v/id`, or `https://user@javdb.com/v/id` could pass detail URL parsing even though they do not represent the configured origin.
+- **Fix.** Detail URL parsing now requires the configured scheme, the configured host or documented `www` alias, the same effective port, and no userinfo or fragment. Query parameters remain allowed because JavDB detail links can legitimately include locale parameters. The configured test-server scheme is honored so local HTTP tests remain deterministic while production's configured origin is HTTPS.
+- **Verification.** Added deterministic rejection cases for HTTP downgrade, non-default port, userinfo, lookalike host, and fragment. CI for this change is pending. No live JavDB requests were made.
