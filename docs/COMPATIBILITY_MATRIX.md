@@ -33,7 +33,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | AVSox | `sites/avsox.py` | `provider/avsox` (new native Go API provider in metaX) | Compared API session lifecycle: native Go client previously discarded cookies between CSRF bootstrap and JSON POST; added a shared cookie jar and deterministic cookie-propagation test. Exact/folded number matching and localized metadata are covered by local tests; live-site verification pending |
 | Dahlia | `sites/dahlia.py` | `provider/dahlia` | Compared shared DAHLIA/FALENO core; patches `0003` and `0011` validate exact work slug, final redirect identity, HTTPS origin, port, base path, and exact detail route; deterministic tests passed in [CI run 38922533782](https://github.com/strange-dragon/metaX/actions/runs/38922533782); live-site behavior remains unverified |
 | DMM | `sites/dmm.py` | `provider/fanza` (FANZA/DMM legacy and video catalogs) | Compared on 2026-10-16; patch `0009` validates DMM detail URL origins/routes and content IDs; deterministic patch-application, formatting, and URL/ID tests passed in [CI run 38901273948](https://github.com/strange-dragon/metaX/actions/runs/38901273948); current live catalog behavior remains unverified |
-| Faleno | `sites/faleno.py` | `provider/faleno` | Compare output and error behavior |
+| Faleno | `sites/faleno.py` | `provider/faleno` + shared Dahlia core | Same WordPress REST API drift as Dahlia: Amane uses `/top/wp-json/wp/v2/works?slug={normalized}` with exact slug matching, while pinned SDK uses legacy HTML search/detail. Amane additionally maps FALENO publisher from slug prefixes (`mgold` → maryGOLD, `jimmy` → JimmyScandal) and distinguishes studio/publisher; SDK currently defaults both maker and label to FALENO. Requires REST fixture tests and output mapping before claiming parity |
 | FC2 | `sites/fc2.py` | `provider/fc2` | Compare ID normalization and metadata |
 | FC2Club | `sites/fc2club.py` | Not confirmed | Site-specific ID and result semantics |
 | FC2PPVDB | `sites/fc2ppvdb.py` | `provider/fc2ppvdb` | Compared on 2026-10-16; patch `0006` hardens article URL/ID validation; temporary deterministic verification workflow reported passing by user; live HTML mapping remains unverified |
@@ -383,3 +383,18 @@ Amane strips hyphens from the requested number, queries `/result_published/?q=..
 Added `patches/metatube-sdk-go/0012-kin8-validate-and-normalize-movie-id.patch`. The patch validates KIN8 IDs before URL construction and normalizes numeric IDs to the four-digit form expected by the current Amane reference. It accepts bare numeric IDs for compatibility with the SDK's existing direct-ID tests, plus `KIN8-` and `KIN8TENGOKU-` prefixes; it rejects unrelated catalog prefixes, zero, overlong values, and path-like input before any network request.
 
 The patch is applied by `.github/workflows/sdk-patch-validation.yml`; patch application, formatting, and all focused deterministic SDK tests passed in [run 38978044278](https://github.com/strange-dragon/metaX/actions/runs/38978044278). This does not fix the legacy-vs-current route difference; that remains deferred until the current site's HTML and field mappings are verified.
+
+
+## DAHLIA/FALENO WordPress REST contract gap (2026-10-17)
+
+A deeper source comparison found that the Amane `WordPressWorksCrawler` is not merely a different HTML parser. It uses the WordPress REST endpoint `/wp-json/wp/v2/works?slug={slug}` as the source of truth for both lookup and metadata extraction. It rejects fuzzy/redirect-based substitutes by requiring a returned post whose `slug` exactly matches the normalized catalog slug. This is important because the HTML site can redirect an unrecognized prefix match to another work.
+
+The pinned SDK's shared `provider/dahlia/core` still searches legacy HTML and extracts fields from legacy selectors. The existing patches `0003` and `0011` improve exact identity and URL safety on that implementation, but do not close the REST API/source-contract gap.
+
+Output mapping differences to resolve:
+- REST ACF fields supply title, actors, plot, runtime, and release date; custom image fields supply main, sub, and gallery images.
+- The public work page URL should remain the returned metadata homepage, even if JSON is used for retrieval.
+- FALENO derives publisher/label from slug prefixes (`mgold` → `maryGOLD`, `jimmy` → `JimmyScandal`) while keeping studio as FALENO; Dahlia uses DAHLIA for both.
+- Missing optional ACF fields should degrade individually rather than fail the whole record; non-exact slug results should be treated as misses.
+
+Decision: treat REST-backed field parity as an implementation gap, not a completed migration. The next implementation should be driven by hand-authored, independently derived JSON fixtures and tests for exact slug selection, malformed/null fields, image mapping, and publisher routing. Do not switch the production route solely from source inspection or claim live-site compatibility.
