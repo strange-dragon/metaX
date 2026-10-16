@@ -161,7 +161,7 @@ func (p *Actor) GetActorInfoByURL(rawURL string) (*model.ActorInfo, error) {
 	}
 
 	fields := profileFields(profile)
-	height, bust, waist, hip, cup := parseMeasurements(fields["サイズ"])
+	height, bust, waist, hip, cup := parseMeasurements(fields["サイズ"])\n\tif height == 0 {\n\t\tif m := heightRE.FindStringSubmatch(fields["身長"]); len(m) == 2 {\n\t\t\theight, _ = strconv.Atoi(m[1])\n\t\t}\n\t}
 	birthday := parser.ParseDate(fields["生年月日"])
 	image := cleanText(doc.Find(`meta[property="og:image"]`).First().AttrOr("content", ""))
 	if image == "" {
