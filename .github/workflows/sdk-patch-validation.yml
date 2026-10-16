@@ -42,6 +42,10 @@ jobs:
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch"
 
+      - name: Apply DAHLIA/FALENO URL validation patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0011-dahlia-validate-detail-url-origin.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0011-dahlia-validate-detail-url-origin.patch"
+
       - name: Apply FC2 patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch"
@@ -60,7 +64,7 @@ jobs:
       - name: Verify formatting
         working-directory: upstream-sdk
         run: |
-          files="provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go"
+          files="provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/dahlia/core/core_url_validation_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go"
           gofmt -d $files
           test -z "$(gofmt -l $files)"
 
@@ -77,7 +81,32 @@ jobs:
       - name: Run deterministic DAHLIA/FALENO identity tests
         working-directory: upstream-sdk
         run: |
-          go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug$' -count=1
+          go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug
+      - name: Run deterministic FC2 URL and ID validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/fc2 -run "TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)" -count=1
+
+      - name: Run deterministic Getchu ID and URL validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
+ -count=1
+
+      - name: Run deterministic DAHLIA/FALENO URL validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/dahlia/core -run '^TestParseMovieIDFromURLValidatesOriginAndPath
+      - name: Run deterministic FC2 URL and ID validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/fc2 -run "TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)" -count=1
+
+      - name: Run deterministic Getchu ID and URL validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
+ -count=1
 
       - name: Run deterministic FC2 URL and ID validation tests
         working-directory: upstream-sdk
