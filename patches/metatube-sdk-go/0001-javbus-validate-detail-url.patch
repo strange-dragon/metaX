@@ -81,10 +81,14 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
 +	return info, nil
  }
  
-@@ -173,4 +202,89 @@
+@@ -173,4 +202,93 @@
  	return strings.ToUpper(keyword)
  }
  
++func hasRequiredMovieFields(title, number string) bool {
++	return strings.TrimSpace(title) != "" && strings.TrimSpace(number) != ""
++}
++
 +// foldMovieNumber follows Amane's JavBus matching rules: case, hyphens, and
 +// spaces are ignored, but underscores remain significant.
 +func foldMovieNumber(s string) string {
