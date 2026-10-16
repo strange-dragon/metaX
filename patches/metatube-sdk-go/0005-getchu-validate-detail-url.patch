@@ -10,9 +10,9 @@ This patch is based on metatube-community/metatube-sdk-go commit
 c62584675c593816cc07e7b5b977d14c7eb505a3.
 
 ---
- provider/getchu/getchu.go      | 29 +++++++++++++++++++++++++----
- provider/getchu/getchu_test.go | 49 ++++++++++++++++++++++++++++++++++++++++++
- 2 files changed, 74 insertions(+), 4 deletions(-)
+ provider/getchu/getchu.go      | 27 ++++++++++++++++++++++++++--
+ provider/getchu/getchu_test.go | 68 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 91 insertions(+), 4 deletions(-)
 
 diff --git a/provider/getchu/getchu.go b/provider/getchu/getchu.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
