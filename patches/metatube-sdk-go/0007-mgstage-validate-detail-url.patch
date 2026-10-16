@@ -10,9 +10,9 @@ validation.
 This patch is based on metatube-community/metatube-sdk-go commit
 c62584675c593816cc07e7b5b977d14c7eb505a3.
 ---
- provider/mgstage/mgstage.go      | 40 ++++++++++++++++++++++++++++++++----
- provider/mgstage/mgstage_test.go | 49 +++++++++++++++++++++++++++++++++++++++++++++++
- 2 files changed, 85 insertions(+), 4 deletions(-)
+ provider/mgstage/mgstage.go      | 36 ++++++++++++++++++++++++++++++++---
+ provider/mgstage/mgstage_test.go | 67 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 100 insertions(+), 3 deletions(-)
 
 diff --git a/provider/mgstage/mgstage.go b/provider/mgstage/mgstage.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
