@@ -72,10 +72,17 @@ func New() *FC2Club {
 
 func newForTest(base string, client *http.Client) *FC2Club {
 	u, _ := url.Parse(base)
-	p := &FC2Club{baseURL: u, timeout: defaultTimeout, priority: Priority, client: client}
-	if p.client == nil {
+	p := &FC2Club{baseURL: u, timeout: defaultTimeout, priority: Priority}
+	if client == nil {
 		p.rebuildClientLocked()
+		return p
 	}
+	clonedClient := *client
+	clonedClient.CheckRedirect = p.checkRedirect
+	if clonedClient.Timeout <= 0 {
+		clonedClient.Timeout = defaultTimeout
+	}
+	p.client = &clonedClient
 	return p
 }
 
@@ -136,13 +143,8 @@ func (p *FC2Club) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("fc2club: parse URL: %w", err)
 	}
-	if u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("fc2club: expected an absolute detail URL")
-	}
-	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
-	baseHost := strings.TrimSuffix(strings.ToLower(p.baseURL.Hostname()), ".")
-	if host != baseHost && !(baseHost == "fc2club.top" && host == "www.fc2club.top") {
-		return "", fmt.Errorf("fc2club: unexpected detail host %q", host)
+	if !p.validOrigin(u) {
+		return "", fmt.Errorf("fc2club: unexpected detail origin %q", rawURL)
 	}
 	if path.Dir(u.Path) != "/html" {
 		return "", fmt.Errorf("fc2club: URL is not an /html/FC2-{number}.html detail URL")
@@ -153,6 +155,46 @@ func (p *FC2Club) ParseMovieIDFromURL(rawURL string) (string, error) {
 		return "", fmt.Errorf("fc2club: invalid detail path %q", u.Path)
 	}
 	return "FC2-" + match[1], nil
+}
+
+
+func (p *FC2Club) validOrigin(u *url.URL) bool {
+	if u == nil || u.User != nil || u.Host == "" {
+		return false
+	}
+	if !strings.EqualFold(u.Scheme, p.baseURL.Scheme) {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	baseHost := strings.TrimSuffix(strings.ToLower(p.baseURL.Hostname()), ".")
+	if host != baseHost && !(baseHost == "fc2club.top" && host == "www.fc2club.top") {
+		return false
+	}
+	return effectivePort(u) == effectivePort(p.baseURL)
+}
+
+func effectivePort(u *url.URL) string {
+	if port := u.Port(); port != "" {
+		return port
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
+}
+
+func (p *FC2Club) checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("fc2club: stopped after 10 redirects")
+	}
+	if !p.validOrigin(req.URL) {
+		return fmt.Errorf("fc2club: refusing redirect to unexpected origin %q", req.URL)
+	}
+	return nil
 }
 
 func (p *FC2Club) SetRequestTimeout(timeout time.Duration) {
@@ -202,7 +244,7 @@ func (p *FC2Club) rebuildClientLocked() {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{Transport: transport, Timeout: timeout}
+	p.client = &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: p.checkRedirect}
 }
 
 func (p *FC2Club) httpClient() *http.Client {
@@ -212,6 +254,13 @@ func (p *FC2Club) httpClient() *http.Client {
 }
 
 func (p *FC2Club) Fetch(rawURL string) (*http.Response, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("fc2club: parse request URL: %w", err)
+	}
+	if !p.validOrigin(u) {
+		return nil, fmt.Errorf("fc2club: refusing request to unexpected origin %q", rawURL)
+	}
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("fc2club: create request: %w", err)
