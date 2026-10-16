@@ -18,7 +18,7 @@ diff --git a/provider/theporndb/video.go b/provider/theporndb/video.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- a/provider/theporndb/video.go
 +++ b/provider/theporndb/video.go
-@@ -7,7 +7,7 @@ import (
+@@ -7,6 +7,6 @@ import (
  	"net/http"
  	"net/url"
 -	"path"
@@ -26,7 +26,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	"strings"
  
  	"github.com/gocolly/colly/v2"
-@@ -29,6 +30,9 @@ const (
+@@ -29,5 +30,32 @@ const (
  	apiSearchSceneURL = "https://api.theporndb.net/scenes?q=%s"
  )
  
@@ -70,7 +70,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	if s.accessToken == "" {
  		return nil, nil
  	}
-@@ -106,12 +134,19 @@ func (s *ThePornDBVideo) GetMovieInfoByID(id string) (info *model.MovieInfo, err
+@@ -106,11 +134,11 @@ func (s *ThePornDBVideo) GetMovieInfoByID(id string) (info *model.MovieInfo, err
  
  // ParseMovieIDFromURL impls MovieProvider.ParseMovieIDFromURL.
  func (s *ThePornDBVideo) ParseMovieIDFromURL(rawURL string) (string, error) {
@@ -90,7 +90,7 @@ diff --git a/provider/theporndb/actor.go b/provider/theporndb/actor.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/provider/theporndb/actor.go
 +++ b/provider/theporndb/actor.go
-@@ -5,7 +5,8 @@ import (
+@@ -5,7 +5,7 @@ import (
  	"fmt"
  	"net/http"
  	"net/url"
@@ -99,7 +99,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	"strconv"
 +	"strings"
  
-@@ -43,12 +42,8 @@ func (s *ThePornDBActor) SetConfig(config map[string]string) error {
+@@ -43,15 +42,15 @@ func (s *ThePornDBActor) SetConfig(config map[string]string) error {
  
  // ParseActorIDFromURL impls ActorProvider.ParseActorIDFromURL.
  func (s *ThePornDBActor) ParseActorIDFromURL(rawURL string) (string, error) {
