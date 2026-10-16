@@ -75,7 +75,7 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
  
 +func matchesMovieNumber(keyword, candidate string) bool {
 +	normalize := func(s string) string {
-+		return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), "_", "-"))
++		return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), "-", ""))
 +	}
 +	keyword = normalize(keyword)
 +	candidate = normalize(candidate)
@@ -99,7 +99,7 @@ diff --git a/provider/javbus/javbus_test.go b/provider/javbus/javbus_test.go
 index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus_test.go
 +++ b/provider/javbus/javbus_test.go
-@@ -1,10 +1,68 @@
+@@ -1,10 +1,69 @@
  package javbus
  
  import (
@@ -153,7 +153,8 @@ index 20319f9553716a14eee8e162efb4872b3d926c6e..00000000000000000000000000000000
 +		want      bool
 +	}{
 +		{keyword: "SSNI-776", candidate: "SSNI-776", want: true},
-+		{keyword: "ssni_776", candidate: "SSNI-776", want: true},
++		{keyword: "ssni-776", candidate: "SSNI776", want: true},
+		{keyword: "ssni_776", candidate: "SSNI-776", want: false},
 +		{keyword: "SSNI-776", candidate: "SSNI-777", want: false},
 +		{keyword: "ABP-331", candidate: "ABP-33", want: false},
 +		{keyword: "SSNI-776", candidate: "", want: false},
