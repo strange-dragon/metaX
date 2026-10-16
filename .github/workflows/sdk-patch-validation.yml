@@ -34,6 +34,10 @@ jobs:
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch"
 
+      - name: Apply AVBase exact-search patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0010-avbase-exact-search-identity.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0010-avbase-exact-search-identity.patch"
+
       - name: Apply DAHLIA/FALENO patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch"
@@ -68,7 +72,23 @@ jobs:
       - name: Run deterministic AVBase URL tests
         working-directory: upstream-sdk
         run: |
-          go test ./provider/avbase -run '^TestMovieURLForWork$' -count=1
+          go test ./provider/avbase -run '^Test(MovieURLForWork|NormalizeAVBaseNumber|AVBaseQueryForms|PickAVBaseWorkExactAndCollision)
+
+      - name: Run deterministic DAHLIA/FALENO identity tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug$' -count=1
+
+      - name: Run deterministic FC2 URL and ID validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/fc2 -run "TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)" -count=1
+
+      - name: Run deterministic Getchu ID and URL validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
+ -count=1
 
       - name: Run deterministic DAHLIA/FALENO identity tests
         working-directory: upstream-sdk
