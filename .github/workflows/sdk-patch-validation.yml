@@ -1,4 +1,4 @@
-name: Validate upstream SDK patch
+name: Validate upstream SDK patches
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  javbus-patch:
+  sdk-patches:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout metaX migration workspace
@@ -26,9 +26,13 @@ jobs:
           ref: c62584675c593816cc07e7b5b977d14c7eb505a3
           path: upstream-sdk
 
-      - name: Apply patch
+      - name: Apply JavBus patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch"
+
+      - name: Apply AVBase patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -40,9 +44,14 @@ jobs:
       - name: Verify formatting
         working-directory: upstream-sdk
         run: |
-          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go)"
+          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go)"
 
       - name: Run deterministic URL, number-variant, and required-field tests
         working-directory: upstream-sdk
         run: |
           go test ./provider/javbus -run 'TestJavBus_ParseMovieIDFromURL|TestHasRequiredMovieFields|TestMovieNumberMatch|TestMovieNumberVariants|TestSelectMovieNumberResult' -count=1
+
+      - name: Run deterministic AVBase URL tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/avbase -run '^TestMovieURLForWork$' -count=1
