@@ -38,6 +38,10 @@ jobs:
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch"
 
+      - name: Apply FC2 patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch"
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -48,7 +52,7 @@ jobs:
       - name: Verify formatting
         working-directory: upstream-sdk
         run: |
-          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go)"
+          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go)"
 
       - name: Run deterministic URL, number-variant, and required-field tests
         working-directory: upstream-sdk
@@ -64,3 +68,8 @@ jobs:
         working-directory: upstream-sdk
         run: |
           go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug$' -count=1
+
+      - name: Run deterministic FC2 URL and ID validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/fc2 -run '^TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)$' -count=1
