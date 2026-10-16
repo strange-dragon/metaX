@@ -1,0 +1,67 @@
+# Amane → MetaTube migration execution checklist
+
+This file is the durable handoff for small, independently reviewable work units. Update it after each task so work can resume without relying on a long chat session.
+
+## Working rules
+
+- Work only on `feat/amane-provider-migration`; do not merge to `main` without explicit approval.
+- One task per commit. Keep each change narrow; inspect the diff and record verification before starting the next task.
+- Do not mark tests as passing unless they were actually run. Distinguish test failures, tests not run, and live-site checks.
+- Compare Amane behavior with the SDK implementation before porting. Prefer the best implementation based on correctness, coverage, resilience, maintainability, and runtime cost.
+- The intended runtime remains Jellyfin → existing MetaTube Jellyfin plugin → MetaTube API → native SDK Providers. Do not introduce a standalone Amane service.
+- Preserve Apache-2.0 only for code that can properly be distributed under it. MetaTube SDK-derived code retains required upstream notices. Amane attribution alone does not grant permission to copy GPL-3.0 source or fixtures; resolve licensing before any such reuse.
+
+## Task queue
+
+### Task 0 — Recover and audit repository state
+- [x] Confirm repository and feature branch.
+- [x] Read contributor instructions, migration plan, compatibility matrix, licensing notes, and initial findings.
+- [x] Confirm existing JavDB and Jav321 Provider implementations and tests.
+- [x] Inspect the SDK Provider interface and explicit `engine/register.go` registration imports.
+- [ ] Local tests, code formatting, and server integration were not run as part of this audit.
+
+### Task 1 — Establish a trustworthy test baseline for the existing JavDB Provider
+- [ ] Inspect the complete JavDB implementation and tests for correctness gaps and missing edge cases.
+- [ ] Confirm the exact Go toolchain and run focused tests plus formatting if a runnable environment is available.
+- [ ] Record commands and outcomes; do not claim live-site support based on fixture tests.
+- [ ] Make only targeted fixes justified by review or test evidence.
+
+### Task 2 — Verify the integration path before expanding providers
+- [ ] Determine whether the safest target is a small SDK fork/branch, an upstream SDK change, or an explicitly imported provider package in the MetaTube server.
+- [ ] Verify actual server imports and factory discovery; do not assume a dependency's `init()` runs unless its package is imported.
+- [ ] Keep the existing Jellyfin plugin contract unchanged unless compatibility evidence requires a change.
+
+### Task 3 — Validate Jav321 independently
+- [ ] Review implementation and deterministic tests.
+- [ ] Check ID/URL normalization, search semantics, field extraction, malformed/not-found responses, and registration.
+- [ ] Run focused tests and update findings only with evidence.
+
+### Task 4 — Compare existing SDK providers against Amane, one site per task
+- [ ] Start with the highest-value uncovered behavior in an existing provider (initial candidates: JavBus, AVBase, MGStage).
+- [ ] Record observed differences and a decision before changing code.
+- [ ] Reuse or improve existing SDK code where it is better; avoid duplicate provider stacks.
+- [ ] Update the compatibility matrix after each completed comparison.
+
+### Task 5 — Add uncovered providers in small increments
+- [ ] Prioritize sites with a clear mapping to existing SDK interfaces and manageable network behavior.
+- [ ] Each provider gets focused tests, registration verification, and a separate commit.
+- [ ] Defer browser-only/anti-bot-heavy sites until feasibility is assessed.
+
+### Task 6 — Actor-provider inventory and migration
+- [ ] Inventory Amane actor crawlers separately from movie crawlers.
+- [ ] Compare with SDK ActorProvider/ActorSearcher interfaces and preserve actor IDs, images, and field semantics.
+- [ ] Migrate one actor site per task where feasible.
+
+### Task 7 — Aggregation, full regression, and release readiness
+- [ ] Compare Amane field-level aggregation with MetaTube's existing orchestration.
+- [ ] Implement a shared aggregation change only if a demonstrated gap exists and the behavior is tested independently.
+- [ ] Run the available SDK tests, formatting/lint checks, and integration checks.
+- [ ] Document known gaps and verification limits. Do not merge to `main` without explicit approval.
+
+## Current verified status
+
+- Repository: `strange-dragon/metaX`
+- Branch: `feat/amane-provider-migration`
+- Existing providers: `provider/javdb`, `provider/jav321`
+- Current blocker for production use: the new providers are not automatically loaded by MetaTube merely because this repository exists; the runtime registration/import path must be verified and integrated.
+- Latest audit: 2026-10-16. Repository files were inspected remotely; local Go tests and live-site checks were not run during this audit.
