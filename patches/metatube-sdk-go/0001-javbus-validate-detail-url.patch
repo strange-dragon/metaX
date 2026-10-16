@@ -19,7 +19,7 @@ diff --git a/provider/javbus/javbus.go b/provider/javbus/javbus.go
 index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus.go
 +++ b/provider/javbus/javbus.go
-@@ -1,12 +1,11 @@
+@@ -1,11 +1,10 @@
  package javbus
  
  import (
