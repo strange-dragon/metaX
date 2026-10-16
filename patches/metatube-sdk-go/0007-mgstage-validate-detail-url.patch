@@ -18,7 +18,7 @@ diff --git a/provider/mgstage/mgstage.go b/provider/mgstage/mgstage.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- a/provider/mgstage/mgstage.go
 +++ b/provider/mgstage/mgstage.go
-@@ -29,6 +29,8 @@ const (
+@@ -29,6 +29,9 @@ const (
  	sampleURL = "https://www.mgstage.com/sampleplayer/sampleRespons.php?pid=%s"
  )
  
@@ -61,7 +61,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  
  func (mgs *MGS) ParseMovieIDFromURL(rawURL string) (string, error) {
  	homepage, err := url.Parse(rawURL)
-@@ -93,7 +107,29 @@ func (mgs *MGS) ParseMovieIDFromURL(rawURL string) (string, error) {
+@@ -93,7 +107,23 @@ func (mgs *MGS) ParseMovieIDFromURL(rawURL string) (string, error) {
  	if err != nil {
  		return "", err
  	}
@@ -90,42 +90,8 @@ diff --git a/provider/mgstage/mgstage_test.go b/provider/mgstage/mgstage_test.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- a/provider/mgstage/mgstage_test.go
 +++ b/provider/mgstage/mgstage_test.go
-@@ -1,6 +1,55 @@
- package mgstage
- 
- import (
-+	"testing"
-+
-+	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
-+)
-+
-+func TestMGS_GetMovieInfoByID(t *testing.T) {
-+	testkit.Test(t, New, []string{
-+		"300MAAN-778",
-+	}, 
-+		testkit.FieldsNotEmpty("preview_images", "actors"),
-+		testkit.FieldsNotEmptyAny("maker", "label", "series"),
-+		testkit.FieldsNotEmptyAny("preview_video_url", "preview_video_hls_url"),
-+	)
-+}
-+
-+func TestMGS_SearchMovie(t *testing.T) {
-+	testkit.Test(t, New, []string{
-+		"ABP-177",
-+		"200GANA-2701",
-+		"ABF-228",
-+	})
-+}
-+
-+func TestMGS_GetMovieReviewsByID(t *testing.T) {
-+	testkit.Test(t, New, []string{
-+		"200GANA-2701",
-+		"MAAN-930",
-+		"300MIUM-973",
-+		"MAAN-929",
-+		"ABP-177",
-+	})
-+}
+@@ -35,1 +35,68 @@ func TestMGS_GetMovieReviewsByID(t *testing.T) {
+ }
 +
 +func TestMGSNormalizeMovieID(t *testing.T) {
 +	tests := []struct {
