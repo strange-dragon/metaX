@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"path"
 	"strconv"
@@ -72,6 +73,9 @@ func newForTest(base string, client *http.Client) *AVSOX {
 		return p
 	}
 	c := *client
+	if c.Jar == nil {
+		c.Jar, _ = cookiejar.New(nil)
+	}
 	c.CheckRedirect = p.checkRedirect
 	if c.Timeout <= 0 {
 		c.Timeout = defaultTimeout
@@ -209,7 +213,8 @@ func (p *AVSOX) rebuildClientLocked() {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{Transport: tr, Timeout: timeout, CheckRedirect: p.checkRedirect}
+	jar, _ := cookiejar.New(nil)
+	p.client = &http.Client{Transport: tr, Timeout: timeout, Jar: jar, CheckRedirect: p.checkRedirect}
 }
 func (p *AVSOX) httpClient() *http.Client {
 	p.clientMu.RLock()
