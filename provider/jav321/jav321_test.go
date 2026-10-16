@@ -119,6 +119,47 @@ func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
 	require.False(t, targetRequested, "redirect destination must not be requested")
 }
 
+
+func TestParseMovieIDFromURLRejectsUnexpectedOriginDetails(t *testing.T) {
+	p := New()
+	for _, rawURL := range []string{
+		"http://www.jav321.com/video/SSIS-033",
+		"https://www.jav321.com:444/video/SSIS-033",
+		"https://jav321.com.evil.invalid/video/SSIS-033",
+	} {
+		t.Run(rawURL, func(t *testing.T) {
+			_, err := p.ParseMovieIDFromURL(rawURL)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestFetchStatusHandling(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/missing", func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	})
+	mux.HandleFunc("/upstream-error", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, nil)
+	resp, err := p.Fetch(server.URL + "/missing")
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	require.ErrorIs(t, err, ErrMovieNotFound)
+
+	resp, err = p.Fetch(server.URL + "/upstream-error")
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unexpected HTTP status 502 Bad Gateway")
+}
+
 func TestProxyAndTimeout(t *testing.T) {
 	p := New()
 	require.Error(t, p.SetProxy("invalid"))
