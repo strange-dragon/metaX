@@ -145,6 +145,13 @@ func (p *Actor) GetActorInfoByURL(rawURL string) (*model.ActorInfo, error) {
 		return nil, fmt.Errorf("minnano actor: profile %q has no name", rawURL)
 	}
 	name, aliases := parseNameLine(rawName)
+	filteredAliases := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		if alias != name {
+			filteredAliases = appendUnique(filteredAliases, alias)
+		}
+	}
+	aliases = filteredAliases
 	for _, row := range profile.Find("tr").EachIter() {
 		key := cleanText(row.Find("td span").First().Text())
 		if key != "別名" {
