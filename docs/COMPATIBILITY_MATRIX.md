@@ -41,7 +41,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | Getchu | `sites/getchu.py` | `provider/getchu` | Compare source mapping and field coverage |
 | Giga | `sites/giga.py` | Not confirmed | Search/detail and ID rules |
 | Iqqtv | `sites/iqqtv.py` | Not confirmed | Search/detail, API behavior |
-| Jav321 | `sites/jav321.py` | Not confirmed | Search/detail and normalization |
+| Jav321 | `sites/jav321.py` | No existing SDK Provider found in the inspected tree | `provider/jav321` — movie search/detail | Native route implementation uses `/video/{number}`, validates host/path, normalizes number and title, and maps actors, studio, release, runtime, genres and cover |
 | JavBus | `sites/javbus.py` | `provider/javbus` | Compare redirects, cookies, special-ID rejection, previews |
 | JavDB | `sites/javdb.py` | No matching `provider/javdb` file observed in SDK tree | Confirm feasibility and whether a native Provider should be added |
 | JavLibrary | `sites/javlibrary.py` | Not confirmed | Login/session, parsing, source availability |
