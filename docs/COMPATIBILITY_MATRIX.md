@@ -30,7 +30,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 |---|---|---|---|
 | Airav | `sites/airav.py` | `provider/airav` (new native Go provider in metaX) | Exact catalog-number matching, detail IDs, metadata fields, URL/redirect handling; live-site verification pending |
 | AVBase | `sites/avbase.py` | `provider/avbase` | Compare field coverage and multi-source fallback |
-| AVSox | `sites/avsox.py` | Not confirmed | Search/detail, site status and parsing |
+| AVSox | `sites/avsox.py` | `provider/avsox` (new native Go API provider in metaX) | CSRF/API flow, exact/folded number matching, localized metadata, URL and redirect handling; live-site verification pending |
 | Dahlia | `sites/dahlia.py` | `provider/dahlia` | Compare output, headers, ID rules |
 | DMM | `sites/dmm.py` | DMM/FANZA-related providers exist; exact mapping to verify | API/site behavior, ID normalization, images |
 | Faleno | `sites/faleno.py` | `provider/faleno` | Compare output and error behavior |
@@ -136,3 +136,14 @@ Compared Amane's `sites/airav.py` behavior with the native MetaTube SDK interfac
 - **Request handling.** The provider validates detail origins, caps response bodies, limits redirects to the configured origin, and rejects a same-origin redirect that resolves to a different detail path.
 - **Deterministic coverage.** Local HTTP tests cover exact vs near-number results, required detail identity, field mapping, opaque detail IDs, malformed/unsafe origins, cross-origin redirects, redirected work identity, provider registration, and proxy/timeout configuration. Full metaX Go tests and formatting passed in [run 38890986424](https://github.com/strange-dragon/metaX/actions/runs/38890986424) and [format run 38890986411](https://github.com/strange-dragon/metaX/actions/runs/38890986411).
 - **Limitations.** No live Airav requests were made. Current production HTML selectors, domain availability, redirects, and metadata coverage remain unverified; the new provider is not yet registered in the pinned upstream SDK's `engine/register.go`, so it is not automatically available in an unmodified MetaTube server.
+
+## Focused comparison: AVSOX (2026-10-16)
+
+Compared Amane's AVSOX crawler behavior with the pinned SDK provider inventory. No `provider/avsox` package exists in the SDK snapshot, so metaX now has an independent native implementation; no Amane source or fixture files were copied.
+
+- **Transport model.** AVSOX is a Vue SPA; useful movie data comes from its Yii JSON API rather than the initial HTML shell. The Go provider follows the observed sequence: GET the localized home page, read the CSRF token, then POST JSON to `/javu/data/api/search` or `/javu/data/api/getMovie` with the expected AJAX headers and referer.
+- **Number selection.** Search prioritizes case-insensitive exact numbers, then falls back to separator-folded matching where hyphens and spaces are ignored but underscores remain significant. Near-number matches are not accepted.
+- **Metadata mapping.** The provider maps movie ID/number, localized title and description, cover/poster, sample images, actors, studio, label, series, director, genres, release date, and runtime into the SDK model. Localized entity-name suffixes are handled without assuming every API object has the same shape.
+- **Request hardening.** Requests and redirects are constrained to the configured origin; detail URLs require the supported movie path and an alphanumeric ID; response bodies are capped.
+- **Deterministic coverage.** Local API tests cover CSRF propagation, search selection, underscore distinction, metadata mapping, mismatched API IDs, invalid URL origins/paths, cross-origin redirects, provider registration, and proxy/timeout configuration. Full metaX Go tests passed in [run 38892023957](https://github.com/strange-dragon/metaX/actions/runs/38892023957), and formatting passed in [run 38892023918](https://github.com/strange-dragon/metaX/actions/runs/38892023918).
+- **Limitations.** No live AVSOX requests were made. The configured domain, CSRF policy, API payload/response schema, and current field names remain source-derived assumptions pending live verification. The provider is not yet imported by the pinned upstream SDK's provider registration package.
