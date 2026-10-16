@@ -37,6 +37,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
 +		return nil, err
 +	}
 +
+ 	info = &model.MovieInfo{
 @@ -140,7 +145,21 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
  		}
  	})
