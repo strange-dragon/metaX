@@ -39,6 +39,7 @@ var (
 	actorIDRE                      = regexp.MustCompile(`^\d+$`)
 	actressHrefRE                  = regexp.MustCompile(`(?i)^/actress(\d+)\.html$`)
 	figureRE                       = regexp.MustCompile(`(?i)T\s*\d+\s*/\s*B\s*(\d+)\s*(?:\(\s*([A-Z]+)(?:カップ)?\s*\))?\s*/\s*W\s*(\d+)\s*/\s*H\s*(\d+)`)
+	heightRE                       = regexp.MustCompile(`(\d{2,3})\s*(?:cm|センチ)?`)
 	cupRE                          = regexp.MustCompile(`(?i)([A-Z]+)\s*カップ`)
 	ageGateCookie                  = &http.Cookie{Name: "age_verified", Value: "1", Path: "/"}
 )
