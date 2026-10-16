@@ -96,6 +96,29 @@ func TestNotFoundPageAndRegistration(t *testing.T) {
 	require.True(t, found, "Jav321 should register with MetaTube's Provider factory")
 }
 
+func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
+	targetRequested := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		targetRequested = true
+		_, _ = fmt.Fprint(w, detailFixture)
+	}))
+	defer target.Close()
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Redirect(w, nil, target.URL+"/landing", http.StatusFound)
+	}))
+	defer source.Close()
+
+	p := newForTest(source.URL, nil)
+	resp, err := p.Fetch(source.URL + "/start")
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "refusing redirect")
+	require.False(t, targetRequested, "redirect destination must not be requested")
+}
+
 func TestProxyAndTimeout(t *testing.T) {
 	p := New()
 	require.Error(t, p.SetProxy("invalid"))
