@@ -3,11 +3,11 @@ index 1234567..89abcde 100644
 --- a/provider/kin8tengoku/kin8tengoku.go
 +++ b/provider/kin8tengoku/kin8tengoku.go
 @@ -45,6 +45,11 @@ func (k8 *KIN8) NormalizeMovieID(id string) string {
--	if ss := regexp.MustCompile(\`^(?i)(?:kin8[-_])?(\\d+)$\`).FindStringSubmatch(id); len(ss) == 2 {
+-	if ss := regexp.MustCompile(`^(?i)(?:kin8[-_])?(\d+)$`).FindStringSubmatch(id); len(ss) == 2 {
 -		return ss[1]
 -	}
 -	return ""
-+	ss := regexp.MustCompile(\`(?i)^(?:KIN8(?:TENGOKU)?[-_ ]?)?(\\d+)$\`).FindStringSubmatch(strings.TrimSpace(id))
++	ss := regexp.MustCompile(`(?i)^(?:KIN8(?:TENGOKU)?[-_ ]?)?(\d+)$`).FindStringSubmatch(strings.TrimSpace(id))
 +	if len(ss) != 2 {
 +		return ""
 +	}
