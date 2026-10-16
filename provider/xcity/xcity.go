@@ -37,7 +37,7 @@ const (
 
 var (
 	ErrMovieNotFound                         = errors.New("xcity: movie not found")
-	catalogNumberRE = regexp.MustCompile(`(?i)^[a-z]+[- ]?\d+[a-z0-9_-]*$`)
+	catalogNumberRE                          = regexp.MustCompile(`(?i)^[a-z]+[- ]?\d+[a-z0-9_-]*$`)
 	_                mt.MovieProvider        = (*XCity)(nil)
 	_                mt.MovieSearcher        = (*XCity)(nil)
 	_                mt.Fetcher              = (*XCity)(nil)
