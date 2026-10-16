@@ -12,7 +12,8 @@ This repository keeps the new Provider in a testable migration workspace. To ena
 2. Add the following import in the SDK's `engine/register.go` alongside existing blank imports:
 
    ```go
-   _ "github.com/metatube-community/metatube-sdk-go/provider/javdb"\n   _ "github.com/metatube-community/metatube-sdk-go/provider/jav321"
+   _ "github.com/metatube-community/metatube-sdk-go/provider/javdb"
+   _ "github.com/metatube-community/metatube-sdk-go/provider/jav321"
    ```
 
 3. Run `gofmt -w provider/javdb/*.go provider/jav321/*.go engine/register.go`.
