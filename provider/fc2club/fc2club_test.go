@@ -86,6 +86,47 @@ func TestNoResultAndRegistration(t *testing.T) {
 	require.True(t, found, "FC2Club should register with MetaTube's Provider factory")
 }
 
+
+func TestParseMovieIDFromURLRejectsUnsafeOrigins(t *testing.T) {
+	p := New()
+	urls := []string{
+		"http://fc2club.top/html/FC2-123456.html",
+		"https://fc2club.top:444/html/FC2-123456.html",
+		"https://user@fc2club.top/html/FC2-123456.html",
+		"https://fc2club.top.evil.invalid/html/FC2-123456.html",
+	}
+	for _, rawURL := range urls {
+		t.Run(rawURL, func(t *testing.T) {
+			_, err := p.ParseMovieIDFromURL(rawURL)
+			require.Error(t, err)
+		})
+	}
+	_, err := p.ParseMovieIDFromURL("https://www.fc2club.top/html/FC2-123456.html")
+	require.NoError(t, err)
+}
+
+func TestDetailRequestRejectsCrossOriginRedirect(t *testing.T) {
+	var externalRequests int
+	external := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		externalRequests++
+		_, _ = fmt.Fprint(w, detailFixture)
+	}))
+	defer external.Close()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/html/FC2-123456.html", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, external.URL+"/stolen", http.StatusFound)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByURL(server.URL + "/html/FC2-123456.html")
+	require.Nil(t, info)
+	require.Error(t, err)
+	require.Zero(t, externalRequests, "cross-origin redirect target must not be requested")
+}
+
 func TestProxyAndTimeout(t *testing.T) {
 	p := New()
 	require.Error(t, p.SetProxy("invalid"))
