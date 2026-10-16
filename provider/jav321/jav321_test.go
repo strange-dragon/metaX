@@ -104,8 +104,8 @@ func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
 	}))
 	defer target.Close()
 
-	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Redirect(w, nil, target.URL+"/landing", http.StatusFound)
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/landing", http.StatusFound)
 	}))
 	defer source.Close()
 
