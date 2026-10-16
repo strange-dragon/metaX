@@ -65,7 +65,6 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
 @@ -150,3 +164,31 @@
  }
  
- func (core *Core) NormalizeMovieKeyword(keyword string) string {
 +// verifyMovieSlug checks the WordPress REST API before scraping the detail
 +// page. A missing slug may otherwise redirect to an unrelated work page.
 +func (core *Core) verifyMovieSlug(id string) error {
