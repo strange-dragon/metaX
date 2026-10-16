@@ -37,7 +37,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | FC2 | `sites/fc2.py` | `provider/fc2` | Compare ID normalization and metadata |
 | FC2Club | `sites/fc2club.py` | Not confirmed | Site-specific ID and result semantics |
 | FC2PPVDB | `sites/fc2ppvdb.py` | `provider/fc2ppvdb` | Compared on 2026-10-16; patch `0006` hardens article URL/ID validation; temporary deterministic verification workflow reported passing by user; live HTML mapping remains unverified |
-| Freejavbt | `sites/freejavbt.py` | Not confirmed | Search/detail and anti-bot behavior |
+| Freejavbt | `sites/freejavbt.py` | No equivalent in the pinned SDK; `provider/javfree` targets a different FC2-focused site | Native `provider/freejavbt` added in metaX; deterministic search/detail, metadata, URL, redirect, and registration tests passed in [CI run 38901990362](https://github.com/strange-dragon/metaX/actions/runs/38901990362); live-site behavior and upstream SDK registration remain unverified |
 | Getchu | `sites/getchu.py` | `provider/getchu` | Compared on 2026-10-16; patch `0005` hardens ID/URL validation; temporary deterministic verification workflow reported passing by user; search behavior/catalog mismatch remains open |
 | Giga | `sites/giga.py` | Not confirmed | Search/detail and ID rules |
 | Iqqtv | `sites/iqqtv.py` | Not confirmed | Search/detail, API behavior |
@@ -199,3 +199,15 @@ Compared Amane `src/amane/crawlers/sites/dmm.py` and its DMM API/CDN helpers wit
 - **Targeted patch.** Added `patches/metatube-sdk-go/0009-fanza-validate-detail-url.patch`: constrain detail URLs to HTTPS on `www.dmm.co.jp` or `video.dmm.co.jp`, reject userinfo and non-default ports, validate legacy `/digital/.../cid=...` and modern `/{av,amateur,anime,cinema}/content/?id=...` route shapes, and reject malformed IDs before URL construction. Existing parsing, search semantics, GraphQL requests, and metadata mapping remain unchanged.
 - **Verification.** The one-off workflow passed patch application, file-existence checks, gofmt, and deterministic URL/ID tests in [CI run 38901273948](https://github.com/strange-dragon/metaX/actions/runs/38901273948). The full metaX Go test workflow passed in [run 38901273971](https://github.com/strange-dragon/metaX/actions/runs/38901273971), and metaX formatting passed in [run 38901273993](https://github.com/strange-dragon/metaX/actions/runs/38901273993). No live DMM/FANZA requests were made, and the SDK's existing live-oriented provider tests were not run.
 - **Remaining gap.** Amane's FANZA TV / DMM TV GraphQL category support is not confirmed to be covered by the pinned SDK provider. Treat it as a separate capability review rather than expanding this validation patch without live or deterministic API evidence.
+
+
+## Focused comparison: Freejavbt (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/freejavbt.py` with the pinned SDK provider inventory and `provider/javfree/javfree.go` at `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+
+- **No direct SDK equivalent.** The SDK's `JAVFREE` provider targets `javfree.me` and FC2-specific paths/IDs; it is not the `freejavbt.com` catalog. Reusing it as a substitute would conflate unrelated sites and lookup semantics.
+- **Search semantics.** Amane treats the final detail-URL segment as the catalog number and accepts only an exact normalized match. The new native Go provider follows exact matching, rejects near-number and external-origin results, and falls back to direct detail lookup when search returns no candidate.
+- **Metadata mapping.** The new provider maps title/number, performers, maker, label, series, release date, runtime, genres, cover/thumbnail, and sample images to the existing SDK `model.MovieInfo` / `MovieSearchResult` types. It does not introduce model changes or an Amane runtime.
+- **Request hardening.** Detail and search requests are constrained to the configured origin, redirects are limited to the same origin and 10 hops, response bodies are capped, and malformed IDs are rejected.
+- **Deterministic verification.** Local HTTP tests cover exact vs near-number results, field mapping, direct-detail fallback, invalid origins/routes, same-origin redirects to a different work, cross-origin redirect rejection, registration, proxy, and timeout behavior. Full metaX Go tests passed in [run 38901990362](https://github.com/strange-dragon/metaX/actions/runs/38901990362); formatting passed in [run 38901990351](https://github.com/strange-dragon/metaX/actions/runs/38901990351).
+- **Limits.** No live Freejavbt requests were made. The site domain, current selectors, permalink shape, and whether the site redirects to a canonical alias remain unverified. The new provider is implemented in the metaX migration workspace but has not been imported into the pinned upstream SDK's registration package.
