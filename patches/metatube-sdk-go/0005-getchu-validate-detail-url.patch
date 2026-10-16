@@ -26,7 +26,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	"regexp"
  	"strings"
  
-@@ -23,6 +22,8 @@ const (
+@@ -23,7 +22,9 @@ const (
  	baseURL  = "https://dl.getchu.com/"
  	movieURL = "https://dl.getchu.com/i/item%s"
  )
@@ -36,11 +36,11 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  type Getchu struct {
  	*scraper.Scraper
  }
-@@ -34,16 +35,38 @@ func New() *Getchu {
+@@ -34,22 +35,42 @@ func New() *Getchu {
  }
  
  func (gcu *Getchu) NormalizeMovieID(id string) string {
--	if ss := regexp.MustCompile(`^(?i)(?:GETCHU[-_])?(\\d+)$`).FindStringSubmatch(id); len(ss) == 2 {
+-	if ss := regexp.MustCompile(`^(?i)(?:GETCHU[-_])?([0-9]+)$`).FindStringSubmatch(id); len(ss) == 2 {
 +	if ss := regexp.MustCompile(`^(?i)(?:GETCHU[-_])?([0-9]+)$`).FindStringSubmatch(strings.TrimSpace(id)); len(ss) == 2 {
  		return ss[1]
  	}
@@ -85,7 +85,7 @@ diff --git a/provider/getchu/getchu_test.go b/provider/getchu/getchu_test.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/provider/getchu/getchu_test.go
 +++ b/provider/getchu/getchu_test.go
-@@ -1,11 +1,60 @@
+@@ -1,17 +1,85 @@
  package getchu
  
  import (
