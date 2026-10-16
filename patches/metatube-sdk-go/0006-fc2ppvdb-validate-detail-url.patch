@@ -1,0 +1,162 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] fc2ppvdb: validate detail URL and numeric ID
+
+Validate FC2PPVDB article IDs before constructing URLs and accept only
+canonical HTTPS article URLs on fc2ppvdb.com. Add deterministic tests
+for ID normalization, malformed paths, and unsafe origins.
+
+This patch is based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+
+---
+ provider/fc2ppvdb/fc2ppvdb.go      | 34 ++++++++++++++++++++++++++++++----
+ provider/fc2ppvdb/fc2ppvdb_test.go | 53 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 83 insertions(+), 4 deletions(-)
+
+diff --git a/provider/fc2ppvdb/fc2ppvdb.go b/provider/fc2ppvdb/fc2ppvdb.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
+--- a/provider/fc2ppvdb/fc2ppvdb.go
++++ b/provider/fc2ppvdb/fc2ppvdb.go
+@@ -3,7 +3,6 @@ package fc2ppvdb
+ import (
+ 	"fmt"
+ 	"net/url"
+-	"path"
++	"regexp"
+ 	"strings"
+ 
+ 	"github.com/antchfx/htmlquery"
+@@ -33,18 +32,45 @@ func New() *FC2PPVDB {
+ }
+ 
+ func (fc2ppvdb *FC2PPVDB) NormalizeMovieID(id string) string {
+-	return fc2util.ParseNumber(id)
++	return fc2util.ParseNumber(strings.TrimSpace(id))
+ }
+ 
+ func (fc2ppvdb *FC2PPVDB) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
++	id = fc2ppvdb.NormalizeMovieID(id)
++	if id == "" {
++		return nil, fmt.Errorf("fc2ppvdb: invalid movie ID")
++	}
+ 	return fc2ppvdb.GetMovieInfoByURL(fmt.Sprintf(movieURL, id))
+ }
+ 
++var detailPathRE = regexp.MustCompile(`^/articles/([0-9]+)/?$ `.TrimSpace())
++
+ func (fc2ppvdb *FC2PPVDB) ParseMovieIDFromURL(rawURL string) (string, error) {
+ 	homepage, err := url.Parse(rawURL)
+ 	if err != nil {
+ 		return "", err
+ 	}
+-	return path.Base(homepage.Path), nil
++	if !homepage.IsAbs() || homepage.Host == "" || !strings.EqualFold(homepage.Scheme, "https") {
++		return "", fmt.Errorf("fc2ppvdb: expected an absolute HTTPS article URL")
++	}
++	if homepage.User != nil {
++		return "", fmt.Errorf("fc2ppvdb: userinfo is not allowed in article URLs")
++	}
++	if host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), "."); host != "fc2ppvdb.com" {
++		return "", fmt.Errorf("fc2ppvdb: unexpected article host %q", homepage.Hostname())
++	}
++	if port := homepage.Port(); port != "" && port != "443" {
++		return "", fmt.Errorf("fc2ppvdb: unexpected article port %q", port)
++	}
++	matches := detailPathRE.FindStringSubmatch(homepage.Path)
++	if len(matches) != 2 {
++		return "", fmt.Errorf("fc2ppvdb: URL is not a supported article path")
++	}
++	return matches[1], nil
+ }
+ 
+ func (fc2ppvdb *FC2PPVDB) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
+diff --git a/provider/fc2ppvdb/fc2ppvdb_test.go b/provider/fc2ppvdb/fc2ppvdb_test.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
+--- a/provider/fc2ppvdb/fc2ppvdb_test.go
++++ b/provider/fc2ppvdb/fc2ppvdb_test.go
+@@ -1,13 +1,66 @@
+ package fc2ppvdb
+ 
+ import (
+ 	"testing"
+ 
+ 	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
+ )
+ 
+ func TestFC2PPVDB_GetMovieInfoByID(t *testing.T) {
+ 	testkit.Test(t, New, []string{
+ 		"2812904",
+ 		"4669533",
+ 		"4745474",
+ 		"4137487",
+ 	})
+ }
++
++func TestFC2PPVDBNormalizeMovieID(t *testing.T) {
++	p := New()
++	tests := []struct {
++		input string
++		want  string
++	}{
++		{input: "2812904", want: "2812904"},
++		{input: "FC2-2812904", want: "2812904"},
++		{input: " fc2_ppv_2812904 ", want: "2812904"},
++		{input: "../2812904", want: ""},
++		{input: "2812904?x=1", want: ""},
++		{input: "", want: ""},
++	}
++	for _, tt := range tests {
++		t.Run(tt.input, func(t *testing.T) {
++			if got := p.NormalizeMovieID(tt.input); got != tt.want {
++				t.Errorf("NormalizeMovieID(%q) = %q, want %q", tt.input, got, tt.want)
++			}
++		})
++	}
++}
++
++func TestFC2PPVDBParseMovieIDFromURL(t *testing.T) {
++	p := New()
++	tests := []struct {
++		url     string
++		want    string
++		wantErr bool
++	}{
++		{url: "https://fc2ppvdb.com/articles/2812904", want: "2812904"},
++		{url: "https://fc2ppvdb.com/articles/4669533/?ref=search", want: "4669533"},
++		{url: "http://fc2ppvdb.com/articles/2812904", wantErr: true},
++		{url: "https://fc2ppvdb.com:8443/articles/2812904", wantErr: true},
++		{url: "https://user@fc2ppvdb.com/articles/2812904", wantErr: true},
++		{url: "https://fc2ppvdb.com.evil.invalid/articles/2812904", wantErr: true},
++		{url: "https://fc2ppvdb.com/articles/abc", wantErr: true},
++		{url: "https://fc2ppvdb.com/articles/2812904/extra", wantErr: true},
++		{url: "https://fc2ppvdb.com/actresses/2812904", wantErr: true},
++		{url: "/articles/2812904", wantErr: true},
++	}
++	for _, tt := range tests {
++		t.Run(tt.url, func(t *testing.T) {
++			got, err := p.ParseMovieIDFromURL(tt.url)
++			if tt.wantErr {
++				if err == nil {
++					t.Fatalf("ParseMovieIDFromURL(%q) error = nil, want error", tt.url)
++				}
++				return
++			}
++			if err != nil {
++				t.Fatalf("ParseMovieIDFromURL(%q) error = %v", tt.url, err)
++			}
++			if got != tt.want {
++				t.Errorf("ParseMovieIDFromURL(%q) = %q, want %q", tt.url, got, tt.want)
++			}
++		})
++	}
++}
++
++func TestFC2PPVDBGetMovieInfoByIDRejectsInvalidID(t *testing.T) {
++	if _, err := New().GetMovieInfoByID("../2812904"); err == nil {
++		t.Fatal("GetMovieInfoByID accepted an invalid movie ID")
++	}
++}
++
+-- 
+2.50.1
