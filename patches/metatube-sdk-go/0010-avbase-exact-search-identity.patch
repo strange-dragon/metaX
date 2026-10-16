@@ -831,7 +831,7 @@ diff --git a/provider/avbase/avbase.go b/provider/avbase/avbase.go
 diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 --- a/provider/avbase/avbase_test.go
 +++ b/provider/avbase/avbase_test.go
-@@ -1,47 +1,109 @@
+@@ -1,47 +1,117 @@
 -package avbase
 -
 -import (
@@ -927,9 +927,11 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 +		"HMN",
 +	})
 +}
-+
 +func TestNormalizeAVBaseNumber(t *testing.T) {
-+	for _, tt := range []struct{ input, want string }{
++	for _, tt := range []struct {
++		input string
++		want  string
++	}{
 +		{"ssis-00497", "SSIS497"},
 +		{"SSIS 497", "SSIS497"},
 +		{"ABP-00588", "ABP588"},
@@ -941,7 +943,10 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 +}
 +
 +func TestAVBaseQueryForms(t *testing.T) {
-+	tests := []struct{ input string; want []string }{
++	tests := []struct {
++		input string
++		want  []string
++	}{
 +		{"SSIS497", []string{"SSIS497", "SSIS-497"}},
 +		{"SSIS-497", []string{"SSIS-497", "SSIS497"}},
 +		{"", nil},
