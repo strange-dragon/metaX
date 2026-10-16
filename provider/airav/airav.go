@@ -421,8 +421,8 @@ func (p *Airav) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	finalParsed, err := url.Parse(finalURL)
-	if err != nil || path.Base(finalParsed.Path) != id {
+	finalID, finalErr := p.ParseMovieIDFromURL(finalURL)
+	if finalErr != nil || finalID != id {
 		return nil, fmt.Errorf("%w: detail URL redirected from %q to %q", ErrMovieNotFound, rawURL, finalURL)
 	}
 	number := ""
