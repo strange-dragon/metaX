@@ -14,7 +14,7 @@ c62584675c593816cc07e7b5b977d14c7eb505a3.
 diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 --- a/provider/dahlia/core/core.go
 +++ b/provider/dahlia/core/core.go
-@@ -50,7 +50,39 @@
+@@ -51,7 +51,39 @@
 -func (core *Core) ParseMovieIDFromURL(rawURL string) (string, error) {
 -	homepage, err := url.Parse(rawURL)
 -	if err != nil {
