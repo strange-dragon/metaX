@@ -232,8 +232,8 @@ func (p *AVSOX) apiCall(method string, payload any, referer string) (json.RawMes
 	responseBody, err := p.readBody(resp)
 	if err != nil { return nil, err }
 	var envelope struct {
-		Code int "json:"code"
-		Data json.RawMessage "json:"data"
+		Code int `json:"code"`
+		Data json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(responseBody, &envelope); err != nil { return nil, fmt.Errorf("avsox: decode %s response: %w", method, err) }
 	if envelope.Code != http.StatusOK || len(envelope.Data) == 0 || string(envelope.Data) == "null" {
@@ -281,29 +281,29 @@ func namedValue(value any, prefix string) string {
 }
 
 type moviePayload struct {
-	MovieID string "json:"movieId"
-	Number string "json:"movieFanHao"
-	Title string "json:"title"
-	TitleJA string "json:"title_ja"
-	TitleEN string "json:"title_en"
-	TitleCN string "json:"title_cn"
-	TitleTW string "json:"title_tw"
-	ReleaseDate string "json:"releaseDate"
-	Length json.RawMessage "json:"length"
-	Description string "json:"description"
-	DescriptionJA string "json:"description_ja"
-	DescriptionEN string "json:"description_en"
-	DescriptionCN string "json:"description_cn"
-	DescriptionTW string "json:"description_tw"
-	PosterSmall string "json:"posterSmall"
-	PosterLarge string "json:"posterLarge"
-	SampleLarge []string "json:"sampleLarge"
-	Studio any "json:"studio"
-	Star []map[string]any "json:"star"
-	Genre []map[string]any "json:"genre"
-	Director any "json:"director"
-	Label any "json:"label"
-	Series any "json:"series"
+	MovieID string `json:"movieId"`
+	Number string `json:"movieFanHao"`
+	Title string `json:"title"`
+	TitleJA string `json:"title_ja"`
+	TitleEN string `json:"title_en"`
+	TitleCN string `json:"title_cn"`
+	TitleTW string `json:"title_tw"`
+	ReleaseDate string `json:"releaseDate"`
+	Length json.RawMessage `json:"length"`
+	Description string `json:"description"`
+	DescriptionJA string `json:"description_ja"`
+	DescriptionEN string `json:"description_en"`
+	DescriptionCN string `json:"description_cn"`
+	DescriptionTW string `json:"description_tw"`
+	PosterSmall string `json:"posterSmall"`
+	PosterLarge string `json:"posterLarge"`
+	SampleLarge []string `json:"sampleLarge"`
+	Studio any `json:"studio"`
+	Star []map[string]any `json:"star"`
+	Genre []map[string]any `json:"genre"`
+	Director any `json:"director"`
+	Label any `json:"label"`
+	Series any `json:"series"`
 }
 func parseLength(raw json.RawMessage) int {
 	if len(raw) == 0 || string(raw) == "null" { return 0 }
