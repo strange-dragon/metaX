@@ -40,7 +40,7 @@ var (
 
 var (
 	_ mt.MovieProvider        = (*Airav)(nil)
-	_ mt.MovieSearcher       = (*Airav)(nil)
+	_ mt.MovieSearcher        = (*Airav)(nil)
 	_ mt.Fetcher              = (*Airav)(nil)
 	_ mt.ProxySetter          = (*Airav)(nil)
 	_ mt.RequestTimeoutSetter = (*Airav)(nil)
