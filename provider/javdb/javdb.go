@@ -1,9 +1,9 @@
 // Copyright 2026 metaX contributors.
 //
 /*
-Behavioral reference: the JavDB crawler in https://github.com/sqzw-x/amane
-(GPL-3.0). This Go implementation is adapted for MetaTube's Provider API.
-See ../LICENSE and ../NOTICE.md for licensing and attribution.
+Feature-level comparison reference: https://github.com/sqzw-x/amane.
+This is a native Go implementation for the MetaTube Provider API; no Amane
+source file or test fixture is vendored. See ../../NOTICE.md for attribution.
 */
 package javdb
 
@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/lib/pq"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
 
@@ -40,7 +41,7 @@ const (
 var (
 	ErrMovieNotFound = errors.New("javdb: movie not found")
 	movieNumberRE    = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
-	leadingDigitsRE  = regexp.MustCompile(`(?i)^\d+(?=[a-z])`)
+	leadingDigitsRE  = regexp.MustCompile(`(?i)^\d+`)
 	dayNumberRE      = regexp.MustCompile(`(?i)^(?P<studio>.+?)(?P<sep0>[._-])(?P<year>\d{4}|\d{2})(?P<sep1>[._-])(?P<month>\d{2})(?P<sep2>[._-])(?P<day>\d{2})$`)
 	scoreRE          = regexp.MustCompile(`\d+(?:\.\d+)?`)
 	runtimeRE        = regexp.MustCompile(`\d+`)
@@ -168,7 +169,7 @@ func (p *JavDB) SetProxy(proxyURL string) error {
 			return fmt.Errorf("javdb: invalid proxy URL %q", proxyURL)
 		}
 		switch strings.ToLower(u.Scheme) {
-		case "http", "https", "socks5", "socks5h":
+		case "http", "https", "socks5":
 		default:
 			return fmt.Errorf("javdb: unsupported proxy scheme %q", u.Scheme)
 		}
@@ -329,7 +330,7 @@ func (p *JavDB) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	genres := fieldValues(doc, "類別", "类别", "ジャンル", "分類", "分类")
 	actors := actorNames(doc)
 	coverURL := absoluteURL(p.baseURL, firstAttr(doc.Find("img.video-cover").First(), "data-src", "data-original", "src"))
-	previews := absoluteLinks(doc, ".tile-images.preview-images a.tile-item", "href")
+	previews := p.absoluteLinks(doc, ".tile-images.preview-images a.tile-item", "href")
 	trailerURL := absoluteURL(p.baseURL, firstAttr(doc.Find("video#preview-video source").First(), "src"))
 	if trailerURL == "" {
 		trailerURL = absoluteURL(p.baseURL, firstAttr(doc.Find("video#preview-video").First(), "src"))
@@ -349,11 +350,11 @@ func (p *JavDB) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		Label:         firstNonEmpty(publisher),
 		Series:        firstNonEmpty(series),
 		Director:      strings.Join(directors, ", "),
-		Actors:        actors,
-		Genres:        genres,
+		Actors:        pq.StringArray(actors),
+		Genres:        pq.StringArray(genres),
 		CoverURL:      coverURL,
 		ThumbURL:      coverURL,
-		PreviewImages: previews,
+		PreviewImages: pq.StringArray(previews),
 		PreviewVideoURL: trailerURL,
 		Score:         parseScore(scoreText),
 		Runtime:       parseRuntimeMinutes(runtimeText),
@@ -437,8 +438,8 @@ func init() {
 
 func searchTerms(number string) []string {
 	terms := []string{number}
-	if m := leadingDigitsRE.FindStringIndex(number); m != nil && m[1] < len(number) {
-		terms = appendUnique(terms, number[m[1]:])
+	if prefix := leadingDigitPrefix(number); prefix != "" {
+		terms = appendUnique(terms, number[len(prefix):])
 	}
 	if alt := alternateWesternNumber(number); alt != "" {
 		terms = appendUnique(terms, alt)
@@ -500,13 +501,25 @@ func foldNumber(value string) string {
 	return b.String()
 }
 
+func leadingDigitPrefix(value string) string {
+	prefix := leadingDigitsRE.FindString(value)
+	if prefix == "" || len(prefix) >= len(value) {
+		return ""
+	}
+	next := value[len(prefix)]
+	if (next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') {
+		return prefix
+	}
+	return ""
+}
+
 func splitLeadingDigits(value string) (string, string) {
 	folded := foldNumber(value)
-	match := leadingDigitsRE.FindStringIndex(strings.ToLower(folded))
-	if match == nil {
+	prefix := leadingDigitPrefix(folded)
+	if prefix == "" {
 		return "", folded
 	}
-	return folded[:match[1]], folded[match[1]:]
+	return folded[:len(prefix)], folded[len(prefix):]
 }
 
 func sameWesternDate(a, b string) bool {
@@ -561,7 +574,13 @@ func alternateWesternNumber(value string) string {
 	} else {
 		alternateYear = "20" + year
 	}
-	return strings.Replace(value, year, alternateYear, 1)
+	studio := match[dayNumberRE.SubexpIndex("studio")]
+	sep0 := match[dayNumberRE.SubexpIndex("sep0")]
+	sep1 := match[dayNumberRE.SubexpIndex("sep1")]
+	sep2 := match[dayNumberRE.SubexpIndex("sep2")]
+	month := match[dayNumberRE.SubexpIndex("month")]
+	day := match[dayNumberRE.SubexpIndex("day")]
+	return studio + sep0 + alternateYear + sep1 + month + sep2 + day
 }
 
 func fieldValues(doc *goquery.Document, labels ...string) []string {
@@ -607,10 +626,13 @@ func fieldValueNode(label *goquery.Selection) *goquery.Selection {
 }
 
 func labelMatches(label string, tokens []string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(norm.NFKC.String(label)))
+	normalize := func(value string) string {
+		value = strings.ToLower(strings.TrimSpace(norm.NFKC.String(value)))
+		return strings.TrimRight(value, ":")
+	}
+	normalized := normalize(label)
 	for _, token := range tokens {
-		token = strings.ToLower(strings.TrimSpace(norm.NFKC.String(token)))
-		if token != "" && strings.Contains(normalized, token) {
+		if token != "" && normalized == normalize(token) {
 			return true
 		}
 	}
@@ -633,18 +655,8 @@ func actorNames(doc *goquery.Document) []string {
 	return names
 }
 
-func absoluteLinks(doc *goquery.Document, selector, attribute string) []string {
-	var links []string
-	doc.Find(selector).Each(func(_ int, node *goquery.Selection) {
-		if value := absoluteURLFromDocument(doc, node, attribute); value != "" {
-			links = appendUnique(links, value)
-		}
-	})
-	return links
-}
-
-// JavDB pages can use either root-relative or absolute URLs; base is the source
-// origin and the raw value is resolved without modifying the resulting URL.
+// absoluteURL resolves root-relative and absolute source URLs against the
+// configured origin without inventing a host when the input is invalid.
 func absoluteURL(base *url.URL, raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -655,12 +667,6 @@ func absoluteURL(base *url.URL, raw string) string {
 		return ""
 	}
 	return base.ResolveReference(ref).String()
-}
-
-func absoluteURLFromDocument(_ *goquery.Document, _ *goquery.Selection, _ string) string {
-	// This stub is replaced at call sites by p.absoluteLinks so a source base
-	// URL is always available. It intentionally does not guess an origin.
-	return ""
 }
 
 func (p *JavDB) absoluteLinks(doc *goquery.Document, selector, attribute string) []string {
@@ -712,10 +718,6 @@ func removeLeadingNumber(title, number string) string {
 		title = strings.TrimLeft(title, " -—:：|")
 	}
 	return cleanText(title)
-}
-
-func absoluteURLForText(base *url.URL, raw string) string {
-	return absoluteURL(base, raw)
 }
 
 func parseRuntimeMinutes(value string) int {
