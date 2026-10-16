@@ -1,0 +1,197 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] mgstage: validate detail URLs and movie IDs
+
+Require MGStage detail URLs to use the canonical HTTPS origin and the
+expected product-detail path. Reject malformed IDs before detail and
+review requests, with deterministic tests for normalization and URL
+validation.
+
+This patch is based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+---
+ provider/mgstage/mgstage.go      | 40 ++++++++++++++++++++++++++++++++----
+ provider/mgstage/mgstage_test.go | 49 +++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 85 insertions(+), 4 deletions(-)
+
+diff --git a/provider/mgstage/mgstage.go b/provider/mgstage/mgstage.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
+--- a/provider/mgstage/mgstage.go
++++ b/provider/mgstage/mgstage.go
+@@ -29,6 +29,8 @@ const (
+ 	sampleURL = "https://www.mgstage.com/sampleplayer/sampleRespons.php?pid=%s"
+ )
+ 
++var movieIDRE = regexp.MustCompile(`^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`)
++var detailPathRE = regexp.MustCompile(`^/product/product_detail/([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)/?$`)
++
+ type MGS struct {
+ 	*scraper.Scraper
+ }
+@@ -47,6 +49,10 @@ func New() *MGS {
+ }
+ 
+ func (mgs *MGS) GetMovieReviewsByID(id string) (reviews []*model.MovieReviewDetail, err error) {
++	id = mgs.NormalizeMovieID(id)
++	if id == "" {
++		return nil, fmt.Errorf("mgstage: invalid movie ID")
++	}
+ 	c := mgs.ClonedCollector()
+ 
+ 	c.OnXML(`//*[@id="user_review"]/ul/li`, func(e *colly.XMLElement) {
+@@ -80,12 +86,20 @@ func (mgs *MGS) GetMovieReviewsByURL(rawURL string) (reviews []*model.MovieReviewDetail, err error) {
+ }
+ 
+ func (mgs *MGS) NormalizeMovieID(id string) string {
+-	return strings.ToUpper(id)
++	id = strings.TrimSpace(id)
++	if !movieIDRE.MatchString(id) {
++		return ""
++	}
++	return strings.ToUpper(id)
+ }
+ 
+ func (mgs *MGS) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
++	id = mgs.NormalizeMovieID(id)
++	if id == "" {
++		return nil, fmt.Errorf("mgstage: invalid movie ID")
++	}
+ 	return mgs.GetMovieInfoByURL(fmt.Sprintf(movieURL, id))
+ }
+ 
+ func (mgs *MGS) ParseMovieIDFromURL(rawURL string) (string, error) {
+ 	homepage, err := url.Parse(rawURL)
+@@ -93,7 +107,29 @@ func (mgs *MGS) ParseMovieIDFromURL(rawURL string) (string, error) {
+ 	if err != nil {
+ 		return "", err
+ 	}
+-	return mgs.NormalizeMovieID(path.Base(homepage.Path)), nil
++	if !homepage.IsAbs() || homepage.Host == "" || !strings.EqualFold(homepage.Scheme, "https") {
++		return "", fmt.Errorf("mgstage: expected an absolute HTTPS detail URL")
++	}
++	if homepage.User != nil {
++		return "", fmt.Errorf("mgstage: userinfo is not allowed in detail URLs")
++	}
++	if host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), "."); host != "www.mgstage.com" {
++		return "", fmt.Errorf("mgstage: unexpected detail host %q", homepage.Hostname())
++	}
++	if port := homepage.Port(); port != "" && port != "443" {
++		return "", fmt.Errorf("mgstage: unexpected detail port %q", port)
++	}
++	matches := detailPathRE.FindStringSubmatch(homepage.Path)
++	if len(matches) != 2 {
++		return "", fmt.Errorf("mgstage: URL is not a supported detail path")
++	}
++	return mgs.NormalizeMovieID(matches[1]), nil
+ }
+ 
+ func (mgs *MGS) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
+diff --git a/provider/mgstage/mgstage_test.go b/provider/mgstage/mgstage_test.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
+--- a/provider/mgstage/mgstage_test.go
++++ b/provider/mgstage/mgstage_test.go
+@@ -1,6 +1,55 @@
+ package mgstage
+ 
+ import (
++	"testing"
++
++	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
++)
++
++func TestMGS_GetMovieInfoByID(t *testing.T) {
++	testkit.Test(t, New, []string{
++		"300MAAN-778",
++	}, 
++		testkit.FieldsNotEmpty("preview_images", "actors"),
++		testkit.FieldsNotEmptyAny("maker", "label", "series"),
++		testkit.FieldsNotEmptyAny("preview_video_url", "preview_video_hls_url"),
++	)
++}
++
++func TestMGS_SearchMovie(t *testing.T) {
++	testkit.Test(t, New, []string{
++		"ABP-177",
++		"200GANA-2701",
++		"ABF-228",
++	})
++}
++
++func TestMGS_GetMovieReviewsByID(t *testing.T) {
++	testkit.Test(t, New, []string{
++		"200GANA-2701",
++		"MAAN-930",
++		"300MIUM-973",
++		"MAAN-929",
++		"ABP-177",
++	})
++}
++
++func TestMGSNormalizeMovieID(t *testing.T) {
++	tests := []struct {
++		input string
++		want  string
++	}{
++		{input: "300maan-778", want: "300MAAN-778"},
++		{input: " ABP-177 ", want: "ABP-177"},
++		{input: "../ABP-177", want: ""},
++		{input: "ABP-177?x=1", want: ""},
++		{input: "", want: ""},
++	}
++	for _, tt := range tests {
++		t.Run(tt.input, func(t *testing.T) {
++			if got := New().NormalizeMovieID(tt.input); got != tt.want {
++				t.Errorf("NormalizeMovieID(%q) = %q, want %q", tt.input, got, tt.want)
++			}
++		})
++	}
++}
++
++func TestMGSParseMovieIDFromURL(t *testing.T) {
++	tests := []struct {
++		url     string
++		want    string
++		wantErr bool
++	}{
++		{url: "https://www.mgstage.com/product/product_detail/300MAAN-778/", want: "300MAAN-778"},
++		{url: "https://www.mgstage.com:443/product/product_detail/ABP-177?ref=search", want: "ABP-177"},
++		{url: "http://www.mgstage.com/product/product_detail/ABP-177/", wantErr: true},
++		{url: "https://www.mgstage.com:8443/product/product_detail/ABP-177/", wantErr: true},
++		{url: "https://user@www.mgstage.com/product/product_detail/ABP-177/", wantErr: true},
++		{url: "https://www.mgstage.com.evil.invalid/product/product_detail/ABP-177/", wantErr: true},
++		{url: "https://www.mgstage.com/product/product_detail/../ABP-177/", wantErr: true},
++		{url: "https://www.mgstage.com/search/cSearch.php?search_word=ABP-177", wantErr: true},
++		{url: "/product/product_detail/ABP-177/", wantErr: true},
++	}
++	for _, tt := range tests {
++		t.Run(tt.url, func(t *testing.T) {
++			got, err := New().ParseMovieIDFromURL(tt.url)
++			if tt.wantErr {
++				if err == nil {
++					t.Fatalf("ParseMovieIDFromURL(%q) error = nil, want error", tt.url)
++				}
++				return
++			}
++			if err != nil {
++				t.Fatalf("ParseMovieIDFromURL(%q) error = %v", tt.url, err)
++			}
++			if got != tt.want {
++				t.Errorf("ParseMovieIDFromURL(%q) = %q, want %q", tt.url, got, tt.want)
++			}
++		})
++	}
++}
++
++func TestMGSGetMovieInfoByIDRejectsInvalidID(t *testing.T) {
++	if _, err := New().GetMovieInfoByID("../ABP-177"); err == nil {
++		t.Fatal("GetMovieInfoByID accepted an invalid movie ID")
++	}
++}
++
++func TestMGSGetMovieReviewsByIDRejectsInvalidID(t *testing.T) {
++	if _, err := New().GetMovieReviewsByID("../ABP-177"); err == nil {
++		t.Fatal("GetMovieReviewsByID accepted an invalid movie ID")
++	}
++}
+-- 
+2.50.1
