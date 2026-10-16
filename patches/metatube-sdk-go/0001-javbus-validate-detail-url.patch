@@ -69,6 +69,25 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
  }
  
  func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
+@@ -165,4 +188,16 @@ func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error)
+-	err = c.Visit(info.Homepage)
+-	return
++	if err = c.Visit(info.Homepage); err != nil {
++		return nil, err
++	}
++	if err = validateRequiredMovieInfo(info); err != nil {
++		return nil, err
++	}
++	return info, nil
+ }
+ 
++func validateRequiredMovieInfo(info *model.MovieInfo) error {
++	if info == nil || strings.TrimSpace(info.Title) == "" || strings.TrimSpace(info.Number) == "" {
++		return fmt.Errorf("javbus: detail page is missing required title or number")
++	}
++	return nil
++}
++
 @@ -173,4 +173,89 @@
  	return strings.ToUpper(keyword)
  }
@@ -201,7 +220,7 @@ diff --git a/provider/javbus/javbus_test.go b/provider/javbus/javbus_test.go
 index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus_test.go
 +++ b/provider/javbus/javbus_test.go
-@@ -1,10 +1,125 @@
+@@ -1,10 +1,148 @@
  package javbus
  
  import (
@@ -244,6 +263,29 @@ index 20319f9553716a14eee8e162efb4872b3d926c6e..00000000000000000000000000000000
 +			}
 +			if !strings.EqualFold(got, tt.wantID) {
 +				t.Errorf("ParseMovieIDFromURL(%q) = %q, want %q", tt.url, got, tt.wantID)
++			}
++		})
++	}
++}
++
++func TestValidateRequiredMovieInfo(t *testing.T) {
++	tests := []struct {
++		name string
++		info *model.MovieInfo
++		wantErr bool
++	}{
++		{"valid", &model.MovieInfo{Title: "Movie", Number: "SSNI-776"}, false},
++		{"missing title", &model.MovieInfo{Number: "SSNI-776"}, true},
++		{"missing number", &model.MovieInfo{Title: "Movie"}, true},
++		{"blank title", &model.MovieInfo{Title: "  ", Number: "SSNI-776"}, true},
++		{"blank number", &model.MovieInfo{Title: "Movie", Number: "  "}, true},
++		{"nil info", nil, true},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			err := validateRequiredMovieInfo(tt.info)
++			if (err != nil) != tt.wantErr {
++				t.Fatalf("validateRequiredMovieInfo() error = %v, wantErr %v", err, tt.wantErr)
 +			}
 +		})
 +	}
