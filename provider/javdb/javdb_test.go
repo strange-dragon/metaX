@@ -197,7 +197,7 @@ func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
 	}))
 	defer source.Close()
 
-	p := newForTest(source.URL, source.Client())
+	p := newForTest(source.URL, nil)
 	info, err := p.GetMovieInfoByURL(source.URL + "/v/redirect")
 	require.Nil(t, info)
 	require.Error(t, err)
