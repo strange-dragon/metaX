@@ -116,14 +116,6 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  }
  
  // ParseNumber parses FANZA-formatted id to general ID.
-@@ -993,6 +1042,10 @@ func IsDigitalVideoURL(url string) bool {
- 	return strings.HasPrefix(url, videoURL)
- }
- 
-+func urlpkgParse(rawURL string) (*url.URL, error) {
-+	return url.Parse(rawURL)
-+}
-+
 diff --git a/provider/fanza/fanza_migration_test.go b/provider/fanza/fanza_migration_test.go
 new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
