@@ -28,7 +28,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 
 | Amane crawler | Source file | SDK equivalent observed in tree | Next comparison |
 |---|---|---|---|
-| Airav | `sites/airav.py` | `provider/airav` (new native Go provider in metaX) | Exact catalog-number matching, detail IDs, metadata fields, URL/redirect handling; live-site verification pending |
+| Airav | `sites/airav.py` | `provider/airav` (new native Go provider in metaX) | Tightened detail URL parsing to require the canonical `/video/{id}` route and reject query/fragment ambiguity; deterministic route tests added. Live-site verification pending |
 | AVBase | `sites/avbase.py` | `provider/avbase` plus patch `0002` | Source comparison completed: search lacks exact normalized `work_id` filtering, alternate query forms, and deterministic collision resolution; retain SDK source-provider fallback; patch `0010` adds exact normalized work identity, original/compact/dashed query fallback, and deterministic prefix-collision resolution; patch application, formatting, and deterministic tests passed in [CI run 38921478829](https://github.com/strange-dragon/metaX/actions/runs/38921478829) |
 | AVSox | `sites/avsox.py` | `provider/avsox` (new native Go API provider in metaX) | Compared API session lifecycle: native Go client previously discarded cookies between CSRF bootstrap and JSON POST; added a shared cookie jar and deterministic cookie-propagation test. Exact/folded number matching and localized metadata are covered by local tests; live-site verification pending |
 | Dahlia | `sites/dahlia.py` | `provider/dahlia` | Compared shared DAHLIA/FALENO core; patches `0003` and `0011` validate exact work slug, final redirect identity, HTTPS origin, port, base path, and exact detail route; deterministic tests passed in [CI run 38922533782](https://github.com/strange-dragon/metaX/actions/runs/38922533782); live-site behavior remains unverified |
@@ -286,3 +286,13 @@ Compared Amane `src/amane/crawlers/sites/avsox.py` with metaX `provider/avsox` a
 - **Gap found in native Go provider.** The Go client did not configure an HTTP cookie jar. Cookies set by the CSRF bootstrap response were therefore not retained for the following API POST, which can break session-bound CSRF validation or other session state.
 - **Fix.** The native provider now creates a shared cookie jar for its HTTP client, including the test-client path. The API fixture server sets a session cookie during the CSRF bootstrap and asserts that both JSON API handlers receive it.
 - **Verification.** CI for the latest branch head is running; update this entry with the final test and format results once those workflows complete. This is deterministic local HTTP coverage only; no live AVSOX requests were made.
+
+
+## Focused comparison: Airav detail route validation (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/airav.py` with the native Go provider in metaX.
+
+- **Search identity.** Both implementations accept search cards only when the leading catalog token exactly matches the requested number after normalization; near-number matches are rejected.
+- **URL validation gap.** The native Go parser validated origin but previously treated the final path segment of any same-origin URL as a movie ID. That allowed unrelated paths such as `/not-video/{id}` to be used as detail pages; query and fragment components were also accepted even though they are not part of the canonical detail identity.
+- **Fix.** Detail URLs now require exactly the `/video/{id}` route (an optional trailing slash is tolerated) and reject query/fragment components. Redirect validation still requires the final path's ID to match the originally requested ID, in addition to the same-origin redirect policy.
+- **Verification.** Added deterministic parser tests for wrong route, extra path segments, query, and fragment. CI results are pending for this update. No live Airav requests were made.
