@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] theporndb: validate detail URLs and IDs
+
+Validate ThePornDB scene, movie, and performer detail URLs against the
+canonical HTTPS origin and expected collection path. Reject malformed IDs
+before constructing API requests, while preserving existing REST mappings.
+
+This patch is based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+---
+ provider/theporndb/video.go          | 43 ++++++++++++++++++++++++++++++---
+ provider/theporndb/actor.go          |  5 +---
+ provider/theporndb/validation_test.go | 68 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 108 insertions(+), 8 deletions(-)
+
+diff --git a/provider/theporndb/video.go b/provider/theporndb/video.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
+--- a/provider/theporndb/video.go
++++ b/provider/theporndb/video.go
+@@ -7,6 +7,7 @@ import (
+ 	"net/http"
+ 	"net/url"
+ 	"path"
++	"regexp"
+ 	"strings"
+ 
+ 	"github.com/gocolly/colly/v2"
+@@ -29,6 +30,9 @@ const (
+ 	apiSearchSceneURL = "https://api.theporndb.net/scenes?q=%s"
+ )
+ 
++var thePornDBIDRE = regexp.MustCompile(`^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$`)
++
++// parseThePornDBDetailID validates a public detail URL for the expected collection.
++func parseThePornDBDetailID(rawURL, collection string) (string, error) {
++	homepage, err := url.Parse(rawURL)
++	if err != nil {
++		return "", err
++	}
++	if !homepage.IsAbs() || homepage.Host == "" || !strings.EqualFold(homepage.Scheme, "https") {
++		return "", fmt.Errorf("theporndb: expected an absolute HTTPS detail URL")
++	}
++	if homepage.User != nil {
++		return "", fmt.Errorf("theporndb: userinfo is not allowed in detail URLs")
++	}
++	if host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), "."); host != "theporndb.net" {
++		return "", fmt.Errorf("theporndb: unexpected detail host %q", homepage.Hostname())
++	}
++	if port := homepage.Port(); port != "" && port != "443" {
++		return "", fmt.Errorf("theporndb: unexpected detail port %q", port)
++	}
++	parts := strings.Split(strings.Trim(homepage.Path, "/"), "/")
++	if len(parts) != 2 || parts[0] != collection || !thePornDBIDRE.MatchString(parts[1]) {
++		return "", fmt.Errorf("theporndb: URL is not a supported %s detail path", collection)
++	}
++	return parts[1], nil
++}
++
+ // ThePornDB have different API endpoints for scenes and movies, but response
+ // JSON schema is the same. So we need to register 2 video providers.
+@@ -62,6 +86,10 @@ func (s *ThePornDBVideo) SetConfig(config map[string]string) error {
+ 
+ // GetMovieInfoByID impls MovieProvider.GetMovieInfoByID.
+ func (s *ThePornDBVideo) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
++	id = strings.TrimSpace(id)
++	if !thePornDBIDRE.MatchString(id) {
++		return nil, fmt.Errorf("theporndb: invalid movie ID")
++	}
+ 	if s.accessToken == "" {
+ 		return nil, nil
+ 	}
+@@ -106,12 +134,19 @@ func (s *ThePornDBVideo) GetMovieInfoByID(id string) (info *model.MovieInfo, err
+ 
+ // ParseMovieIDFromURL impls MovieProvider.ParseMovieIDFromURL.
+ func (s *ThePornDBVideo) ParseMovieIDFromURL(rawURL string) (string, error) {
+-	homepage, err := url.Parse(rawURL)
+-	if err != nil {
+-		return "", err
++	collection := "movies"
++	if s.Name() == SceneProviderName {
++		collection = "scenes"
+ 	}
+-	return path.Base(homepage.Path), nil
++	return parseThePornDBDetailID(rawURL, collection)
+ }
+ 
+ // GetMovieInfoByURL impls MovieProvider.GetMovieInfoByURL.
+diff --git a/provider/theporndb/actor.go b/provider/theporndb/actor.go
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/provider/theporndb/actor.go
++++ b/provider/theporndb/actor.go
+@@ -5,7 +5,6 @@ import (
+ 	"fmt"
+ 	"net/http"
+ 	"net/url"
+-	"path"
+ 	"regexp"
+ 	"strconv"
+ 
+@@ -43,12 +42,8 @@ func (s *ThePornDBActor) SetConfig(config map[string]string) error {
+ 
+ // ParseActorIDFromURL impls ActorProvider.ParseActorIDFromURL.
+ func (s *ThePornDBActor) ParseActorIDFromURL(rawURL string) (string, error) {
+-	homepage, err := url.Parse(rawURL)
+-	if err != nil {
+-		return "", err
+-	}
+-	return path.Base(homepage.Path), nil
++	return parseThePornDBDetailID(rawURL, "performers")
+ }
+ 
+ // GetActorInfoByID impls ActorProvider.GetActorInfoByID.
+ func (s *ThePornDBActor) GetActorInfoByID(id string) (info *model.ActorInfo, err error) {
++	id = strings.TrimSpace(id)
++	if !thePornDBIDRE.MatchString(id) {
++		return nil, fmt.Errorf("theporndb: invalid actor ID")
++	}
+ 	if s.accessToken == "" {
+ 		return nil, nil
+ 	}
