@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/lib/pq"
 	"golang.org/x/text/language"
 
