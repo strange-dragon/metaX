@@ -51,6 +51,18 @@ jobs:
         working-directory: sdk
         run: test -z "$(gofmt -l .)"
 
-      - name: Run full SDK regression suite
+      - name: Run SDK tests excluding live translation integrations
         working-directory: sdk
-        run: go test ./...
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(go list ./... | grep -v '/translate/')
+          if (("${#packages[@]}" == 0)); then
+            echo "No non-translation SDK packages found"
+            exit 1
+          fi
+          go test "${packages[@]}"
+
+      - name: Compile translation packages without calling external APIs
+        working-directory: sdk
+        run: go test -run '^$' ./translate/...
