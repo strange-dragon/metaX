@@ -39,3 +39,10 @@ Amane's `src/amane/crawlers/sites/javdb.py` supports search and detail extractio
 - Existing SDK tests and Amane fixtures must be inspected before code changes.
 - Site availability and anti-bot behavior can change independently of source code.
 - The project keeps Apache-2.0 for project-authored code. These notes document feature comparison, not permission to copy upstream source or fixtures; see `LICENSING.md`.
+
+
+## Jav321: native Provider added
+
+The SDK tree did not contain a `provider/jav321` implementation. metaX now has a Provider following MetaTube's `MovieProvider`, `MovieSearcher`, and optional fetch/proxy/timeout interfaces. The implemented route is `/video/{number}`; the parser maps the site's heading, cover, actors, studio, release date, runtime, genres and synopsis into `model.MovieInfo`. Unlike a literal source translation, the display title is normalized by removing a duplicated leading catalog number while preserving the raw heading when stripping would produce an empty result.
+
+Deterministic local HTTP tests cover normalization, host/path validation, field extraction, not-found responses, Provider registration, proxy validation and timeout configuration. This is a unit-test result, not a live-site success claim. The Provider still must be merged into the SDK tree and added to `engine/register.go` before the MetaTube server can discover it.
