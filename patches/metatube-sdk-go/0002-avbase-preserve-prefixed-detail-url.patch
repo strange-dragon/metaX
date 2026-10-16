@@ -1,0 +1,82 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] avbase: preserve work prefix in search result URLs
+
+AVBase canonical detail routes use /works/{prefix}:{work_id} when a
+prefix exists. SearchMovie already returns the joined prefixed ID, but
+previously built Homepage from work.WorkID alone, which can point to a
+non-canonical 404 route. Reuse JoinPrefixID for the homepage and cover
+prefixed and unprefixed cases with deterministic tests.
+
+Based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+
+---
+ provider/avbase/avbase.go      | 6 +++++-
+ provider/avbase/avbase_test.go | 17 +++++++++++++++++
+ 2 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/provider/avbase/avbase.go b/provider/avbase/avbase.go
+index 7c42bc7aa0e5c338d747bd333d519e74a59c1134..0000000000000000000000000000000000000000 100644
+--- a/provider/avbase/avbase.go
++++ b/provider/avbase/avbase.go
+@@ -245,7 +245,7 @@ func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResult
+ 					ID:          ab.JoinPrefixID(work.Prefix, work.WorkID),
+ 					Number:      work.WorkID,
+ 					Title:       work.Title,
+ 					Provider:    ab.Name(),
+-					Homepage:    fmt.Sprintf(movieURL, work.WorkID),
++					Homepage:    ab.movieURLForWork(work.Prefix, work.WorkID),
+ 					ThumbURL:    work.Products[index].ThumbnailURL,
+ 					CoverURL:    work.Products[index].ImageURL,
+ 					ReleaseDate: parser.ParseDate(work.MinDate),
+@@ -272,6 +272,10 @@ func (ab *AVBase) JoinPrefixID(prefix, workID string) string {
+ 	return fmt.Sprintf("%s:%s", prefix, workID)
+ }
+ 
++func (ab *AVBase) movieURLForWork(prefix, workID string) string {
++	return fmt.Sprintf(movieURL, ab.JoinPrefixID(prefix, workID))
++}
++
+ func (ab *AVBase) GetBuildID() (string, error) {
+ 	v, err, _ := ab.single.Do(func() (any, error) {
+ 		return ab.getBuildID()
+diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
+index 29135776eb23ac9c27c62aee2d6a26b454ddfb29..0000000000000000000000000000000000000000 100644
+--- a/provider/avbase/avbase_test.go
++++ b/provider/avbase/avbase_test.go
+@@ -1,9 +1,26 @@
+ package avbase
+ 
+ import (
++	"net/url"
+ 	"testing"
+ 
+ 	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
+ )
+ 
++func TestMovieURLForWork(t *testing.T) {
++	ab := New()
++	tests := []struct {
++		name, prefix, workID, want string
++	}{
++		{"prefixed work", "prestige", "ABP-588", "https://www.avbase.net/works/prestige:ABP-588"},
++		{"unprefixed work", "", "SSIS-354", "https://www.avbase.net/works/SSIS-354"},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			got, err := url.Parse(ab.movieURLForWork(tt.prefix, tt.workID))
++			if err != nil {
++				t.Fatal(err)
++			}
++			if got.String() != tt.want {
++				t.Errorf("movieURLForWork() = %q, want %q", got.String(), tt.want)
++			}
++		})
++	}
++}
++
+ func TestAVBase_GetMovieInfoByID(t *testing.T) {
+ 	testkit.Test(t, New, []string{
+-- 
+2.46.0
