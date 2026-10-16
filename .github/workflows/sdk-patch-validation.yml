@@ -41,6 +41,10 @@ jobs:
       - name: Apply FC2 patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch"
+ 
+      - name: Apply Getchu patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0005-getchu-normalize-and-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0005-getchu-normalize-and-validate-detail-url.patch"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -52,7 +56,7 @@ jobs:
       - name: Verify formatting
         working-directory: upstream-sdk
         run: |
-          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go)"
+          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go)"
 
       - name: Run deterministic URL, number-variant, and required-field tests
         working-directory: upstream-sdk
@@ -72,4 +76,9 @@ jobs:
       - name: Run deterministic FC2 URL and ID validation tests
         working-directory: upstream-sdk
         run: |
-          go test ./provider/fc2 -run '^TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)$' -count=1
+          go test ./provider/fc2 -run '^TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID) -count=1
+ 
+      - name: Run deterministic Getchu ID and URL validation tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/getchu -run '^Test(NormalizeMovieIDForDetailLookup|ParseMovieIDFromURLValidatesOriginAndPath) -count=1
