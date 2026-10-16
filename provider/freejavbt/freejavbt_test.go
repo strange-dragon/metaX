@@ -98,6 +98,9 @@ func TestSearchRejectsNearNumberAndExternalResult(t *testing.T) {
 
 func TestParseMovieIDFromURLRejectsUnsafeOriginsAndPaths(t *testing.T) {
 	p := New()
+	id, err := p.ParseMovieIDFromURL("https://freejavbt.com/category/ABC-123/")
+	require.NoError(t, err)
+	require.Equal(t, "ABC-123", id)
 	for _, rawURL := range []string{
 		"http://freejavbt.com/ABC-123/",
 		"https://freejavbt.com:444/ABC-123/",
@@ -172,4 +175,20 @@ func TestGetMovieInfoByIDRejectsInvalidID(t *testing.T) {
 	p := New()
 	_, err := p.GetMovieInfoByID("../ABC-123")
 	require.Error(t, err)
+}
+
+func TestGetMovieInfoByIDFallsBackToDirectDetail(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search/ABC-123", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, "<html><body>No results</body></html>")
+	})
+	mux.HandleFunc("/ABC-123", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, detailFixture)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	info, err := newForTest(server.URL, server.Client()).GetMovieInfoByID("ABC-123")
+	require.NoError(t, err)
+	require.Equal(t, "ABC-123", info.Number)
 }
