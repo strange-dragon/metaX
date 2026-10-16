@@ -71,6 +71,13 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Combined patch application, formatting, and all focused SDK patch tests passed in [run 38885581605](https://github.com/strange-dragon/metaX/actions/runs/38885581605); full metaX tests passed in [run 38885581539](https://github.com/strange-dragon/metaX/actions/runs/38885581539).
 - [ ] Live FC2 behavior and full upstream SDK regression remain unverified.
 
+### Task 5a — Add native Airav provider
+- [x] Compared Amane's Airav lookup behavior with the pinned SDK provider inventory; no native Airav provider was found.
+- [x] Added independent Go implementation in `provider/airav/airav.go`; no Amane source or fixtures were copied.
+- [x] Added exact normalized catalog-number matching, detail lookup by opaque ID, field mapping, same-origin redirect limits, final detail-path identity checks, and response-size cap.
+- [x] Added deterministic local HTTP tests for exact vs near matches, detail parsing, opaque IDs, unsafe origins, cross-origin redirects, redirected work identity, registration, proxy and timeout configuration.
+- [x] Full metaX Go tests passed in [run 38890986424](https://github.com/strange-dragon/metaX/actions/runs/38890986424); gofmt workflow passed in [run 38890986411](https://github.com/strange-dragon/metaX/actions/runs/38890986411).
+- [ ] Live Airav compatibility and end-to-end MetaTube server registration remain unverified; the pinned upstream SDK does not yet import this metaX package.
 ### Task 5 — Add uncovered providers in small increments
 - [ ] Prioritize sites with a clear mapping to existing SDK interfaces and manageable network behavior.
 - [ ] Each provider gets focused tests, registration verification, and a separate commit.
