@@ -21,8 +21,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 @@ -7,6 +7,7 @@ import (
  	"net/http"
  	"net/url"
- 	"path"
-+	"regexp"
+ +	"regexp"
  	"strings"
  
  	"github.com/gocolly/colly/v2"
@@ -90,7 +89,7 @@ diff --git a/provider/theporndb/actor.go b/provider/theporndb/actor.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/provider/theporndb/actor.go
 +++ b/provider/theporndb/actor.go
-@@ -5,7 +5,6 @@ import (
+@@ -5,7 +5,7 @@ import (
  	"fmt"
  	"net/http"
  	"net/url"
