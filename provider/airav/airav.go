@@ -384,6 +384,9 @@ func (p *Airav) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if u, err := url.Parse(id); err == nil && u.IsAbs() {
 		return p.GetMovieInfoByURL(id)
 	}
+
+	// Search by catalog number first, since Airav's internal detail IDs may
+	// differ from the displayed number. Never accept a fuzzy/near-number hit.
 	results, err := p.SearchMovie(id)
 	if err != nil {
 		return nil, err
@@ -394,7 +397,16 @@ func (p *Airav) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 			return p.GetMovieInfoByURL(result.Homepage)
 		}
 	}
-	return nil, ErrMovieNotFound
+
+	// The Provider API also calls this method with IDs parsed from Homepage.
+	// If no exact catalog-number search result exists, try the site's detail
+	// route using that opaque path ID.
+	if strings.ContainsAny(id, "/\\\\?#") {
+		return nil, fmt.Errorf("airav: invalid movie ID %q", id)
+	}
+	u := *p.baseURL
+	u.Path = path.Join(u.Path, "video", id)
+	return p.GetMovieInfoByURL(u.String())
 }
 
 func (p *Airav) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
