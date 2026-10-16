@@ -141,14 +141,37 @@ func (p *JavDB) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if u.Scheme == "" || u.Host == "" {
 		return "", fmt.Errorf("javdb: expected an absolute detail URL")
 	}
+	if u.User != nil || u.Fragment != "" {
+		return "", fmt.Errorf("javdb: detail URL must not contain userinfo or fragment")
+	}
+	if !strings.EqualFold(u.Scheme, p.baseURL.Scheme) {
+		return "", fmt.Errorf("javdb: unexpected detail scheme %q", u.Scheme)
+	}
 	if !p.allowedHost(u.Hostname()) {
 		return "", fmt.Errorf("javdb: unexpected detail host %q", u.Hostname())
+	}
+	if effectivePort(u) != effectivePort(p.baseURL) {
+		return "", fmt.Errorf("javdb: unexpected detail port %q", u.Port())
 	}
 	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
 	if len(segments) != 2 || segments[0] != "v" || strings.TrimSpace(segments[1]) == "" {
 		return "", fmt.Errorf("javdb: URL is not a /v/{id} detail URL")
 	}
 	return segments[1], nil
+}
+
+func effectivePort(u *url.URL) string {
+	if value := u.Port(); value != "" {
+		return value
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "https":
+		return "443"
+	case "http":
+		return "80"
+	default:
+		return ""
+	}
 }
 
 func (p *JavDB) allowedHost(host string) bool {
