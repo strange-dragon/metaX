@@ -200,7 +200,12 @@ func (p *Freejavbt) SetProxy(proxyURL string) error {
 }
 
 func (p *Freejavbt) rebuildClientLocked() {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	var transport *http.Transport
+	if base, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = base.Clone()
+	} else {
+		transport = &http.Transport{Proxy: http.ProxyFromEnvironment}
+	}
 	transport.Proxy = http.ProxyFromEnvironment
 	if p.proxyURL != "" {
 		if proxyURL, err := url.Parse(p.proxyURL); err == nil {
@@ -395,15 +400,16 @@ func fieldValues(doc *goquery.Document, label string) []string {
 		if parent.Length() == 0 {
 			parent = strong
 		}
+		before := len(values)
 		parent.Find("a").Each(func(_ int, a *goquery.Selection) {
 			if value := strings.TrimSpace(a.Text()); value != "" {
 				values = appendUnique(values, value)
 			}
 		})
-		if len(values) == 0 {
-			text := strings.TrimSpace(strings.TrimPrefix(parent.Text(), strong.Text()))
-			if text != "" {
-				values = appendUnique(values, text)
+		if len(values) == before {
+			value := strings.TrimSpace(strings.TrimPrefix(parent.Text(), strong.Text()))
+			if value != "" {
+				values = appendUnique(values, value)
 			}
 		}
 	})
