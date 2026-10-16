@@ -279,6 +279,10 @@ func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	if match := numberInTitleRE.FindString(title); match != "" {
 		number = strings.ToUpper(match)
 	}
+	displayTitle := removeLeadingNumber(title, number)
+	if displayTitle == "" {
+		displayTitle = title
+	}
 
 	actors := collectTexts(doc, "b", "出演者", "a")
 	studio := collectTexts(doc, "b", "メーカー", "a")
@@ -297,7 +301,7 @@ func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	info := &model.MovieInfo{
 		ID:            number,
 		Number:        number,
-		Title:         title,
+		Title:         displayTitle,
 		Summary:       plot,
 		Provider:      p.Name(),
 		Homepage:      rawURL,
@@ -333,6 +337,17 @@ func (p *Jav321) SearchMovie(keyword string) ([]*model.MovieSearchResult, error)
 		return nil, err
 	}
 	return []*model.MovieSearchResult{info.ToSearchResult()}, nil
+}
+
+func removeLeadingNumber(title, number string) string {
+	title = cleanText(title)
+	number = cleanText(number)
+	if title == "" || number == "" || len(title) < len(number) || !strings.EqualFold(title[:len(number)], number) {
+		return title
+	}
+	rest := strings.TrimSpace(title[len(number):])
+	rest = strings.TrimLeft(rest, " -—:：|")
+	return cleanText(rest)
 }
 
 func collectTexts(doc *goquery.Document, labelSelector, label, valueSelector string) []string {
