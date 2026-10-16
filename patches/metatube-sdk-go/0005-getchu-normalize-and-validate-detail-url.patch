@@ -12,8 +12,8 @@ c62584675c593816cc07e7b5b977d14c7eb505a3.
 
 ---
  provider/getchu/getchu.go                | 18 ++++++++++++++++--
- provider/getchu/getchu_migration_test.go | 42 ++++++++++++++++++++++++++++++++++++++++++
- 2 files changed, 58 insertions(+), 2 deletions(-)
+ provider/getchu/getchu_migration_test.go | 41 +++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+), 2 deletions(-)
 
 diff --git a/provider/getchu/getchu.go b/provider/getchu/getchu.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
@@ -59,7 +59,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- /dev/null
 +++ b/provider/getchu/getchu_migration_test.go
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,41 @@
 +package getchu
 +
 +import "testing"
@@ -101,6 +101,5 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +		}
 +	}
 +}
-+
 -- 
 2.46.0
