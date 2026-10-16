@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	mt "github.com/metatube-community/metatube-sdk-go/provider"
 )
 
 const detailFixture = `<!doctype html>
@@ -139,4 +140,19 @@ func TestProxyAndTimeoutValidation(t *testing.T) {
 	require.NoError(t, p.SetProxy(""))
 	p.SetRequestTimeout(3 * time.Second)
 	require.Equal(t, 3*time.Second, p.httpClient().Timeout)
+}
+
+func TestProviderRegistered(t *testing.T) {
+	found := false
+	for name, factory := range mt.RangeMovieFactory {
+		if name != Name {
+			continue
+		}
+		found = true
+		provider := factory()
+		require.Equal(t, Name, provider.Name())
+		require.Equal(t, Priority, provider.Priority())
+		break
+	}
+	require.True(t, found, "JavDB should register with MetaTube's Provider factory")
 }
