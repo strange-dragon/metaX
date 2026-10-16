@@ -46,7 +46,7 @@ var (
 
 var (
 	_ mt.MovieProvider        = (*IQQTV)(nil)
-	_ mt.MovieSearcher       = (*IQQTV)(nil)
+	_ mt.MovieSearcher        = (*IQQTV)(nil)
 	_ mt.Fetcher              = (*IQQTV)(nil)
 	_ mt.ProxySetter          = (*IQQTV)(nil)
 	_ mt.RequestTimeoutSetter = (*IQQTV)(nil)
@@ -502,7 +502,7 @@ func (p *IQQTV) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	info := &model.MovieInfo{
 		ID: id, Number: number, Title: cleanTitle(title), Provider: p.Name(), Homepage: rawURL,
 		Actors: pq.StringArray(actors), Maker: studio, Label: studio, Series: series,
-		Genres: pq.StringArray(uniqueTexts(doc.Find("div.tag-info a[href*='tag']"))),
+		Genres:  pq.StringArray(uniqueTexts(doc.Find("div.tag-info a[href*='tag']"))),
 		Summary: plot, CoverURL: thumb, ThumbURL: thumb, PreviewImages: pq.StringArray(samples),
 	}
 	if release != "" {
