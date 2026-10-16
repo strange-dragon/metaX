@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/stretchr/testify/require"
 )
 
 const searchFixture = `<!doctype html><html><body>
