@@ -41,7 +41,7 @@ var (
 	ErrMovieNotFound = errors.New("iqqtv: movie not found")
 	excludedWords    = []string{"克破", "无码破解", "無碼破解", "无码流出", "無碼流出"}
 	validPathPartRE  = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
-	catalogNumberRE  = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\\d+[A-Za-z0-9_-]*$`)
+	catalogNumberRE  = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\d+[A-Za-z0-9_-]*$`)
 )
 
 var (
