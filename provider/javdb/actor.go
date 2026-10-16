@@ -21,12 +21,12 @@ import (
 const ActorProviderName = "JavDBActor"
 
 var (
-	_ mt.ActorProvider = (*JavDBActor)(nil)
-	_ mt.ActorSearcher = (*JavDBActor)(nil)
-	actorSlugRE        = regexp.MustCompile(`^[A-Za-z0-9]+$`)
-	actorFilmCountRE   = regexp.MustCompile(`(?i)^\d+\s*(?:部影片|movie\(s\))$`)
-	actorGenderRE      = regexp.MustCompile(`(?i)^(?:男優|男优|女優|女优|male|female)$`)
-	actorAvatarRE      = regexp.MustCompile(`(?i)url\(\s*['"]?(https?://[^)'"]+)['"]?\s*\)`)
+	_                mt.ActorProvider = (*JavDBActor)(nil)
+	_                mt.ActorSearcher = (*JavDBActor)(nil)
+	actorSlugRE                       = regexp.MustCompile(`^[A-Za-z0-9]+$`)
+	actorFilmCountRE                  = regexp.MustCompile(`(?i)^\d+\s*(?:部影片|movie\(s\))$`)
+	actorGenderRE                     = regexp.MustCompile(`(?i)^(?:男優|男优|女優|女优|male|female)$`)
+	actorAvatarRE                     = regexp.MustCompile(`(?i)url\(\s*['"]?(https?://[^)'"]+)['"]?\s*\)`)
 )
 
 // JavDBActor exposes JavDB's actor search and profile pages through the SDK
@@ -39,7 +39,7 @@ func NewActor() *JavDBActor {
 	return &JavDBActor{JavDB: New()}
 }
 
-func (p *JavDBActor) Name() string { return ActorProviderName }
+func (p *JavDBActor) Name() string           { return ActorProviderName }
 func (p *JavDBActor) Language() language.Tag { return language.SimplifiedChinese }
 
 func (p *JavDBActor) NormalizeActorID(id string) string {
