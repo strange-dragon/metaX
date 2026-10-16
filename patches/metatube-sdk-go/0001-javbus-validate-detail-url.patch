@@ -19,6 +19,18 @@ diff --git a/provider/javbus/javbus.go b/provider/javbus/javbus.go
 index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus.go
 +++ b/provider/javbus/javbus.go
+@@ -1,12 +1,11 @@
+ package javbus
+ 
+ import (
+ 	"fmt"
+ 	"net/http"
+ 	"net/url"
+-	"path"
+ 	"regexp"
+ 	"strings"
+ 	"sync"
+ 
 @@ -72,11 +72,35 @@ func (bus *JavBus) GetMovieInfoByID(id string) (info *model.MovieInfo, err error
  }
  
