@@ -44,7 +44,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | Jav321 | `sites/jav321.py` | No Provider in SDK tree; metaX now has `provider/jav321` | Deterministic tests cover route, metadata mapping, not-found behavior and registration; live-site and full server integration pending |
 | JavBus | `sites/javbus.py` | `provider/javbus` | Compared against pinned SDK source; findings and follow-up decision recorded below |
 | JavDB | `sites/javdb.py` | No Provider in SDK tree; metaX now has `provider/javdb` | Deterministic tests cover search, details, number variants, foreign hosts, and registration; live-site and full server integration pending |
-| JavLibrary | `sites/javlibrary.py` | Not confirmed | Login/session, parsing, source availability |
+| JavLibrary | `sites/javlibrary.py` | No direct equivalent in pinned SDK; native `provider/javlibrary` added in metaX | Deterministic search/detail metadata and URL/redirect tests added; CI verification pending; live-site availability and current selectors unverified |
 | Kin8 | `sites/kin8.py` | `provider/kin8tengoku` likely related; mapping must be verified | Confirm canonical domain, IDs, and output |
 | MGStage | `sites/mgstage.py` | `provider/mgstage` | Compared on 2026-10-16; patch `0007` validates detail URL origins/paths and rejects malformed IDs; temporary patch-application, formatting, and deterministic test workflow reported passing by user |
 | Official | `sites/official.py` | No direct equivalent; this is a 29-manufacturer routing layer, not one site scraper | Source audit completed; defer implementation until SDK/config integration can pass route overrides and prior-studio context without hard-coding a partial solution |
@@ -245,3 +245,14 @@ Compared Amane `src/amane/crawlers/sites/official.py` with the pinned SDK's prov
 - **Metadata scope.** Once routed, Amane extracts title, catalog number, actors, release date, runtime, genres, series, and a horizontal cover from manufacturer-specific sites that share a Works-like HTML structure. It does not have a single base URL or universal detail route.
 - **Decision: defer the provider implementation, not the capability.** First define how metaX/SDK passes per-user route overrides and previous-provider studio metadata into a router, and decide whether the manufacturer/domain tables should be maintained in project configuration or code. Only then implement the adapter with deterministic tests for route priority, ambiguous prefixes, alias matching, and manufacturer-specific domains. This avoids a superficially complete provider that cannot reproduce Amane's actual routing behavior.
 - **Limits.** This is a source-level architecture assessment only; no manufacturer websites were requested. No Amane code or route fixtures were copied into the project.
+
+
+## Focused comparison: JavLibrary (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/javlibrary.py` with the pinned SDK provider tree at `c62584675c593816cc07e7b5b977d14c7eb505a3`. No direct JavLibrary provider exists in the pinned SDK.
+
+- **Search behavior.** Amane queries the catalog-number endpoint and prefers a title containing the requested number, but falls back to the first result when none matches. The native Go provider deliberately rejects non-exact catalog-number candidates to avoid assigning a neighboring title to the requested work.
+- **Metadata coverage.** The new provider maps number, title, release date, runtime, director, studio, label, cast, genres, cover image, and score to the existing SDK model. It supports the site's query-parameter detail IDs and relative image URLs.
+- **Request safety.** Detail URLs must use the configured origin, an allowed language path, and a valid `v` query parameter. Redirects are restricted to the same origin and at most ten hops; response bodies are capped at 8 MiB. Proxy and request timeout settings follow the local Provider conventions.
+- **Deterministic tests.** Local HTTP fixtures cover exact-number search vs near matches, metadata mapping, malformed/foreign URLs, cross-origin redirect rejection, registration, proxy validation, and timeout configuration. Initial CI runs stopped at the formatting gate; the formatter workflow applied a formatting-only commit. A fresh full test run is pending after this matrix update, so the implementation is not yet marked validated.
+- **Limits.** No live JavLibrary requests have been made. Current selectors, route behavior, score formatting, and availability require live-site verification. This implementation is independently written and does not include Amane code or fixtures.
