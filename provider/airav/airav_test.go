@@ -83,7 +83,7 @@ func TestGetMovieInfoRejectsMissingOrMismatchedIdentity(t *testing.T) {
 	defer server.Close()
 
 	p := newForTest(server.URL, server.Client())
-	results, err := p.SearchMovie("ABC-1234")
+	results, err := p.SearchMovie("XYZ-9")
 	require.NoError(t, err)
 	require.Empty(t, results)
 
