@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/stretchr/testify/require"
 )
 
 const csrfPage = `<!doctype html><html><head><meta name="csrf-token" content="csrf-test"></head></html>`
@@ -173,7 +173,7 @@ func TestRegistrationAndConfiguration(t *testing.T) {
 
 func TestEnvelopeDecoding(t *testing.T) {
 	var envelope struct {
-		Code int `json:"code"`
+		Code int             `json:"code"`
 		Data json.RawMessage `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(`{"code":200,"data":[]}`), &envelope))
