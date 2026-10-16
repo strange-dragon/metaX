@@ -831,7 +831,7 @@ diff --git a/provider/avbase/avbase.go b/provider/avbase/avbase.go
 diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 --- a/provider/avbase/avbase_test.go
 +++ b/provider/avbase/avbase_test.go
-@@ -1,41 +1,95 @@
+@@ -1,47 +1,116 @@
 -package avbase
 -
 -import (
@@ -843,15 +843,21 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 -
 -func TestMovieURLForWork(t *testing.T) {
 -	ab := New()
--	tests := []struct { name, prefix, workID, want string }{
+-	tests := []struct {
+-		name, prefix, workID, want string
+-	}{
 -		{"prefixed work", "prestige", "ABP-588", "https://www.avbase.net/works/prestige:ABP-588"},
 -		{"unprefixed work", "", "SSIS-354", "https://www.avbase.net/works/SSIS-354"},
 -	}
 -	for _, tt := range tests {
 -		t.Run(tt.name, func(t *testing.T) {
 -			got, err := url.Parse(ab.movieURLForWork(tt.prefix, tt.workID))
--			if err != nil { t.Fatal(err) }
--			if got.String() != tt.want { t.Errorf("movieURLForWork() = %q, want %q", got.String(), tt.want) }
+-			if err != nil {
+-				t.Fatal(err)
+-			}
+-			if got.String() != tt.want {
+-				t.Errorf("movieURLForWork() = %q, want %q", got.String(), tt.want)
+-			}
 -		})
 -	}
 -}
@@ -880,6 +886,27 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 +
 +	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
 +)
++
++func TestMovieURLForWork(t *testing.T) {
++	ab := New()
++	tests := []struct {
++		name, prefix, workID, want string
++	}{
++		{"prefixed work", "prestige", "ABP-588", "https://www.avbase.net/works/prestige:ABP-588"},
++		{"unprefixed work", "", "SSIS-354", "https://www.avbase.net/works/SSIS-354"},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			got, err := url.Parse(ab.movieURLForWork(tt.prefix, tt.workID))
++			if err != nil {
++				t.Fatal(err)
++			}
++			if got.String() != tt.want {
++				t.Errorf("movieURLForWork() = %q, want %q", got.String(), tt.want)
++			}
++		})
++	}
++}
 +
 +func TestAVBase_GetMovieInfoByID(t *testing.T) {
 +	testkit.Test(t, New, []string{
