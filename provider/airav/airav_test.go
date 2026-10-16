@@ -172,3 +172,21 @@ func TestAbsoluteURLLeavesMissingValuesEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, absoluteURL(base, ""))
 }
+
+func TestGetMovieInfoByIDAcceptsOpaqueDetailID(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search_result", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `<html><body>No results</body></html>`)
+	})
+	mux.HandleFunc("/video/target", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, detailFixture)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByID("target")
+	require.NoError(t, err)
+	require.Equal(t, "target", info.ID)
+	require.Equal(t, "ABC-123", info.Number)
+}
