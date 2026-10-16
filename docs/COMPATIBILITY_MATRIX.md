@@ -339,3 +339,14 @@ Compared the behavior of Amane's Minnano actor crawler with the pinned SDK `Acto
 - **Profile mapping.** Added a separate registered `MinnanoActor` provider mapping aliases and name readings, birthday, height, measurements, cup size, and profile image into existing SDK actor fields. The age-verification cookie is sent for search and detail requests.
 - **Input and response hardening.** Detail URLs must use the configured origin and canonical numeric actress route; query strings, fragments, userinfo, alternate ports, and foreign origins are rejected. Redirects are bounded and constrained to the configured origin, and response bodies are capped at 8 MiB.
 - **Verification.** Deterministic local HTTP tests cover exact search matching, age-cookie delivery, profile mapping, URL-origin/path rejection, and factory registration. Full Go tests passed in [CI run 38928899145](https://github.com/strange-dragon/metaX/actions/runs/38928899145), and formatting passed in [run 38928899279](https://github.com/strange-dragon/metaX/actions/runs/38928899279). Live Minnano site behavior and current selectors remain unverified.
+
+
+## SDK patch validation workflow audit (2026-10-16)
+
+The maintained workflow previously applied only a subset of the patch set, so several patch files were not reproducibly validated by the long-term CI. Expanded `.github/workflows/sdk-patch-validation.yml` to apply every unique patch against the pinned SDK in dependency order and run focused deterministic tests for JavBus, AVBase, DAHLIA/FALENO, FC2, Getchu, FC2PPVDB, MGStage, ThePornDB, and FANZA/DMM. Formatting coverage now includes all changed SDK source and test files.
+
+The audit also found two competing files numbered `0005` for Getchu. Kept the version used by the workflow (`0005-getchu-normalize-and-validate-detail-url.patch`) and removed the redundant `0005-getchu-validate-detail-url.patch`.
+
+- All maintained patches applied successfully to the pinned SDK; formatting and all focused patch tests passed in [CI run 38932602151](https://github.com/strange-dragon/metaX/actions/runs/38932602151).
+- The metaX Go tests and Go formatting workflows also passed on the same commit: [tests](https://github.com/strange-dragon/metaX/actions/runs/38932602115), [format](https://github.com/strange-dragon/metaX/actions/runs/38932602108).
+- This validates patch application and targeted regression cases, not the entire upstream SDK test suite or live-site behavior.
