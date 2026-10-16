@@ -882,6 +882,7 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 +package avbase
 +
 +import (
++	"net/url"
 +	"testing"
 +
 +	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
