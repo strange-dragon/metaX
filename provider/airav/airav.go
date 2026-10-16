@@ -248,23 +248,32 @@ func (p *Airav) Fetch(rawURL string) (*http.Response, error) {
 }
 
 func (p *Airav) getHTML(rawURL string) (*goquery.Document, error) {
+	doc, _, err := p.getHTMLWithFinalURL(rawURL)
+	return doc, err
+}
+
+func (p *Airav) getHTMLWithFinalURL(rawURL string) (*goquery.Document, string, error) {
 	resp, err := p.Fetch(rawURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
+	finalURL := rawURL
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPageBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("airav: read response: %w", err)
+		return nil, "", fmt.Errorf("airav: read response: %w", err)
 	}
 	if len(body) > maxPageBytes {
-		return nil, fmt.Errorf("airav: response exceeds %d bytes", maxPageBytes)
+		return nil, "", fmt.Errorf("airav: response exceeds %d bytes", maxPageBytes)
 	}
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
 	if err != nil {
-		return nil, fmt.Errorf("airav: parse HTML: %w", err)
+		return nil, "", fmt.Errorf("airav: parse HTML: %w", err)
 	}
-	return doc, nil
+	return doc, finalURL, nil
 }
 
 func (p *Airav) searchURL(keyword string) string {
@@ -301,8 +310,12 @@ func removeLeadingNumber(title, number string) string {
 }
 
 func absoluteURL(base *url.URL, raw string) string {
-	ref, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || ref.String() == "" {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	ref, err := url.Parse(raw)
+	if err != nil {
 		return ""
 	}
 	return base.ResolveReference(ref).String()
@@ -389,9 +402,13 @@ func (p *Airav) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := p.getHTML(rawURL)
+	doc, finalURL, err := p.getHTMLWithFinalURL(rawURL)
 	if err != nil {
 		return nil, err
+	}
+	finalParsed, err := url.Parse(finalURL)
+	if err != nil || path.Base(finalParsed.Path) != id {
+		return nil, fmt.Errorf("%w: detail URL redirected from %q to %q", ErrMovieNotFound, rawURL, finalURL)
 	}
 	number := ""
 	doc.Find("li").EachWithBreak(func(_ int, item *goquery.Selection) bool {
