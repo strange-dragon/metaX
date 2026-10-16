@@ -104,8 +104,10 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  		return fz.getDigitalMovieInfoByURL(rawURL)
  	}
 @@ -985,8 +1024,18 @@ func IsDigitalVideoURL(url string) bool {
+-func IsDigitalVideoURL(url string) bool {
 -	return strings.HasPrefix(url, videoURL)
-+	homepage, err := urlpkgParse(url)
++func IsDigitalVideoURL(rawURL string) bool {
++	homepage, err := url.Parse(rawURL)
 +	if err != nil || !homepage.IsAbs() || !strings.EqualFold(homepage.Scheme, "https") {
 +		return false
 +	}
