@@ -38,7 +38,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | FC2Club | `sites/fc2club.py` | Not confirmed | Site-specific ID and result semantics |
 | FC2PPVDB | `sites/fc2ppvdb.py` | `provider/fc2ppvdb` | Compare source mapping and field coverage |
 | Freejavbt | `sites/freejavbt.py` | Not confirmed | Search/detail and anti-bot behavior |
-| Getchu | `sites/getchu.py` | `provider/getchu` | Compare source mapping and field coverage |
+| Getchu | `sites/getchu.py` | `provider/getchu` | Compared on 2026-10-16; patch `0005` hardens ID/URL validation; search behavior/catalog mismatch remains open |
 | Giga | `sites/giga.py` | Not confirmed | Search/detail and ID rules |
 | Iqqtv | `sites/iqqtv.py` | Not confirmed | Search/detail, API behavior |
 | Jav321 | `sites/jav321.py` | No Provider in SDK tree; metaX now has `provider/jav321` | Deterministic tests cover route, metadata mapping, not-found behavior and registration; live-site and full server integration pending |
