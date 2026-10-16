@@ -187,13 +187,14 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
 index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus_test.go
 +++ b/provider/javbus/javbus_test.go
-@@ -1,10 +1,123 @@
+@@ -1,10 +1,124 @@
  package javbus
  
  import (
 +	"strings"
  	"testing"
  
++	"github.com/metatube-community/metatube-sdk-go/model"
  	"github.com/metatube-community/metatube-sdk-go/provider/internal/testkit"
  )
  
