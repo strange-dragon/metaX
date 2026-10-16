@@ -363,6 +363,15 @@ func (p *FC2Club) SearchMovie(keyword string) ([]*model.MovieSearchResult, error
 	return []*model.MovieSearchResult{info.ToSearchResult()}, nil
 }
 
+func appendUnique(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
+}
+
 func texts(doc *goquery.Document, selector string) []string {
 	var values []string
 	doc.Find(selector).Each(func(_ int, node *goquery.Selection) {
