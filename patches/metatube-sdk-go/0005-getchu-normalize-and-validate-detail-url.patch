@@ -11,15 +11,15 @@ Based on metatube-community/metatube-sdk-go commit
 c62584675c593816cc07e7b5b977d14c7eb505a3.
 
 ---
- provider/getchu/getchu.go                | 23 ++++++++++++++++++-----
- provider/getchu/getchu_migration_test.go | 33 +++++++++++++++++++++++++++++++
- 2 files changed, 51 insertions(+), 5 deletions(-)
+ provider/getchu/getchu.go                | 18 ++++++++++++++++--
+ provider/getchu/getchu_migration_test.go | 42 ++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+), 2 deletions(-)
 
 diff --git a/provider/getchu/getchu.go b/provider/getchu/getchu.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/provider/getchu/getchu.go
 +++ b/provider/getchu/getchu.go
-@@ -36,20 +36,33 @@ func (gcu *Getchu) NormalizeMovieID(id string) string {
+@@ -36,15 +36,31 @@ func (gcu *Getchu) NormalizeMovieID(id string) string {
  }
  
  func (gcu *Getchu) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
@@ -59,7 +59,7 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- /dev/null
 +++ b/provider/getchu/getchu_migration_test.go
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,42 @@
 +package getchu
 +
 +import "testing"
