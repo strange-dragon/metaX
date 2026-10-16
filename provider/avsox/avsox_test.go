@@ -38,11 +38,11 @@ func apiServer(t *testing.T, searchData, detailData string) *httptest.Server {
 
 func TestSearchAndDetailParsing(t *testing.T) {
 	search := `{"code":200,"data":[
-		{"movieId":"movie-1","movieFanHao":"ABC-1234","title":"Near match"},
-		{"movieId":"movie-2","movieFanHao":"abc123","title":"Exact title","posterSmall":"/poster.jpg","posterLarge":"/thumb.jpg"}
+		{"movieId":"movie1","movieFanHao":"ABC-1234","title":"Near match"},
+		{"movieId":"movie2","movieFanHao":"abc123","title":"Exact title","posterSmall":"/poster.jpg","posterLarge":"/thumb.jpg"}
 	]}`
 	detail := `{"code":200,"data":{
-		"movieId":"movie-2","movieFanHao":"ABC-123","title":"Exact title",
+		"movieId":"movie2","movieFanHao":"ABC-123","title":"Exact title",
 		"releaseDate":"2024-05-16","length":121,"description_cn":"Plot text",
 		"posterSmall":"/poster.jpg","posterLarge":"/thumb.jpg","sampleLarge":["/sample/1.jpg",""],
 		"studio":{"studioName":"Studio One"},
@@ -58,14 +58,14 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	results, err := p.SearchMovie("ABC-123")
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	require.Equal(t, "movie-2", results[0].ID)
+	require.Equal(t, "movie2", results[0].ID)
 	require.Equal(t, "abc123", results[0].Number)
 	require.Equal(t, "Exact title", results[0].Title)
-	require.Equal(t, server.URL+"/cn/movies/movie-2", results[0].Homepage)
+	require.Equal(t, server.URL+"/cn/movies/movie2", results[0].Homepage)
 
 	info, err := p.GetMovieInfoByURL(results[0].Homepage)
 	require.NoError(t, err)
-	require.Equal(t, "movie-2", info.ID)
+	require.Equal(t, "movie2", info.ID)
 	require.Equal(t, "ABC-123", info.Number)
 	require.Equal(t, "Exact title", info.Title)
 	require.Equal(t, server.URL+"/poster.jpg", info.CoverURL)
