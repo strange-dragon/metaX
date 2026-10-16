@@ -19,7 +19,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 --- a/provider/fanza/fanza.go
 +++ b/provider/fanza/fanza.go
 @@ -51,6 +51,12 @@ const (
- 	movieMonoAnimeURL        = "https://www.dmm.co.jp/mono/anime/-/detail/=/cid=%s/"
+ 	movieMonoAnimeURL      = "https://www.dmm.co.jp/mono/anime/-/detail/=/cid=%s/"
  )
  
 +var (
