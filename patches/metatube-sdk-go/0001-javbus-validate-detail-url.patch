@@ -82,7 +82,7 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
 +	return keyword != "" && candidate != "" && keyword == candidate
 +}
 +
- func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error)
+ func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
 @@ -183,6 +183,10 @@ func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error)
  		homepage := e.Request.AbsoluteURL(e.Attr("href"))
  		id, _ := bus.ParseMovieIDFromURL(homepage)
