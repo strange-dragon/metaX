@@ -123,7 +123,7 @@ func (p *Freejavbt) ParseMovieIDFromURL(rawURL string) (string, error) {
 		return "", fmt.Errorf("freejavbt: unexpected detail origin %q", rawURL)
 	}
 	trimmed := strings.Trim(u.Path, "/")
-	if trimmed == "" || strings.Contains(trimmed, "/") || strings.EqualFold(trimmed, "search") {
+	if trimmed == "" || strings.EqualFold(strings.Split(trimmed, "/")[0], "search") {
 		return "", fmt.Errorf("freejavbt: unsupported detail path %q", u.Path)
 	}
 	id, err := url.PathUnescape(path.Base(u.Path))
@@ -441,10 +441,10 @@ func (p *Freejavbt) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(results) == 0 {
-			return nil, ErrMovieNotFound
+		if len(results) > 0 {
+			return p.GetMovieInfoByURL(results[0].Homepage)
 		}
-		return p.GetMovieInfoByURL(results[0].Homepage)
+		// Some detail pages are not returned by search; preserve direct-ID lookup as a fallback.
 	}
 	u := *p.baseURL
 	u.Path = "/" + id
