@@ -30,7 +30,7 @@ jobs:
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch"
 
-      - name: Apply AVBase patch
+      - name: Apply AVBase URL patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch"
 
@@ -38,7 +38,7 @@ jobs:
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0010-avbase-exact-search-identity.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0010-avbase-exact-search-identity.patch"
 
-      - name: Apply DAHLIA/FALENO patch
+      - name: Apply DAHLIA/FALENO exact-slug patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch"
 
@@ -49,7 +49,7 @@ jobs:
       - name: Apply FC2 patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch"
- 
+
       - name: Apply Getchu patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0005-getchu-normalize-and-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0005-getchu-normalize-and-validate-detail-url.patch"
@@ -68,52 +68,26 @@ jobs:
           gofmt -d $files
           test -z "$(gofmt -l $files)"
 
-      - name: Run deterministic URL, number-variant, and required-field tests
+      - name: Run deterministic JavBus tests
         working-directory: upstream-sdk
-        run: |
-          go test ./provider/javbus -run 'TestJavBus_ParseMovieIDFromURL|TestHasRequiredMovieFields|TestMovieNumberMatch|TestMovieNumberVariants|TestSelectMovieNumberResult' -count=1
+        run: go test ./provider/javbus -run 'TestJavBus_ParseMovieIDFromURL|TestHasRequiredMovieFields|TestMovieNumberMatch|TestMovieNumberVariants|TestSelectMovieNumberResult' -count=1
 
       - name: Run deterministic AVBase exact-search tests
         working-directory: upstream-sdk
-        run: |
-          go test ./provider/avbase -run '^Test(MovieURLForWork|NormalizeAVBaseNumber|AVBaseQueryForms|PickAVBaseWorkExactAndCollision)$'
+        run: go test ./provider/avbase -run '^Test(MovieURLForWork|NormalizeAVBaseNumber|AVBaseQueryForms|PickAVBaseWorkExactAndCollision)$' -count=1
 
-      - name: Run deterministic DAHLIA/FALENO identity tests
+      - name: Run deterministic DAHLIA/FALENO slug tests
         working-directory: upstream-sdk
-        run: |
-          go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug
-      - name: Run deterministic FC2 URL and ID validation tests
-        working-directory: upstream-sdk
-        run: |
-          go test ./provider/fc2 -run "TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)" -count=1
-
-      - name: Run deterministic Getchu ID and URL validation tests
-        working-directory: upstream-sdk
-        run: |
-          go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
- -count=1
+        run: go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug$' -count=1
 
       - name: Run deterministic DAHLIA/FALENO URL validation tests
         working-directory: upstream-sdk
-        run: |
-          go test ./provider/dahlia/core -run '^TestParseMovieIDFromURLValidatesOriginAndPath
-      - name: Run deterministic FC2 URL and ID validation tests
-        working-directory: upstream-sdk
-        run: |
-          go test ./provider/fc2 -run "TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)" -count=1
-
-      - name: Run deterministic Getchu ID and URL validation tests
-        working-directory: upstream-sdk
-        run: |
-          go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
- -count=1
+        run: go test ./provider/dahlia/core -run '^TestParseMovieIDFromURLValidatesOriginAndPath$' -count=1
 
       - name: Run deterministic FC2 URL and ID validation tests
         working-directory: upstream-sdk
-        run: |
-          go test ./provider/fc2 -run "TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)" -count=1
+        run: go test ./provider/fc2 -run 'TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)' -count=1
 
       - name: Run deterministic Getchu ID and URL validation tests
         working-directory: upstream-sdk
-        run: |
-          go test ./provider/getchu -run "Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)" -count=1
+        run: go test ./provider/getchu -run 'Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)' -count=1
