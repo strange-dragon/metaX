@@ -151,7 +151,7 @@ func TestProviderRegistered(t *testing.T) {
 		found = true
 		provider := factory()
 		require.Equal(t, Name, provider.Name())
-		require.Equal(t, Priority, provider.Priority())
+		require.Equal(t, float64(Priority), provider.Priority())
 		break
 	}
 	require.True(t, found, "JavDB should register with MetaTube's Provider factory")
