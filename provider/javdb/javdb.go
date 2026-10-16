@@ -212,7 +212,45 @@ func (p *JavDB) rebuildClientLocked() {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{Transport: transport, Timeout: timeout}
+	p.client = &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("javdb: stopped after 10 redirects")
+			}
+			if !p.allowedRedirectURL(req.URL) {
+				return fmt.Errorf("javdb: refusing redirect to unexpected URL %q", req.URL.String())
+			}
+			return nil
+		},
+	}
+}
+
+// allowedRedirectURL prevents a source-page redirect from escaping the
+// configured origin, including redirects to a different port on the same host.
+// The canonical www alias is allowed when it uses the same effective port.
+func (p *JavDB) allowedRedirectURL(u *url.URL) bool {
+	if !p.allowedHost(u.Hostname()) {
+		return false
+	}
+	if strings.EqualFold(p.baseURL.Scheme, "https") && !strings.EqualFold(u.Scheme, "https") {
+		return false
+	}
+	port := func(u *url.URL) string {
+		if value := u.Port(); value != "" {
+			return value
+		}
+		switch strings.ToLower(u.Scheme) {
+		case "https":
+			return "443"
+		case "http":
+			return "80"
+		default:
+			return ""
+		}
+	}
+	return port(u) == port(p.baseURL)
 }
 
 func (p *JavDB) httpClient() *http.Client {
