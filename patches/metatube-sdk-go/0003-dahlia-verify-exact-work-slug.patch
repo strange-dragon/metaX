@@ -12,9 +12,9 @@ Based on metatube-community/metatube-sdk-go commit
 c62584675c593816cc07e7b5b977d14c7eb505a3.
 
 ---
- provider/dahlia/core/core.go      | 55 ++++++++++++++++++++++++++++++++
+ provider/dahlia/core/core.go      | 48 ++++++++++++++++++++++++++++++++
  provider/dahlia/core/core_test.go | 87 +++++++++++++++++++++++++++++++++++++++
- 2 files changed, 142 insertions(+)
+ 2 files changed, 135 insertions(+)
 
 diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 index 59c9eb417151fea4f4bcef38931a1088541d541f..0000000000000000000000000000000000000000 100644
@@ -29,6 +29,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
  	"net/http"
  	"net/url"
 @@ -56,6 +57,10 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+ 	if err != nil {
  		return
  	}
  
@@ -39,17 +40,13 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
  	info = &model.MovieInfo{
  		ID:            id,
  		Number:        parser.ParseIDToNumber(id),
-@@ -72,6 +77,13 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
- 	// Title
- 	c.OnXML(`//div[@class="bar02_works"]/h1/text()`, func(e *colly.XMLElement) {
- 		info.Title = strings.TrimSpace(e.Text)
-@@ -127,6 +139,58 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+@@ -140,6 +145,18 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
  		}
  	})
  
 +	var identityErr error
 +	c.OnResponse(func(r *colly.Response) {
-+		resolvedID := strings.TrimSuffix(path.Base(r.Request.URL.Path), "/")
++		resolvedID := path.Base(r.Request.URL.Path)
 +		if core.NormalizeMovieID(resolvedID) != id {
 +			identityErr = fmt.Errorf("requested work %q resolved to different work %q", id, resolvedID)
 +		}
@@ -127,10 +124,10 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +
 +func TestGetMovieInfoByURLVerifiesExactSlug(t *testing.T) {
 +	tests := []struct {
-+		name       string
-+		restBody   string
-+		redirect   bool
-+		wantErr    bool
++		name     string
++		restBody string
++		redirect bool
++		wantErr  bool
 +	}{
 +		{name: "exact slug", restBody: `[{"slug":"target"}]`},
 +		{name: "missing slug", restBody: `[]`, wantErr: true},
