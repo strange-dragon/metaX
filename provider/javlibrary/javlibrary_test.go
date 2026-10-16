@@ -32,43 +32,45 @@ const detailHTML = `<!doctype html><html><head><meta property="og:image" content
 </body></html>`
 
 func TestSearchMovieRequiresExactCatalogNumber(t *testing.T) {
-	mux:=http.NewServeMux()
-	mux.HandleFunc("/cn/vl_searchbyid.php",func(w http.ResponseWriter,_ *http.Request){ _,_=fmt.Fprint(w,searchHTML) })
-	server:=httptest.NewServer(mux); defer server.Close()
-	p:=newForTest(server.URL,server.Client())
-	results,err:=p.SearchMovie("ABC-123")
-	require.NoError(t,err)
-	require.Len(t,results,1)
-	require.Equal(t,"ABC-123",results[0].Number)
-	require.Equal(t,"Exact title",results[0].Title)
-	require.Equal(t,server.URL+"/cn/?v=abc123",results[0].Homepage)
-	require.Equal(t,server.URL+"/images/cover.jpg",results[0].ThumbURL)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/cn/vl_searchbyid.php", func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, searchHTML) })
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	p := newForTest(server.URL, server.Client())
+	results, err := p.SearchMovie("ABC-123")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "ABC-123", results[0].Number)
+	require.Equal(t, "Exact title", results[0].Title)
+	require.Equal(t, server.URL+"/cn/?v=abc123", results[0].Homepage)
+	require.Equal(t, server.URL+"/images/cover.jpg", results[0].ThumbURL)
 }
 
 func TestGetMovieInfoByURLMapsMetadata(t *testing.T) {
-	mux:=http.NewServeMux()
-	mux.HandleFunc("/cn/",func(w http.ResponseWriter,_ *http.Request){ _,_=fmt.Fprint(w,detailHTML) })
-	server:=httptest.NewServer(mux); defer server.Close()
-	p:=newForTest(server.URL,server.Client())
-	info,err:=p.GetMovieInfoByURL(server.URL+"/cn/?v=abc123")
-	require.NoError(t,err)
-	require.Equal(t,"abc123",info.ID)
-	require.Equal(t,"ABC-123",info.Number)
-	require.Equal(t,"Exact title ABC-123",info.Title)
-	require.Equal(t,"Studio One",info.Maker)
-	require.Equal(t,"Label One",info.Label)
-	require.Equal(t,"Director One",info.Director)
-	require.Equal(t,[]string{"Actor One","Actor Two"},[]string(info.Actors))
-	require.Equal(t,[]string{"Drama","Romance"},[]string(info.Genres))
-	require.Equal(t,server.URL+"/images/cover.jpg",info.CoverURL)
-	require.Equal(t,7.8,info.Score)
-	require.Equal(t,120,info.Runtime)
-	require.Equal(t,"2024-05-16",time.Time(info.ReleaseDate).Format("2006-01-02"))
+	mux := http.NewServeMux()
+	mux.HandleFunc("/cn/", func(w http.ResponseWriter, _ *http.Request) { _, _ = fmt.Fprint(w, detailHTML) })
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByURL(server.URL + "/cn/?v=abc123")
+	require.NoError(t, err)
+	require.Equal(t, "abc123", info.ID)
+	require.Equal(t, "ABC-123", info.Number)
+	require.Equal(t, "Exact title ABC-123", info.Title)
+	require.Equal(t, "Studio One", info.Maker)
+	require.Equal(t, "Label One", info.Label)
+	require.Equal(t, "Director One", info.Director)
+	require.Equal(t, []string{"Actor One", "Actor Two"}, []string(info.Actors))
+	require.Equal(t, []string{"Drama", "Romance"}, []string(info.Genres))
+	require.Equal(t, server.URL+"/images/cover.jpg", info.CoverURL)
+	require.Equal(t, 7.8, info.Score)
+	require.Equal(t, 120, info.Runtime)
+	require.Equal(t, "2024-05-16", time.Time(info.ReleaseDate).Format("2006-01-02"))
 }
 
 func TestParseMovieIDRejectsUnexpectedURL(t *testing.T) {
-	p:=New()
-	for _,raw:=range []string{
+	p := New()
+	for _, raw := range []string{
 		"http://www.javlibrary.com/cn/?v=abc123",
 		"https://www.javlibrary.com:444/cn/?v=abc123",
 		"https://user@www.javlibrary.com/cn/?v=abc123",
@@ -77,36 +79,46 @@ func TestParseMovieIDRejectsUnexpectedURL(t *testing.T) {
 		"https://www.javlibrary.com/cn/?v=../evil",
 		"/cn/?v=abc123",
 	} {
-		_,err:=p.ParseMovieIDFromURL(raw)
-		require.Error(t,err,raw)
+		_, err := p.ParseMovieIDFromURL(raw)
+		require.Error(t, err, raw)
 	}
-	id,err:=p.ParseMovieIDFromURL("https://www.javlibrary.com/cn/?v=abc123")
-	require.NoError(t,err)
-	require.Equal(t,"abc123",id)
+	id, err := p.ParseMovieIDFromURL("https://www.javlibrary.com/cn/?v=abc123")
+	require.NoError(t, err)
+	require.Equal(t, "abc123", id)
 }
 
 func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
 	var hit int
-	external:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,_ *http.Request){ hit++; _,_=fmt.Fprint(w,detailHTML) }))
+	external := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hit++; _, _ = fmt.Fprint(w, detailHTML) }))
 	defer external.Close()
-	source:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){ http.Redirect(w,r,external.URL+"/cn/?v=abc123",http.StatusFound) }))
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, external.URL+"/cn/?v=abc123", http.StatusFound)
+	}))
 	defer source.Close()
-	p:=newForTest(source.URL,source.Client())
-	resp,err:=p.Fetch(source.URL+"/cn/?v=abc123")
-	if resp!=nil { _=resp.Body.Close() }
-	require.Error(t,err)
-	require.Zero(t,hit)
+	p := newForTest(source.URL, source.Client())
+	resp, err := p.Fetch(source.URL + "/cn/?v=abc123")
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	require.Zero(t, hit)
 }
 
 func TestRegistrationAndSettings(t *testing.T) {
-	found:=false
-	for name,factory:=range mt.RangeMovieFactory {
-		if name==Name { found=true; instance:=factory(); require.Equal(t,Name,instance.Name()); require.Equal(t,float64(Priority),instance.Priority()); break }
+	found := false
+	for name, factory := range mt.RangeMovieFactory {
+		if name == Name {
+			found = true
+			instance := factory()
+			require.Equal(t, Name, instance.Name())
+			require.Equal(t, float64(Priority), instance.Priority())
+			break
+		}
 	}
-	require.True(t,found)
-	p:=New()
-	require.Error(t,p.SetProxy("invalid"))
-	require.NoError(t,p.SetProxy(""))
-	p.SetRequestTimeout(3*time.Second)
-	require.Equal(t,3*time.Second,p.httpClient().Timeout)
+	require.True(t, found)
+	p := New()
+	require.Error(t, p.SetProxy("invalid"))
+	require.NoError(t, p.SetProxy(""))
+	p.SetRequestTimeout(3 * time.Second)
+	require.Equal(t, 3*time.Second, p.httpClient().Timeout)
 }
