@@ -31,11 +31,11 @@ import (
 )
 
 const (
-	Name         = "JavDB"
-	Priority     = 1000 - 10
-	defaultURL   = "https://javdb.com"
+	Name           = "JavDB"
+	Priority       = 1000 - 10
+	defaultURL     = "https://javdb.com"
 	defaultTimeout = 20 * time.Second
-	maxPageBytes = 8 << 20
+	maxPageBytes   = 8 << 20
 )
 
 var (
@@ -48,10 +48,10 @@ var (
 )
 
 var (
-	_ mt.MovieProvider  = (*JavDB)(nil)
-	_ mt.MovieSearcher  = (*JavDB)(nil)
-	_ mt.Fetcher        = (*JavDB)(nil)
-	_ mt.ProxySetter    = (*JavDB)(nil)
+	_ mt.MovieProvider        = (*JavDB)(nil)
+	_ mt.MovieSearcher        = (*JavDB)(nil)
+	_ mt.Fetcher              = (*JavDB)(nil)
+	_ mt.ProxySetter          = (*JavDB)(nil)
 	_ mt.RequestTimeoutSetter = (*JavDB)(nil)
 )
 
@@ -346,23 +346,23 @@ func (p *JavDB) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	}
 
 	info := &model.MovieInfo{
-		ID:            id,
-		Number:        number,
-		Title:         title,
-		Provider:      p.Name(),
-		Homepage:      rawURL,
-		Maker:         firstNonEmpty(studio),
-		Label:         firstNonEmpty(publisher),
-		Series:        firstNonEmpty(series),
-		Director:      strings.Join(directors, ", "),
-		Actors:        pq.StringArray(actors),
-		Genres:        pq.StringArray(genres),
-		CoverURL:      coverURL,
-		ThumbURL:      coverURL,
-		PreviewImages: pq.StringArray(previews),
+		ID:              id,
+		Number:          number,
+		Title:           title,
+		Provider:        p.Name(),
+		Homepage:        rawURL,
+		Maker:           firstNonEmpty(studio),
+		Label:           firstNonEmpty(publisher),
+		Series:          firstNonEmpty(series),
+		Director:        strings.Join(directors, ", "),
+		Actors:          pq.StringArray(actors),
+		Genres:          pq.StringArray(genres),
+		CoverURL:        coverURL,
+		ThumbURL:        coverURL,
+		PreviewImages:   pq.StringArray(previews),
 		PreviewVideoURL: trailerURL,
-		Score:         parseScore(scoreText),
-		Runtime:       parseRuntimeMinutes(runtimeText),
+		Score:           parseScore(scoreText),
+		Runtime:         parseRuntimeMinutes(runtimeText),
 	}
 	if strings.TrimSpace(releaseText) != "" {
 		info.ReleaseDate = parser.ParseDate(releaseText)
