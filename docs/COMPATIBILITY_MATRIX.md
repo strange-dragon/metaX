@@ -30,7 +30,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 |---|---|---|---|
 | Airav | `sites/airav.py` | `provider/airav` (new native Go provider in metaX) | Exact catalog-number matching, detail IDs, metadata fields, URL/redirect handling; live-site verification pending |
 | AVBase | `sites/avbase.py` | `provider/avbase` plus patch `0002` | Source comparison completed: search lacks exact normalized `work_id` filtering, alternate query forms, and deterministic collision resolution; retain SDK source-provider fallback; patch `0010` adds exact normalized work identity, original/compact/dashed query fallback, and deterministic prefix-collision resolution; patch application, formatting, and deterministic tests passed in [CI run 38921478829](https://github.com/strange-dragon/metaX/actions/runs/38921478829) |
-| AVSox | `sites/avsox.py` | `provider/avsox` (new native Go API provider in metaX) | CSRF/API flow, exact/folded number matching, localized metadata, URL and redirect handling; live-site verification pending |
+| AVSox | `sites/avsox.py` | `provider/avsox` (new native Go API provider in metaX) | Compared API session lifecycle: native Go client previously discarded cookies between CSRF bootstrap and JSON POST; added a shared cookie jar and deterministic cookie-propagation test. Exact/folded number matching and localized metadata are covered by local tests; live-site verification pending |
 | Dahlia | `sites/dahlia.py` | `provider/dahlia` | Compared shared DAHLIA/FALENO core; patches `0003` and `0011` validate exact work slug, final redirect identity, HTTPS origin, port, base path, and exact detail route; deterministic tests passed in [CI run 38922533782](https://github.com/strange-dragon/metaX/actions/runs/38922533782); live-site behavior remains unverified |
 | DMM | `sites/dmm.py` | `provider/fanza` (FANZA/DMM legacy and video catalogs) | Compared on 2026-10-16; patch `0009` validates DMM detail URL origins/routes and content IDs; deterministic patch-application, formatting, and URL/ID tests passed in [CI run 38901273948](https://github.com/strange-dragon/metaX/actions/runs/38901273948); current live catalog behavior remains unverified |
 | Faleno | `sites/faleno.py` | `provider/faleno` | Compare output and error behavior |
@@ -276,3 +276,13 @@ Compared Amane's `sites/prestige.py` with the pinned SDK provider inventory. No 
 - **Metadata mapping.** The API response carries the normal SKU number, title, release date, runtime, actresses, directors, genres, maker/label/series, plot, poster/package image paths, media gallery, and product UUID. Image paths may be relative to `/api/media/`; poster and landscape thumbnail slots are intentionally mapped from different API fields.
 - **Important access constraint.** The pinned Amane implementation documents a region restriction: requests outside Japan may receive CloudFront 403 or a regional restriction response. No live requests were made as part of this comparison, and the API schema has not been independently validated here.
 - **Decision.** Do not create a speculative native provider yet. First obtain permitted-region test responses or stable, independently sourced API fixtures; then implement exact SKU matching, special SKU handling, field mapping, URL-origin validation, response limits, and deterministic tests. Do not substitute the fuzzy search endpoint as a fallback because it can return unrelated products.
+
+
+## Focused comparison: AVSOX API session lifecycle (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/avsox.py` with metaX `provider/avsox` against the pinned source snapshots.
+
+- **API flow.** Both clients first GET the `/cn/` shell to retrieve a CSRF token, then POST JSON to `/javu/data/api/{search|getMovie}`. Amane uses a shared crawler HTTP client for both requests.
+- **Gap found in native Go provider.** The Go client did not configure an HTTP cookie jar. Cookies set by the CSRF bootstrap response were therefore not retained for the following API POST, which can break session-bound CSRF validation or other session state.
+- **Fix.** The native provider now creates a shared cookie jar for its HTTP client, including the test-client path. The API fixture server sets a session cookie during the CSRF bootstrap and asserts that both JSON API handlers receive it.
+- **Verification.** CI for the latest branch head is running; update this entry with the final test and format results once those workflows complete. This is deterministic local HTTP coverage only; no live AVSOX requests were made.
