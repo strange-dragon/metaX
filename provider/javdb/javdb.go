@@ -182,7 +182,12 @@ func (p *JavDB) SetProxy(proxyURL string) error {
 }
 
 func (p *JavDB) rebuildClientLocked() {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	var transport *http.Transport
+	if baseTransport, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = baseTransport.Clone()
+	} else {
+		transport = &http.Transport{Proxy: http.ProxyFromEnvironment}
+	}
 	transport.Proxy = http.ProxyFromEnvironment
 	if p.proxyURL != "" {
 		u, err := url.Parse(p.proxyURL)
@@ -366,6 +371,9 @@ func (p *JavDB) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		// Some JavDB layouts expose the poster through an og:image meta tag.
 		info.CoverURL = absoluteURL(p.baseURL, attrText(doc.Find("meta[property='og:image']").First(), "content"))
 		info.ThumbURL = info.CoverURL
+	}
+	if info.CoverURL == "" {
+		return nil, fmt.Errorf("javdb: detail page %s has no cover image", rawURL)
 	}
 	if info.Number == "" || info.Title == "" {
 		return nil, ErrMovieNotFound
