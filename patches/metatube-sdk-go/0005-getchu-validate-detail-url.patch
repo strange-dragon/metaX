@@ -40,7 +40,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  }
  
  func (gcu *Getchu) NormalizeMovieID(id string) string {
--	if ss := regexp.MustCompile(`^(?i)(?:GETCHU[-_])?([0-9]+)$`).FindStringSubmatch(id); len(ss) == 2 {
+-	if ss := regexp.MustCompile(`^(?i)(?:GETCHU[-_])?(\d+)$`).FindStringSubmatch(id); len(ss) == 2 {
 +	if ss := regexp.MustCompile(`^(?i)(?:GETCHU[-_])?([0-9]+)$`).FindStringSubmatch(strings.TrimSpace(id)); len(ss) == 2 {
  		return ss[1]
  	}
