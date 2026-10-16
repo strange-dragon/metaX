@@ -39,3 +39,15 @@ Reviewed `metatube-community/metatube-sdk-go` at commit
 - Therefore, a provider package must be part of the SDK module and imported from `engine/register.go` (or the relevant experimental registration file) to be discovered by the stock server. Adding metaX as a normal dependency does not register it.
 
 **Recommended delivery path:** keep metaX as the migration/test workspace, then transplant the reviewed provider package(s) and registration import(s) into an SDK fork or propose them to the upstream SDK. Do not add a runtime dependency from the SDK back to metaX; that reverses the dependency direction and does not fit the current registration design. The Jellyfin plugin contract does not need to change for provider discovery.
+
+
+## Upstream contribution constraints (2026-10-16)
+
+Repository reviewed: [metatube-community/metatube-sdk-go](https://github.com/metatube-community/metatube-sdk-go).
+
+- The upstream `LICENSE` is Apache-2.0.
+- The root `README.md` documents Go 1.25+, while the current `go.mod` declares `go 1.26.0`; use the module directive as the authoritative toolchain requirement.
+- No root `CONTRIBUTING.md` was found in the inspected default branch. This does not prove there are no contribution expectations in issues, PR templates, or maintainer guidance.
+- No user-owned SDK fork has been supplied. Do not attempt to push a branch to the upstream repository or open a PR from metaX as if it were a fork.
+
+**Current delivery plan:** prepare a reviewable patch against the pinned SDK source in this repository's migration workspace, including source changes and deterministic tests. Validate that the patch applies cleanly to the pinned upstream revision before treating it as ready. To submit it as a normal GitHub PR, the user will need a fork (or upstream write access); then the same patch can be applied to that fork and CI run there.
