@@ -63,6 +63,14 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Full metaX Go test workflow passed after formatting in [run 38884644252](https://github.com/strange-dragon/metaX/actions/runs/38884644252); formatting passed in [run 38884644417](https://github.com/strange-dragon/metaX/actions/runs/38884644417).
 - [ ] Live-site behavior and end-to-end MetaTube integration remain unverified.
 
+
+### Task 4e — official FC2 detail URL validation
+- [x] Compared Amane's official FC2 scraper with SDK `provider/fc2`; preserved the SDK's broader metadata extraction.
+- [x] Added `patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch` to validate the official HTTPS origin/path, normalize IDs, and reject redirects to other works or origins.
+- [x] Added deterministic tests for malformed IDs, invalid origins, nonstandard ports, userinfo, spoofed hosts, and malformed paths.
+- [x] Combined patch application, formatting, and all focused SDK patch tests passed in [run 38885581605](https://github.com/strange-dragon/metaX/actions/runs/38885581605); full metaX tests passed in [run 38885581539](https://github.com/strange-dragon/metaX/actions/runs/38885581539).
+- [ ] Live FC2 behavior and full upstream SDK regression remain unverified.
+
 ### Task 5 — Add uncovered providers in small increments
 - [ ] Prioritize sites with a clear mapping to existing SDK interfaces and manageable network behavior.
 - [ ] Each provider gets focused tests, registration verification, and a separate commit.
