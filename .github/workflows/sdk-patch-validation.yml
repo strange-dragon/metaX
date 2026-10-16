@@ -44,5 +44,6 @@ jobs:
 
       - name: Run deterministic URL and exact-number tests
         working-directory: upstream-sdk
-        run: go test ./provider/javbus -run '^(TestJavBus_ParseMovieIDFromURL|TestMatchesMovieNumber)
- -count=1
+        run: |
+          go test ./provider/javbus -run TestJavBus_ParseMovieIDFromURL -count=1
+          go test ./provider/javbus -run TestMatchesMovieNumber -count=1
