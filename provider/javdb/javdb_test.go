@@ -182,3 +182,25 @@ func TestGetMovieInfoByIDPreservesTransportFailures(t *testing.T) {
 	require.Contains(t, err.Error(), "unexpected HTTP status")
 	require.Zero(t, searchHits, "transport errors must not be disguised as search misses")
 }
+
+
+func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
+	destinationHits := 0
+	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		destinationHits++
+		_, _ = fmt.Fprint(w, detailFixture)
+	}))
+	defer destination.Close()
+
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, destination.URL+"/v/sampleid", http.StatusFound)
+	}))
+	defer source.Close()
+
+	p := newForTest(source.URL, source.Client())
+	info, err := p.GetMovieInfoByURL(source.URL + "/v/redirect")
+	require.Nil(t, info)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "refusing redirect")
+	require.Zero(t, destinationHits, "redirects must not reach a different origin or port")
+}
