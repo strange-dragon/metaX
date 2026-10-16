@@ -129,3 +129,11 @@ This is a migration workspace, not a claim that every inventoried site has shipp
 - Search treats results as candidates only and validates each detail page's `span.kopin` against the requested catalog number after normalization. This avoids the Amane reference crawler's first-result false-positive behavior.
 - Added deterministic local HTTP tests for exact-vs-near number matching, field mapping, URL validation, cross-origin redirect blocking, cookie behavior, and registration/configuration.
 - Updated README and compatibility matrix. Go formatting has passed CI; full deterministic Go test workflow is still running. No live-site validation or runtime engine import has been claimed.
+
+
+## Progress snapshot (2026-10-17, KIN8 ID validation)
+
+- Added SDK patch `0012-kin8-validate-and-normalize-movie-id.patch` to reject unrelated/invalid KIN8 IDs before network access and normalize accepted numeric IDs to four digits.
+- Added deterministic SDK migration tests for valid prefixes, normalization, zero/overlong values, foreign catalog numbers, and path-like input.
+- Added the patch and focused tests to the permanent SDK patch-validation workflow, including gofmt coverage.
+- The old SDK route and selectors remain unchanged; this patch deliberately does not claim full current-site compatibility. CI status pending at the time of this update.
