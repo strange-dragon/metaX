@@ -39,7 +39,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
 +	}
 +
  	info = &model.MovieInfo{
-@@ -145,3 +150,17 @@
+@@ -140,3 +144,17 @@
 +	var identityErr error
 +	c.OnResponse(func(r *colly.Response) {
 +		resolvedID := path.Base(r.Request.URL.Path)
@@ -57,7 +57,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
 +	}
  	return
  }
-@@ -150,3 +164,34 @@
+@@ -142,3 +160,34 @@
  }
  
 +// verifyMovieSlug checks the WordPress REST API before scraping the detail
