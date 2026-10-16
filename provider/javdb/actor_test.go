@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
@@ -15,7 +16,7 @@ const actorDetailFixture = `<!doctype html><html><head><link rel="canonical" hre
 <span class="section-meta">Female</span>
 <span class="section-meta">3 movie(s)</span>
 <span class="section-meta">Other Alias</span>
-<div class="actor-avatar"><span class="avatar" style="background-image: url("https://images.example.test/actor.jpg")"></span></div>
+<div class="actor-avatar"><span class="avatar" style="background-image: url('https://images.example.test/actor.jpg')"></span></div>
 </body></html>`
 
 func TestJavDBActorParseURLAndOriginValidation(t *testing.T) {
@@ -45,7 +46,7 @@ func TestJavDBActorSearchAndDetails(t *testing.T) {
 		require.Equal(t, "actor", r.URL.Query().Get("f"))
 		require.Equal(t, "zh", r.URL.Query().Get("locale"))
 		_, _ = fmt.Fprint(w, `<html><body>
-<div class="actor-box"><a href="/actors/Other123" title="Example Name"><strong>Unrelated Name</strong><img src="/other.jpg"></a></div>
+<div class="actor-box"><a href="/actors/Other123" title="Unrelated Name"><strong>Unrelated Name</strong><img src="/other.jpg"></a></div>
 <div class="actor-box"><a href="/actors/Actor123" title="Example Name, 別名"><strong>Example Name</strong><img data-src="/actor.jpg"></a></div>
 </body></html>`)
 	})
