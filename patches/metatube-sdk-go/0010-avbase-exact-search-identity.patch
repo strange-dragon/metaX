@@ -831,7 +831,7 @@ diff --git a/provider/avbase/avbase.go b/provider/avbase/avbase.go
 diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 --- a/provider/avbase/avbase_test.go
 +++ b/provider/avbase/avbase_test.go
-@@ -1,47 +1,116 @@
+@@ -1,47 +1,109 @@
 -package avbase
 -
 -import (
@@ -966,6 +966,7 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 +	if !ok || got.Prefix != "" {
 +		t.Fatalf("pickAVBaseWork() = (%q, %v), want unique unprefixed candidate", got.Prefix, ok)
 +	}
++
 +	works = []workResponse{
 +		{Prefix: "label-a", WorkID: "ABP-588"},
 +		{Prefix: "label-b", WorkID: "ABP-588"},
@@ -973,22 +974,13 @@ diff --git a/provider/avbase/avbase_test.go b/provider/avbase/avbase_test.go
 +	if _, ok := pickAVBaseWork(works, "ABP588"); ok {
 +		t.Fatal("pickAVBaseWork() unexpectedly selected ambiguous prefixed work")
 +	}
++
++	var productMatch workResponse
++	if err := json.Unmarshal([]byte(`{"prefix":"label-a","work_id":"ABP-588","products":[{"product_id":"ABP-588"}]}`), &productMatch); err != nil {
++		t.Fatal(err)
++	}
 +	works = []workResponse{
-+		{Prefix: "label-a", WorkID: "ABP-588", Products: []struct {
-+			ID int `json:"id"`
-+			ProductID string `json:"product_id"`
-+			URL string `json:"url"`
-+			Title string `json:"title"`
-+			Source string `json:"source"`
-+			ImageURL string `json:"image_url"`
-+			ThumbnailURL string `json:"thumbnail_url"`
-+			Date string `json:"date"`
-+			Maker struct { Name string `json:"name"` } `json:"maker"`
-+			Label struct { Name string `json:"name"` } `json:"label"`
-+			Series struct { Name string `json:"name"` } `json:"series"`
-+			SampleImageURLS []struct { S string `json:"s"`; L string `json:"l"` } `json:"sample_image_urls"`
-+			ItemInfo struct { Description string `json:"description"`; Price string `json:"price"`; Volume string `json:"volume"` } `json:"iteminfo"`
-+		}{{ProductID: "ABP-588"}}},
++		productMatch,
 +		{Prefix: "label-b", WorkID: "ABP-588"},
 +	}
 +	got, ok = pickAVBaseWork(works, "ABP588")
