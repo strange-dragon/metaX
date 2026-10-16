@@ -32,10 +32,10 @@ These observations are a starting snapshot, not a substitute for pinning exact u
 - [x] Create isolated feature branch.
 - [x] Add repository-level development instructions.
 - [x] Add migration and compatibility planning documents.
-- [ ] Record exact upstream SHAs for Amane, SDK, and Jellyfin plugin in the compatibility matrix.
+- [x] Record exact upstream SHAs for Amane, SDK, and Jellyfin plugin in the compatibility matrix.
 - [ ] Inspect all existing metaX files, scripts, workflow permissions, and prior branches/commits for handoff material.
 - [x] Record the intended license strategy: keep metaX project-authored code Apache-2.0; credit Amane as a feature reference; do not copy Amane source files or fixtures into Apache-only code.
-- [ ] Identify SDK's actual Go toolchain, lint, unit-test, and CI commands.
+- [x] Identify SDK's actual Go toolchain and the available formatting, unit-test, and CI commands; a full upstream SDK regression run is still pending.
 
 **Exit criteria:** the migration is technically scoped; source provenance is documented; direct reuse of Amane source or fixtures is excluded unless its license treatment is separately approved.
 
@@ -110,3 +110,14 @@ Amane supports multi-source field-level aggregation. Verify whether MetaTube alr
 - Existing providers and the Jellyfin plugin contract remain compatible.
 - License, attribution, dependency, and test status are documented.
 - Remaining gaps are explicit; untested sites are not labelled complete.
+
+
+## Progress snapshot (2026-10-16)
+
+This is a migration workspace, not a claim that every inventoried site has shipped.
+
+- **Inventory scope:** 24 Amane movie crawler sources and 6 actor crawler sources are listed for comparison in `docs/COMPATIBILITY_MATRIX.md`.
+- **Native Go extension packages:** 10 package directories currently exist in metaX: Airav, AVSOX, FC2Club, FreeJAVBT, GIGA, IQQTV, Jav321, JavDB (movie and actor), JavLibrary, and Minnano (actor).
+- **SDK patches:** 11 unique patch files target existing SDK providers. The maintained workflow applies the entire set to the pinned SDK, runs focused deterministic tests, and checks formatting; latest pass: [run 38932602151](https://github.com/strange-dragon/metaX/actions/runs/38932602151).
+- **Still outstanding:** finish source-by-source behavior comparison and decisions across the 24 movie and 6 actor sources; implement only justified gaps; design actor image/profile enrichment and identity resolution; run the full pinned SDK test suite; verify provider import/registration in the actual MetaTube engine; and conduct selective live-site checks plus Jellyfin/MetaTube integration validation.
+- **Do not interpret the counts as a simple percentage complete.** Some inventory rows are already covered by an SDK provider plus a hardening patch, some have native Go implementations, and others need a design decision or are blocked by site access. The acceptance checklist and per-source evidence determine completion.
