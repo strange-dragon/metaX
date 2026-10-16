@@ -34,6 +34,10 @@ jobs:
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch"
 
+      - name: Apply DAHLIA/FALENO patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch"
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -44,7 +48,7 @@ jobs:
       - name: Verify formatting
         working-directory: upstream-sdk
         run: |
-          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go)"
+          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go)"
 
       - name: Run deterministic URL, number-variant, and required-field tests
         working-directory: upstream-sdk
@@ -55,3 +59,8 @@ jobs:
         working-directory: upstream-sdk
         run: |
           go test ./provider/avbase -run '^TestMovieURLForWork$' -count=1
+
+      - name: Run deterministic DAHLIA/FALENO identity tests
+        working-directory: upstream-sdk
+        run: |
+          go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug$' -count=1
