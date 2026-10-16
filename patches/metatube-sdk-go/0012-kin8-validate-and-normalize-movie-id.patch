@@ -1,14 +1,13 @@
 diff --git a/provider/kin8tengoku/kin8tengoku.go b/provider/kin8tengoku/kin8tengoku.go
-index 0000000..0000000 100644
+index 1234567..89abcde 100644
 --- a/provider/kin8tengoku/kin8tengoku.go
 +++ b/provider/kin8tengoku/kin8tengoku.go
-@@
- func (k8 *KIN8) NormalizeMovieID(id string) string {
--	if ss := regexp.MustCompile(`^(?i)(?:kin8[-_])?(\\d+)$`).FindStringSubmatch(id); len(ss) == 2 {
+@@ -45,6 +45,11 @@ func (k8 *KIN8) NormalizeMovieID(id string) string {
+-	if ss := regexp.MustCompile(\`^(?i)(?:kin8[-_])?(\\d+)$\`).FindStringSubmatch(id); len(ss) == 2 {
 -		return ss[1]
 -	}
 -	return ""
-+	ss := regexp.MustCompile(`(?i)^(?:KIN8(?:TENGOKU)?[-_ ]?)?(\\d+)$`).FindStringSubmatch(strings.TrimSpace(id))
++	ss := regexp.MustCompile(\`(?i)^(?:KIN8(?:TENGOKU)?[-_ ]?)?(\\d+)$\`).FindStringSubmatch(strings.TrimSpace(id))
 +	if len(ss) != 2 {
 +		return ""
 +	}
@@ -19,8 +18,9 @@ index 0000000..0000000 100644
 +	return strings.Repeat("0", 4-len(value)) + value
  }
  
- func (k8 *KIN8) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
+-func (k8 *KIN8) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
 -	return k8.GetMovieInfoByURL(fmt.Sprintf(movieURL, id))
++func (k8 *KIN8) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
 +	normalized := k8.NormalizeMovieID(id)
 +	if normalized == "" {
 +		return nil, fmt.Errorf("kin8: invalid movie ID %q", id)
@@ -29,9 +29,10 @@ index 0000000..0000000 100644
  }
 diff --git a/provider/kin8tengoku/kin8tengoku_migration_test.go b/provider/kin8tengoku/kin8tengoku_migration_test.go
 new file mode 100644
+index 0000000..1234567
 --- /dev/null
 +++ b/provider/kin8tengoku/kin8tengoku_migration_test.go
-@@
+@@ -0,0 +1,40 @@
 +package kin8tengoku
 +
 +import (
