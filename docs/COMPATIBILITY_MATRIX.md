@@ -318,6 +318,19 @@ Compared Amane's JavDB actor crawler with the pinned SDK actor interfaces and Th
 - Verification: deterministic local tests cover exact search selection, metadata mapping, malformed/foreign origins, and actor factory registration. Full Go tests passed in [CI run 38927152300](https://github.com/strange-dragon/metaX/actions/runs/38927152300), and formatting passed in [run 38927152279](https://github.com/strange-dragon/metaX/actions/runs/38927152279). No live JavDB actor requests were made.
 
 
+
+### Actor source audit: implementation scope
+
+| Amane actor source | SDK/metaX status | Decision |
+|---|---|---|
+| AVBase | SDK has an AVBase movie provider but no actor provider | AVBase actor pages are addressed by talent name, while the payload also exposes a separate numeric talent ID. Defer until the native provider can define and test a stable ID-to-canonical-name resolution contract rather than pretending the numeric ID is directly routable. |
+| GFriends | No actor-profile interface equivalent | This source is an image index backed by a repository `Filetree.json`, not a biography/profile crawler. Do not model an image-only hit as a complete actor profile; revisit when metaX has an explicit actor-image enrichment path. |
+| JavDB | Native `provider/javdb/JavDBActor` added | Exact name/alias matching, actor slug validation, profile metadata and avatar mapping are covered by deterministic tests; live-site behavior remains unverified. |
+| Minnano | Native `provider/minnano/MinnanoActor` added | Exact-name search, numeric profile IDs, age-gate cookie and profile fields are covered by deterministic tests; live-site behavior remains unverified. |
+| ThePornDB | SDK already provides `ThePornDBActor` | Retain existing API-backed actor provider; audit its URL parsing and access-token requirements separately from scene/movie URL hardening. |
+| Wikipedia / Wikidata | No direct SDK actor provider | Defer rather than build a shallow scraper: correct behavior requires multilingual Wikidata candidate search, AV-specific occupation/description filtering, exact identity checks, entity data validation and language-prioritized article extraction. Add only with deterministic API-response tests. |
+
+
 ## Focused comparison: Minnano actor search and profile (2026-10-16)
 
 Compared the behavior of Amane's Minnano actor crawler with the pinned SDK `ActorProvider` / `ActorSearcher` interfaces. The SDK had no Minnano actor provider.
