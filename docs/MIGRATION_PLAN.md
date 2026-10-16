@@ -142,3 +142,11 @@ This is a migration workspace, not a claim that every inventoried site has shipp
 ## KIN8 patch validation result (2026-10-17)
 
 The new KIN8 ID normalization patch applies cleanly to the pinned SDK. The permanent workflow passed patch application, gofmt, and all focused deterministic patch tests in [run 38978044278](https://github.com/strange-dragon/metaX/actions/runs/38978044278). The metaX Go tests and formatting also passed on the same branch head in [run 38978044363](https://github.com/strange-dragon/metaX/actions/runs/38978044363) and [run 38978044255](https://github.com/strange-dragon/metaX/actions/runs/38978044255). This is not live-site verification and does not resolve KIN8's legacy route drift.
+
+
+## Source-contract audit: DAHLIA/FALENO REST API (2026-10-17)
+
+- Confirmed that Amane's shared WordPress works crawler uses the WordPress REST API and exact returned slug matching, whereas the pinned SDK shared core still uses legacy HTML search/detail selectors.
+- Confirmed an additional field-mapping difference for FALENO: publisher/label depends on slug prefixes, while studio remains FALENO. Existing URL/slug patches do not close this behavior gap.
+- Recorded the evidence and implementation criteria in `docs/COMPATIBILITY_MATRIX.md`.
+- Next step: design the smallest SDK patch that keeps public work-page URLs in `MovieInfo.Homepage`, fetches the JSON endpoint for data, and tests exact-slug selection, null/missing ACF fields, images, and publisher routing with independent fixtures. Do not change production endpoints without deterministic coverage; live-site behavior remains unverified.
