@@ -40,8 +40,7 @@ jobs:
       - name: Verify formatting
         working-directory: upstream-sdk
         run: |
-          gofmt -w provider/javbus/javbus.go provider/javbus/javbus_test.go
-          git diff --exit-code -- provider/javbus/javbus.go provider/javbus/javbus_test.go
+          test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go)"
 
       - name: Run deterministic URL validation tests
         working-directory: upstream-sdk
