@@ -1,0 +1,72 @@
+diff --git a/provider/kin8tengoku/kin8tengoku.go b/provider/kin8tengoku/kin8tengoku.go
+index 0000000..0000000 100644
+--- a/provider/kin8tengoku/kin8tengoku.go
++++ b/provider/kin8tengoku/kin8tengoku.go
+@@
+ func (k8 *KIN8) NormalizeMovieID(id string) string {
+-	if ss := regexp.MustCompile(`^(?i)(?:kin8[-_])?(\\d+)$`).FindStringSubmatch(id); len(ss) == 2 {
+-		return ss[1]
+-	}
+-	return ""
++	ss := regexp.MustCompile(`(?i)^(?:KIN8(?:TENGOKU)?[-_ ]?)?(\\d+)$`).FindStringSubmatch(strings.TrimSpace(id))
++	if len(ss) != 2 {
++		return ""
++	}
++	value := strings.TrimLeft(ss[1], "0")
++	if value == "" || len(value) > 4 {
++		return ""
++	}
++	return strings.Repeat("0", 4-len(value)) + value
+ }
+ 
+ func (k8 *KIN8) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
+-	return k8.GetMovieInfoByURL(fmt.Sprintf(movieURL, id))
++	normalized := k8.NormalizeMovieID(id)
++	if normalized == "" {
++		return nil, fmt.Errorf("kin8: invalid movie ID %q", id)
++	}
++	return k8.GetMovieInfoByURL(fmt.Sprintf(movieURL, normalized))
+ }
+diff --git a/provider/kin8tengoku/kin8tengoku_migration_test.go b/provider/kin8tengoku/kin8tengoku_migration_test.go
+new file mode 100644
+--- /dev/null
++++ b/provider/kin8tengoku/kin8tengoku_migration_test.go
+@@
++package kin8tengoku
++
++import (
++	"testing"
++
++	"github.com/stretchr/testify/require"
++)
++
++func TestNormalizeMovieIDMigration(t *testing.T) {
++	k8 := New()
++	tests := []struct {
++		input string
++		want  string
++	}{
++		{input: "3604", want: "3604"},
++		{input: "kin8-1", want: "0001"},
++		{input: "KIN8TENGOKU-0001", want: "0001"},
++		{input: " KIN8_42 ", want: "0042"},
++		{input: "heyzo-1234", want: ""},
++		{input: "010115_001", want: ""},
++		{input: "KIN8-0000", want: ""},
++		{input: "KIN8-12345", want: ""},
++		{input: "../1234", want: ""},
++		{input: "", want: ""},
++	}
++	for _, tt := range tests {
++		t.Run(tt.input, func(t *testing.T) {
++			require.Equal(t, tt.want, k8.NormalizeMovieID(tt.input))
++		})
++	}
++}
++
++func TestGetMovieInfoByIDRejectsInvalidIDBeforeNetwork(t *testing.T) {
++	_, err := New().GetMovieInfoByID("heyzo-1234")
++	require.Error(t, err)
++	_, err = New().GetMovieInfoByID("KIN8-0000")
++	require.Error(t, err)
++}
