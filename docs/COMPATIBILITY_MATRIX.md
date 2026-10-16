@@ -36,9 +36,9 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | Faleno | `sites/faleno.py` | `provider/faleno` | Compare output and error behavior |
 | FC2 | `sites/fc2.py` | `provider/fc2` | Compare ID normalization and metadata |
 | FC2Club | `sites/fc2club.py` | Not confirmed | Site-specific ID and result semantics |
-| FC2PPVDB | `sites/fc2ppvdb.py` | `provider/fc2ppvdb` | Compared on 2026-10-16; patch `0006` hardens article URL/ID validation; live HTML mapping remains unverified |
+| FC2PPVDB | `sites/fc2ppvdb.py` | `provider/fc2ppvdb` | Compared on 2026-10-16; patch `0006` hardens article URL/ID validation; temporary deterministic verification workflow reported passing by user; live HTML mapping remains unverified |
 | Freejavbt | `sites/freejavbt.py` | Not confirmed | Search/detail and anti-bot behavior |
-| Getchu | `sites/getchu.py` | `provider/getchu` | Compared on 2026-10-16; patch `0005` hardens ID/URL validation; search behavior/catalog mismatch remains open |
+| Getchu | `sites/getchu.py` | `provider/getchu` | Compared on 2026-10-16; patch `0005` hardens ID/URL validation; temporary deterministic verification workflow reported passing by user; search behavior/catalog mismatch remains open |
 | Giga | `sites/giga.py` | Not confirmed | Search/detail and ID rules |
 | Iqqtv | `sites/iqqtv.py` | Not confirmed | Search/detail, API behavior |
 | Jav321 | `sites/jav321.py` | No Provider in SDK tree; metaX now has `provider/jav321` | Deterministic tests cover route, metadata mapping, not-found behavior and registration; live-site and full server integration pending |
@@ -46,7 +46,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | JavDB | `sites/javdb.py` | No Provider in SDK tree; metaX now has `provider/javdb` | Deterministic tests cover search, details, number variants, foreign hosts, and registration; live-site and full server integration pending |
 | JavLibrary | `sites/javlibrary.py` | Not confirmed | Login/session, parsing, source availability |
 | Kin8 | `sites/kin8.py` | `provider/kin8tengoku` likely related; mapping must be verified | Confirm canonical domain, IDs, and output |
-| MGStage | `sites/mgstage.py` | `provider/mgstage` | Compared on 2026-10-16; patch `0007` validates detail URL origins/paths and rejects malformed IDs; deterministic verification pending |
+| MGStage | `sites/mgstage.py` | `provider/mgstage` | Compared on 2026-10-16; patch `0007` validates detail URL origins/paths and rejects malformed IDs; temporary patch-application, formatting, and deterministic test workflow reported passing by user |
 | Official | `sites/official.py` | No direct equivalent confirmed | Inspect multi-hop/brand routing and fallback |
 | Prestige | `sites/prestige.py` | Not confirmed | Search/detail, IDs, images |
 | R18Dev | `sites/r18dev.py` | Not confirmed | API schema and identifier mapping |
@@ -99,7 +99,7 @@ Compared Amane `src/amane/crawlers/sites/mgstage.py` with the pinned SDK's `prov
 - **Lookup behavior — both try direct detail lookup and use MGStage's product-detail URL shape.** Amane tries known number variants and verifies a direct page by requiring a title, then searches and selects a matching catalog number rather than returning the first result. SDK search returns the provider's result list; do not replace its search semantics with Amane's single-result resolver.
 - **URL/ID validation gap.** SDK previously uppercased any input and used `path.Base(URL.Path)` without validating origin or route. Both detail and review-by-ID methods interpolate IDs into request URLs, so malformed input could reach the fetcher.
 - **Targeted patch.** Added `patches/metatube-sdk-go/0007-mgstage-validate-detail-url.patch`: constrain IDs to alphanumeric segments separated by hyphens, normalize accepted IDs to uppercase, require HTTPS on `www.mgstage.com` with the default port and no userinfo, and accept only `/product/product_detail/{id}/` routes. Invalid IDs are rejected before detail or review requests. Existing metadata parsing and search behavior remain unchanged.
-- **Limits / verification.** No live MGStage requests were made. A temporary workflow was added to check patch application, gofmt, and deterministic MGStage tests. The available GitHub status interface has not returned a workflow run yet, so this patch remains unverified; delete the temporary workflow after its result is confirmed if it has no continuing use.
+- **Limits / verification.** No live MGStage requests were made. The temporary workflow checking patch application, gofmt, and deterministic MGStage tests was reported passing by the user and was deleted afterward.
 
 ## Per-site acceptance checklist
 
@@ -167,7 +167,7 @@ Compared Amane's `sites/getchu.py` with the pinned SDK's `provider/getchu/getchu
 - **Detail metadata — SDK is broader.** Amane extracts title, cover, release date, brand, genres, and a leading token as the number. The SDK also maps circle/label, release date, genres, summary, preview images, and Open Graph title/cover fallbacks. Keep the existing richer SDK field mapping.
 - **ID/URL correctness — SDK gap found.** `GetMovieInfoByID` previously interpolated the caller-provided ID directly into a detail URL. `ParseMovieIDFromURL` used `strings.TrimLeft(path.Base(...), "item")`, which trims any leading characters in the set `i/t/e/m` rather than removing the literal `item` prefix, and it accepted unrelated hosts and paths. This could derive malformed IDs from non-Getchu URLs.
 - **Targeted patch.** Added `patches/metatube-sdk-go/0005-getchu-validate-detail-url.patch`: normalize only numeric IDs with optional `GETCHU-` / `GETCHU_` prefixes; reject invalid IDs before URL construction; require HTTPS, the exact `dl.getchu.com` host, default HTTPS port, no userinfo, and the exact `/i/item{digits}` path. Deterministic tests cover valid IDs, malformed IDs, URL origin/path rejection, and invalid-ID short-circuiting.
-- **Limits and verification.** No live Getchu requests were made. This patch does not add search support or change the existing metadata parser. The temporary SDK regression workflow was extended to apply and test this patch, then deleted as requested. Its run result could not be confirmed through the available status interface.
+- **Limits and verification.** No live Getchu requests were made. This patch does not add search support or change the existing metadata parser. The temporary SDK regression workflow was reported passing by the user and was deleted afterward.
 
 ## Focused comparison: FC2PPVDB (2026-10-16)
 
@@ -177,4 +177,4 @@ Compared Amane's `sites/fc2ppvdb.py` with the pinned SDK's `provider/fc2ppvdb/fc
 - **Metadata mapping.** Amane extracts title, actresses, article cover, tags, and release date from its current selectors. The SDK additionally maps maker, runtime, and score, and has a more specific Japanese-label parser. It is not safe to replace that parser wholesale without fixtures or a live-site check; current HTML compatibility remains unverified.
 - **URL/ID validation gap.** The SDK previously passed arbitrary IDs into `/articles/%s` and extracted IDs from `path.Base(URL.Path)` without validating scheme, host, or article path. That could construct malformed URLs or accept a non-FC2PPVDB URL as a detail page.
 - **Targeted patch.** Added `patches/metatube-sdk-go/0006-fc2ppvdb-validate-detail-url.patch`: trim input before shared FC2 normalization, reject invalid IDs before constructing a URL, and require HTTPS on `fc2ppvdb.com` with a numeric `/articles/{id}` path (optional trailing slash allowed). Deterministic tests cover valid/invalid IDs and URL origin/path rejection.
-- **Limits / verification status.** No live site requests were made. A malformed regex hunk in the patch file was found and repaired in commit `b44d87c7c6db6e6bf17b92e87fba3064ddc14613`. A temporary workflow was then created to run `git apply --check`, apply the patch, check `gofmt`, and run deterministic FC2PPVDB tests. The available GitHub status interface returned no workflow run or status for its commit, so successful application and tests remain unconfirmed; keep the temporary workflow until this verification can be observed, then delete it if no longer needed.
+- **Limits / verification status.** No live site requests were made. A malformed regex hunk in the patch file was found and repaired in commit `b44d87c7c6db6e6bf17b92e87fba3064ddc14613`. The temporary workflow's patch-application, formatting, and deterministic FC2PPVDB tests were reported passing by the user; the temporary workflow was deleted afterward. Current HTML compatibility remains unverified.
