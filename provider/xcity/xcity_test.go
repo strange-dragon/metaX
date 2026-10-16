@@ -31,7 +31,7 @@ func TestSearchMovieRequiresExactCatalogNumber(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/result_published/", func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "ABC123", r.URL.Query().Get("q"))
-		require.Equal(t, "1", r.Header.Get("Cookie"))
+		require.Equal(t, "adc=1", r.Header.Get("Cookie"))
 		_, _ = fmt.Fprint(w, searchHTML)
 	})
 	mux.HandleFunc("/titles/exact", func(w http.ResponseWriter, _ *http.Request) {
