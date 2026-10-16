@@ -99,6 +99,10 @@ func TestParseMovieIDFromURLRejectsUnsafeOrigins(t *testing.T) {
 		"https://airav.io:444/video/123",
 		"https://user@airav.io/video/123",
 		"https://airav.io.evil.invalid/video/123",
+		"https://airav.io/not-video/123",
+		"https://airav.io/video/123/extra",
+		"https://airav.io/video/123?redirect=other",
+		"https://airav.io/video/123#fragment",
 	} {
 		t.Run(raw, func(t *testing.T) {
 			_, err := p.ParseMovieIDFromURL(raw)
