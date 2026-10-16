@@ -203,3 +203,19 @@ func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
 	require.Contains(t, err.Error(), "refusing redirect")
 	require.Zero(t, destinationHits, "redirects must not reach a different origin or port")
 }
+
+func TestParseMovieIDFromURLRejectsInvalidOriginComponents(t *testing.T) {
+	p := New()
+	for _, raw := range []string{
+		"http://javdb.com/v/opaque-id",
+		"https://javdb.com:8443/v/opaque-id",
+		"https://user@javdb.com/v/opaque-id",
+		"https://javdb.com.evil.invalid/v/opaque-id",
+		"https://javdb.com/v/opaque-id#fragment",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			_, err := p.ParseMovieIDFromURL(raw)
+			require.Error(t, err)
+		})
+	}
+}
