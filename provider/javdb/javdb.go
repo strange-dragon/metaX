@@ -141,11 +141,24 @@ func (p *JavDB) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if u.Scheme == "" || u.Host == "" {
 		return "", fmt.Errorf("javdb: expected an absolute detail URL")
 	}
+	if !p.allowedHost(u.Hostname()) {
+		return "", fmt.Errorf("javdb: unexpected detail host %q", u.Hostname())
+	}
 	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
 	if len(segments) != 2 || segments[0] != "v" || strings.TrimSpace(segments[1]) == "" {
 		return "", fmt.Errorf("javdb: URL is not a /v/{id} detail URL")
 	}
 	return segments[1], nil
+}
+
+func (p *JavDB) allowedHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	base := strings.TrimSuffix(strings.ToLower(p.baseURL.Hostname()), ".")
+	if host == base {
+		return true
+	}
+	// JavDB's canonical host and its common www alias are equivalent.
+	return base == "javdb.com" && host == "www.javdb.com"
 }
 
 // SetRequestTimeout replaces the HTTP client with the requested timeout while
@@ -286,8 +299,13 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 		if err == nil && info != nil {
 			return info, nil
 		}
-		// Opaque IDs are tried as direct detail slugs first. If that does not
-		// resolve to a valid detail page, fall back to searching by the input.
+		if err != nil && !errors.Is(err, ErrMovieNotFound) {
+			// Preserve transport, timeout, status and parse failures; a network
+			// error is not evidence that a slug should be treated as a search term.
+			return nil, err
+		}
+		// Opaque IDs are tried as direct detail slugs first. A valid not-found
+		// result may still be a movie number or keyword, so then try search.
 	}
 	results, err := p.SearchMovie(id)
 	if err != nil {
