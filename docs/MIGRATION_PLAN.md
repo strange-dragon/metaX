@@ -34,10 +34,10 @@ These observations are a starting snapshot, not a substitute for pinning exact u
 - [x] Add migration and compatibility planning documents.
 - [ ] Record exact upstream SHAs for Amane, SDK, and Jellyfin plugin in the compatibility matrix.
 - [ ] Inspect all existing metaX files, scripts, workflow permissions, and prior branches/commits for handoff material.
-- [ ] Confirm source and fixture licenses and determine what code/data can be ported or must be independently reimplemented.
+- [x] Record the intended license strategy: keep metaX project-authored code Apache-2.0; credit Amane as a feature reference; do not copy Amane source files or fixtures into Apache-only code.
 - [ ] Identify SDK's actual Go toolchain, lint, unit-test, and CI commands.
 
-**Exit criteria:** the migration is legally and technically scoped; the baseline can be reproduced.
+**Exit criteria:** the migration is technically scoped; source provenance is documented; direct reuse of Amane source or fixtures is excluded unless its license treatment is separately approved.
 
 ## Phase 1 — capability inventory
 
@@ -55,7 +55,7 @@ Use the compatibility matrix to record findings. Do not rank sites by filename c
 ## Phase 2 — SDK compatibility and test baseline
 
 - Read the SDK Provider interfaces, factory, shared fetcher/scraper helpers, model types, and representative providers.
-- Read the relevant Amane crawler, parser, aggregation, configuration, and test code for each selected site.
+- Compare relevant Amane capability descriptions and observable site behavior against the SDK. Do not translate source files line by line; use the SDK's idioms and independently authored parsers/tests.
 - Map Amane data into existing SDK model types before proposing model changes.
 - Build the unmodified SDK and run its existing tests in a suitable Go environment.
 - Add a small, deterministic test skeleton for one representative migrated Provider before broad migration.
