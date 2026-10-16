@@ -214,7 +214,12 @@ func (p *Giga) SetProxy(proxyURL string) error {
 }
 
 func (p *Giga) rebuildClientLocked() {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
+	var transport *http.Transport
+	if base, ok := http.DefaultTransport.(*http.Transport); ok {
+		transport = base.Clone()
+	} else {
+		transport = &http.Transport{Proxy: http.ProxyFromEnvironment}
+	}
 	transport.Proxy = http.ProxyFromEnvironment
 	if p.proxyURL != "" {
 		if proxyURL, err := url.Parse(p.proxyURL); err == nil {
