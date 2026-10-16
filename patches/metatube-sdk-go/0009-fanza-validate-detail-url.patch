@@ -10,20 +10,20 @@ Add deterministic tests for supported routes and rejected origins/IDs.
 This patch is based on metatube-community/metatube-sdk-go commit
 c62584675c593816cc07e7b5b977d14c7eb505a3.
 ---
- provider/fanza/fanza.go                 | 68 ++++++++++++++++++++++++++++-----
- provider/fanza/fanza_migration_test.go  | 51 +++++++++++++++++++++++
- 2 files changed, 110 insertions(+), 9 deletions(-)
+ provider/fanza/fanza.go                | 54 ++++++++++++++++++++++++++------
+ provider/fanza/fanza_migration_test.go | 59 ++++++++++++++++++++++++++++++++
+ 2 files changed, 103 insertions(+), 10 deletions(-)
 
 diff --git a/provider/fanza/fanza.go b/provider/fanza/fanza.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/provider/fanza/fanza.go
 +++ b/provider/fanza/fanza.go
-@@ -51,6 +51,10 @@ const (
+@@ -51,6 +51,12 @@ const (
  	movieMonoAnimeURL        = "https://www.dmm.co.jp/mono/anime/-/detail/=/cid=%s/"
  )
  
 +var (
-+	contentIDRE       = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
++	contentIDRE        = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 +	legacyDetailPathRE = regexp.MustCompile(`^/(?:digital|mono)/[A-Za-z0-9_-]+/-/detail/=/cid=([A-Za-z0-9_-]+)/?$`)
 +	digitalVideoPathRE = regexp.MustCompile(`^/(?:av|amateur|anime|cinema)/content/?$`)
 +)
@@ -31,7 +31,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  const regionNotAvailable = "not-available-in-your-region"
  
  var (
-@@ -107,6 +111,11 @@ func (fz *FANZA) SetRequestTimeout(timeout time.Duration) {
+@@ -102,6 +108,10 @@ func (fz *FANZA) SetRequestTimeout(timeout time.Duration) {
  }
  
  func (fz *FANZA) NormalizeMovieID(id string) string {
@@ -42,7 +42,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	return strings.ToLower(id) /* FANZA uses lowercase ID */
  }
  
-@@ -137,6 +146,10 @@ func (fz *FANZA) getHomepagesByID(id string) []string {
+@@ -122,6 +132,10 @@ func (fz *FANZA) getHomepagesByID(id string) []string {
  }
  
  func (fz *FANZA) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
@@ -53,8 +53,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	for _, homepage := range fz.getHomepagesByID(id) {
  		if info, err = fz.GetMovieInfoByURL(homepage); errors.Is(err, ErrRegionNotAvailable) || err == nil && info.IsValid() {
  			return
-@@ -151,22 +164,57 @@ func (fz *FANZA) ParseMovieIDFromURL(rawURL string) (id string, err error) {
- 	}()
+@@ -134,20 +148,45 @@ func (fz *FANZA) ParseMovieIDFromURL(rawURL string) (id string, err error) {
  	homepage, err := url.Parse(rawURL)
  	if err != nil {
  		return
@@ -72,10 +71,10 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +	if homepage.User != nil {
 +		return "", fmt.Errorf("fanza: userinfo is not allowed in detail URLs")
 +	}
-+	host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), ".")
 +	if port := homepage.Port(); port != "" && port != "443" {
 +		return "", fmt.Errorf("fanza: unexpected detail port %q", port)
 +	}
++	host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), ".")
 +	switch host {
 +	case "video.dmm.co.jp":
 +		if !digitalVideoPathRE.MatchString(homepage.Path) {
@@ -98,32 +97,103 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  }
  
  func (fz *FANZA) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
--	if IsDigitalVideoURL(rawURL) {
 +	if _, err := fz.ParseMovieIDFromURL(rawURL); err != nil {
 +		return nil, err
 +	}
-+	if IsDigitalVideoURL(rawURL) {
+ 	if IsDigitalVideoURL(rawURL) {
  		return fz.getDigitalMovieInfoByURL(rawURL)
  	}
- 	return fz.getMonoMovieInfoByURL(rawURL)
-@@ -1114,8 +1162,12 @@ func IsDigitalVideoURL(url string) bool {
+@@ -985,8 +1024,18 @@ func IsDigitalVideoURL(url string) bool {
 -	return strings.HasPrefix(url, videoURL)
 +	homepage, err := urlpkgParse(url)
 +	if err != nil || !homepage.IsAbs() || !strings.EqualFold(homepage.Scheme, "https") {
 +		return false
 +	}
 +	host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), ".")
-+	return host == "video.dmm.co.jp" && (homepage.Port() == "" || homepage.Port() == "443") && homepage.User == nil && digitalVideoPathRE.MatchString(homepage.Path)
++	return host == "video.dmm.co.jp" &&
++		(homepage.Port() == "" || homepage.Port() == "443") &&
++		homepage.User == nil && digitalVideoPathRE.MatchString(homepage.Path)
  }
  
  // ParseNumber parses FANZA-formatted id to general ID.
-@@ -1120,6 +1172,13 @@ func IsDigitalVideoURL(url string) bool {
+@@ -993,6 +1042,10 @@ func IsDigitalVideoURL(url string) bool {
  	return strings.HasPrefix(url, videoURL)
  }
  
-+// urlpkgParse avoids shadowing the URL argument name in IsDigitalVideoURL.
 +func urlpkgParse(rawURL string) (*url.URL, error) {
 +	return url.Parse(rawURL)
 +}
 +
-*** End Patch
+diff --git a/provider/fanza/fanza_migration_test.go b/provider/fanza/fanza_migration_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
+--- /dev/null
++++ b/provider/fanza/fanza_migration_test.go
+@@ -0,0 +1,59 @@
++package fanza
++
++import "testing"
++
++func TestFANZANormalizeMovieIDValidation(t *testing.T) {
++	tests := []struct {
++		input string
++		want  string
++	}{
++		{input: " JUX00109 ", want: "jux00109"},
++		{input: "h_346rebd655", want: "h_346rebd655"},
++		{input: "ssis-00964", want: "ssis-00964"},
++		{input: "../jux00109", want: ""},
++		{input: "jux00109?x=1", want: ""},
++		{input: "", want: ""},
++	}
++	for _, tt := range tests {
++		if got := New().NormalizeMovieID(tt.input); got != tt.want {
++			t.Errorf("NormalizeMovieID(%q) = %q, want %q", tt.input, got, tt.want)
++		}
++	}
++}
++
++func TestFANZAParseMovieIDFromURLValidation(t *testing.T) {
++	tests := []struct {
++		rawURL  string
++		want    string
++		wantErr bool
++	}{
++		{rawURL: "https://www.dmm.co.jp/digital/videoa/-/detail/=/cid=jux00109/", want: "jux00109"},
++		{rawURL: "https://www.dmm.co.jp/mono/dvd/-/detail/=/cid=h_346rebd655/", want: "h_346rebd655"},
++		{rawURL: "https://video.dmm.co.jp/av/content/?id=jux00109", want: "jux00109"},
++		{rawURL: "https://video.dmm.co.jp/anime/content/?id=196glod00359", want: "196glod00359"},
++		{rawURL: "https://video.dmm.co.jp.evil.invalid/av/content/?id=jux00109", wantErr: true},
++		{rawURL: "https://user@video.dmm.co.jp/av/content/?id=jux00109", wantErr: true},
++		{rawURL: "https://video.dmm.co.jp:8443/av/content/?id=jux00109", wantErr: true},
++		{rawURL: "http://www.dmm.co.jp/digital/videoa/-/detail/=/cid=jux00109/", wantErr: true},
++		{rawURL: "https://www.dmm.co.jp/search/=/searchstr=jux00109/", wantErr: true},
++		{rawURL: "/digital/videoa/-/detail/=/cid=jux00109/", wantErr: true},
++		{rawURL: "https://video.dmm.co.jp/av/content/?id=../jux00109", wantErr: true},
++	}
++	for _, tt := range tests {
++		t.Run(tt.rawURL, func(t *testing.T) {
++			got, err := New().ParseMovieIDFromURL(tt.rawURL)
++			if tt.wantErr {
++				if err == nil {
++					t.Fatalf("ParseMovieIDFromURL(%q) error = nil, want error", tt.rawURL)
++				}
++				return
++			}
++			if err != nil {
++				t.Fatalf("ParseMovieIDFromURL(%q) error = %v", tt.rawURL, err)
++			}
++			if got != tt.want {
++				t.Errorf("ParseMovieIDFromURL(%q) = %q, want %q", tt.rawURL, got, tt.want)
++			}
++		})
++	}
++}
++
++func TestFANZAGetMovieInfoByIDRejectsInvalidID(t *testing.T) {
++	if _, err := New().GetMovieInfoByID("../jux00109"); err == nil {
++		t.Fatal("GetMovieInfoByID accepted an invalid content ID")
++	}
++}
+-- 
+2.50.1
