@@ -137,3 +137,8 @@ This is a migration workspace, not a claim that every inventoried site has shipp
 - Added deterministic SDK migration tests for valid prefixes, normalization, zero/overlong values, foreign catalog numbers, and path-like input.
 - Added the patch and focused tests to the permanent SDK patch-validation workflow, including gofmt coverage.
 - The old SDK route and selectors remain unchanged; this patch deliberately does not claim full current-site compatibility. CI status pending at the time of this update.
+
+
+## KIN8 patch validation result (2026-10-17)
+
+The new KIN8 ID normalization patch applies cleanly to the pinned SDK. The permanent workflow passed patch application, gofmt, and all focused deterministic patch tests in [run 38978044278](https://github.com/strange-dragon/metaX/actions/runs/38978044278). The metaX Go tests and formatting also passed on the same branch head in [run 38978044363](https://github.com/strange-dragon/metaX/actions/runs/38978044363) and [run 38978044255](https://github.com/strange-dragon/metaX/actions/runs/38978044255). This is not live-site verification and does not resolve KIN8's legacy route drift.
