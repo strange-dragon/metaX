@@ -119,7 +119,6 @@ func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
 	require.False(t, targetRequested, "redirect destination must not be requested")
 }
 
-
 func TestParseMovieIDFromURLRejectsUnexpectedOriginDetails(t *testing.T) {
 	p := New()
 	for _, rawURL := range []string{
