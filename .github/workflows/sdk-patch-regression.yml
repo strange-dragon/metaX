@@ -38,6 +38,7 @@ jobs:
           git apply --check ../metaX/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch
           git apply --check ../metaX/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch
           git apply --check ../metaX/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch
+          git apply --check ../metaX/patches/metatube-sdk-go/0005-getchu-validate-detail-url.patch
 
       - name: Apply SDK patches
         working-directory: sdk
@@ -46,6 +47,7 @@ jobs:
           git apply ../metaX/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch
           git apply ../metaX/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch
           git apply ../metaX/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch
+          git apply ../metaX/patches/metatube-sdk-go/0005-getchu-validate-detail-url.patch
 
       - name: Check formatting
         working-directory: sdk
@@ -63,6 +65,10 @@ jobs:
           fi
           go test "${packages[@]}"
 
+      - name: Run focused Getchu validation tests
+        working-directory: sdk
+        run: go test ./provider/getchu -run '^(TestGetchuNormalizeMovieID|TestGetchuParseMovieIDFromURL|TestGetchuGetMovieInfoByIDRejectsInvalidID)
+
       - name: Compile translation packages without calling external APIs
         working-directory: sdk
-        run: go test -run '^$' ./translate/...
+        run: go test -run '^ ./translate/...
