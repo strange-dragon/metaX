@@ -42,8 +42,7 @@ jobs:
         run: |
           test -z "$(gofmt -d provider/javbus/javbus.go provider/javbus/javbus_test.go)"
 
-      - name: Run deterministic URL and exact-number tests
+      - name: Run deterministic URL, number-variant, and required-field tests
         working-directory: upstream-sdk
         run: |
-          go test ./provider/javbus -run TestJavBus_ParseMovieIDFromURL -count=1
-          go test ./provider/javbus -run TestMatchesMovieNumber -count=1
+          go test ./provider/javbus -run 'TestJavBus_ParseMovieIDFromURL|TestHasRequiredMovieFields|TestMovieNumberMatch|TestMovieNumberVariants|TestSelectMovieNumberResult' -count=1
