@@ -182,7 +182,7 @@ func (p *Actor) GetActorInfoByURL(rawURL string) (*model.ActorInfo, error) {
 		ID: id, Name: name, Provider: p.Name(), Homepage: homepage,
 		Aliases: pq.StringArray(aliases),
 	}
-	if !birthday.IsZero() {
+	if !time.Time(birthday).IsZero() {
 		info.Birthday = birthday
 	}
 	if height > 0 {
