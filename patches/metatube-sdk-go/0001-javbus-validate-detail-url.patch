@@ -31,37 +31,6 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
  	"strings"
  	"sync"
  
-@@ -139,6 +163,17 @@ func (bus *JavBus) NormalizeMovieKeyword(keyword string) string {
- 	return strings.ToUpper(keyword)
- }
- 
-+func matchesMovieNumber(keyword, candidate string) bool {
-+	normalize := func(s string) string {
-+		return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s), "_", "-"))
-+	}
-+	keyword = normalize(keyword)
-+	candidate = normalize(candidate)
-+	return keyword != "" && candidate != "" && keyword == candidate
-+}
-+
- func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
- 	c := bus.ClonedCollector()
- 	c.Async = true /* ASYNC */
-@@ -157,6 +192,10 @@ func (bus *JavBus) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
- 		}
- 
- 		homepage := e.Request.AbsoluteURL(e.Attr("href"))
- 		id, _ := bus.ParseMovieIDFromURL(homepage)
-+		resultNumber := e.ChildText(`.//div[2]/span/date[1]`)
-+		if !matchesMovieNumber(keyword, resultNumber) {
-+			return
-+		}
- 		results = append(results, &model.MovieSearchResult{
- 			ID:          id,
--			Number:      e.ChildText(`.//div[2]/span/date[1]`),
-+			Number:      resultNumber,
- 			Title:       strings.SplitN(e.ChildText(`.//div[2]/span`), "\n", 2)[0],
-
 @@ -72,11 +72,35 @@ func (bus *JavBus) GetMovieInfoByID(id string) (info *model.MovieInfo, err error
  }
  
@@ -104,7 +73,7 @@ diff --git a/provider/javbus/javbus_test.go b/provider/javbus/javbus_test.go
 index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus_test.go
 +++ b/provider/javbus/javbus_test.go
-@@ -1,10 +1,70 @@
+@@ -1,10 +1,48 @@
  package javbus
  
  import (
@@ -148,26 +117,6 @@ index 20319f9553716a14eee8e162efb4872b3d926c6e..00000000000000000000000000000000
 +				t.Errorf("ParseMovieIDFromURL(%q) = %q, want %q", tt.url, got, tt.wantID)
 +			}
 +		})
-+	}
-+}
-+
-+func TestMatchesMovieNumber(t *testing.T) {
-+	tests := []struct {
-+		keyword  string
-+		candidate string
-+		want     bool
-+	}{
-+		{keyword: "SSNI-776", candidate: "SSNI-776", want: true},
-+		{keyword: "ssni_776", candidate: "SSNI-776", want: true},
-+		{keyword: "SSNI-776", candidate: "SSNI-777", want: false},
-+		{keyword: "ABP-331", candidate: "ABP-33", want: false},
-+		{keyword: "SSNI-776", candidate: "", want: false},
-+		{keyword: "", candidate: "SSNI-776", want: false},
-+	}
-+	for _, tt := range tests {
-+		if got := matchesMovieNumber(tt.keyword, tt.candidate); got != tt.want {
-+			t.Errorf("matchesMovieNumber(%q, %q) = %v, want %v", tt.keyword, tt.candidate, got, tt.want)
-+		}
 +	}
 +}
 +
