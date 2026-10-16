@@ -42,7 +42,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | Giga | `sites/giga.py` | Not confirmed | Search/detail and ID rules |
 | Iqqtv | `sites/iqqtv.py` | Not confirmed | Search/detail, API behavior |
 | Jav321 | `sites/jav321.py` | No Provider in SDK tree; metaX now has `provider/jav321` | Deterministic tests cover route, metadata mapping, not-found behavior and registration; live-site and full server integration pending |
-| JavBus | `sites/javbus.py` | `provider/javbus` | Compare redirects, cookies, special-ID rejection, previews |
+| JavBus | `sites/javbus.py` | `provider/javbus` | Compared against pinned SDK source; findings and follow-up decision recorded below |
 | JavDB | `sites/javdb.py` | No Provider in SDK tree; metaX now has `provider/javdb` | Deterministic tests cover search, details, number variants, foreign hosts, and registration; live-site and full server integration pending |
 | JavLibrary | `sites/javlibrary.py` | Not confirmed | Login/session, parsing, source availability |
 | Kin8 | `sites/kin8.py` | `provider/kin8tengoku` likely related; mapping must be verified | Confirm canonical domain, IDs, and output |
@@ -54,6 +54,19 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | XCity | `sites/xcity.py` | Not confirmed | Search/detail and ID rules |
 
 Amane's actor registry is separate at `src/amane/crawlers/actor/sites/`; inventory it independently and compare with SDK `ActorProvider` / `ActorSearcher` implementations. Do not infer that a movie crawler also covers actor profiles or images.
+
+
+## Focused comparison: JavBus (2026-10-16)
+
+Compared Amane `sites/javbus.py` and its shared number-matching helpers at Amane commit `a2d45880e83df7047d461452965919692701e8c9` with SDK `provider/javbus/javbus.go` at SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+
+- **Search correctness — Amane is stronger.** Amane tries number variants, first attempts a direct detail URL, then searches and selects only an exact normalized number (or one unique match differing only by the known leading digit segment). It avoids returning the first fuzzy result. The SDK implementation runs normal and uncensored search pages and appends every matching card without checking that the result number matches the query. This risks false-positive results for ambiguous/similar numbers.
+- **Number variants — Amane is stronger.** Amane accounts for JavBus omitting leading numeric segments in some amateur-series identifiers. SDK `NormalizeMovieKeyword` filters certain special numbers, but it does not implement the same number-variant / candidate-selection flow.
+- **Detail fields — broadly similar, with differences.** Both extract title, cover, actors, release, runtime, studio/maker, label/publisher, director, series, genres/tags, and sample images. SDK additionally probes for a thumbnail URL with two HEAD requests; Amane derives poster/thumbnail URLs directly. These behaviors are not equivalent and should be validated before choosing one.
+- **Required-field validation — Amane is stronger.** Amane returns no metadata if title or the page's identifier is missing. SDK initializes an info object and may return partially populated data when selectors no longer match.
+- **HTTP behavior — different and needs deliberate review.** SDK config disables automatic redirects, sets a Referer and cookies `dv=1` and `existmag=all`; Amane sets `dv=1`, a Chinese Accept-Language header, and same-origin Referer behavior. Do not blindly merge headers/cookies or enable redirects without deterministic tests.
+- **URL validation — SDK gap to address in the SDK source/fork.** SDK `ParseMovieIDFromURL` parses any syntactically valid URL and takes its final path segment without checking scheme/host/port. A caller passing a lookalike or unrelated origin can therefore produce a JavBus ID from that URL. The detail fetcher is configured to disable redirects, but that does not validate the initial URL.
+- **Decision.** Treat Amane's exact candidate selection and required-field validation as behavior worth porting into the native SDK JavBus provider; add deterministic tests for near-match rejection, leading-digit variants, malformed/missing detail fields, and URL-origin validation first. Keep SDK thumbnail probing and existing HTTP settings unless tests or live behavior demonstrate a reason to change them. This comparison is source-based only; no live JavBus requests were made.
 
 ## Per-site acceptance checklist
 
