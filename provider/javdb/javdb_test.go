@@ -156,3 +156,29 @@ func TestProviderRegistered(t *testing.T) {
 	}
 	require.True(t, found, "JavDB should register with MetaTube's Provider factory")
 }
+
+func TestParseMovieIDFromURLRejectsForeignHost(t *testing.T) {
+	p := New()
+	_, err := p.ParseMovieIDFromURL("https://example.invalid/v/opaque-id")
+	require.Error(t, err)
+}
+
+func TestGetMovieInfoByIDPreservesTransportFailures(t *testing.T) {
+	searchHits := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v/opaque-id", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "upstream unavailable", http.StatusBadGateway)
+	})
+	mux.HandleFunc("/search", func(w http.ResponseWriter, _ *http.Request) {
+		searchHits++
+		_, _ = fmt.Fprint(w, "<html></html>")
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	_, err := p.GetMovieInfoByID("opaque-id")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unexpected HTTP status")
+	require.Zero(t, searchHits, "transport errors must not be disguised as search misses")
+}
