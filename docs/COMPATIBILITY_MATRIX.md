@@ -69,6 +69,17 @@ Compared Amane `sites/javbus.py` and its shared number-matching helpers at Amane
 - **Decision.** Treat Amane's exact candidate selection and required-field validation as behavior worth porting into the native SDK JavBus provider; add deterministic tests for near-match rejection, leading-digit variants, malformed/missing detail fields, and URL-origin validation first. Keep SDK thumbnail probing and existing HTTP settings unless tests or live behavior demonstrate a reason to change them. This comparison is source-based only; no live JavBus requests were made.
 - **Patch status (2026-10-16).** The migration patch now implements HTTPS origin/path validation, bounded number variants, exact-first candidate selection with unique leading-digit-only fallback, duplicate-URL deduplication, and required title/number validation. Patch application, formatting, and focused deterministic tests passed in [CI run 38878430661](https://github.com/strange-dragon/metaX/actions/runs/38878430661). This patch remains a proposed SDK change in the metaX migration workspace; it has not been merged upstream, and the full SDK regression suite and live-site behavior are still unverified.
 
+
+## Focused comparison: FC2Club (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/fc2club.py` at commit `a2d45880e83df7047d461452965919692701e8c9` with the native Go implementation in `provider/fc2club`. The pinned SDK has FC2HUB and FC2PPVDB providers, but they target different sites and are not drop-in FC2Club implementations.
+
+- **Lookup semantics — broadly aligned.** Both normalize FC2-prefixed numeric IDs into a canonical `FC2-{digits}` identifier and construct the direct `/html/FC2-{digits}.html` detail URL. Both reject pages without the expected content marker/title.
+- **Metadata — Go implementation is more defensive.** It handles lazy-loaded cover attributes and Open Graph fallback, deduplicates actors/tags, strips a leading catalog number from the display title, caps response size, and maps not-found responses into a predictable error. Amane's simpler parser extracts the title, actors, cover, tags, and release date.
+- **Correctness trade-off.** The Go implementation currently treats a missing cover as an error, while Amane can return metadata without a cover. Keep this stricter behavior only if downstream validity requirements justify the possible false negatives.
+- **Security gap found and fixed.** Detail URL parsing previously accepted non-default ports and userinfo on the expected hostname, and the default HTTP client could follow redirects off-site. The native provider now requires the configured scheme/host/effective port, rejects userinfo and spoofed hosts, and limits redirects to the same origin with a 10-hop cap.
+- **Deterministic coverage.** Added tests for HTTPS downgrade, unusual port, userinfo, lookalike host, allowed `www` alias, and a cross-origin redirect that must not reach its target. The initial test run stopped at the formatting gate; the formatter normalized the tracked Go files. Re-run CI on the formatter-updated branch head before treating these tests as fully verified. No live FC2Club requests were made.
+
 ## Per-site acceptance checklist
 
 - [ ] Site registry, aliases, and supported roles confirmed.
