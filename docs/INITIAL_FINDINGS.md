@@ -1,6 +1,6 @@
 # Initial implementation comparison notes
 
-Review date: 2026-10-16. Source revisions are pinned in `COMPATIBILITY_MATRIX.md`. These notes describe observable implementation differences from source inspection; they are not live-site validation and no site is marked migrated.
+Review date: 2026-10-16. Source revisions are pinned in `COMPATIBILITY_MATRIX.md`. These notes describe feature-level behavior differences observed during comparison. They are not live-site validation and no site is marked migrated. The intended Apache-2.0 path is to author native Go code and tests independently; do not copy or line-by-line translate Amane source or fixtures.
 
 ## JavBus: existing SDK Provider vs Amane crawler
 
@@ -38,4 +38,4 @@ Amane's `src/amane/crawlers/sites/javdb.py` supports search and detail extractio
 - No Go formatter, linter, unit tests, Python tests, or live site requests were executed in this environment.
 - Existing SDK tests and Amane fixtures must be inspected before code changes.
 - Site availability and anti-bot behavior can change independently of source code.
-- The licensing gate in `LICENSING.md` remains open; these notes are architectural comparison only and do not authorize source reuse.
+- The project keeps Apache-2.0 for project-authored code. These notes document feature comparison, not permission to copy upstream source or fixtures; see `LICENSING.md`.
