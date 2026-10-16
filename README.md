@@ -12,10 +12,11 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 
 ## Current status
 
-- The migration planning and initial compatibility inventory are committed on `feat/amane-provider-migration`.
-- Native JavDB and Jav321 Provider implementations and deterministic HTTP-fixture tests are added on the feature branch. Live-site verification and server integration are still pending.
-- The existing MetaTube engine must import the Provider package (or the package must be merged into the SDK) for the provider's `init()` registration to take effect at runtime. A standalone module dependency alone does not auto-register providers.
-- No live-site support is claimed until tests and real-site verification succeed.
+- The `feat/amane-provider-migration` branch currently contains 10 native Go Provider packages: Airav, AVSOX, FC2Club, FreeJAVBT, GIGA, IQQTV, Jav321, JavDB (movie and actor), JavLibrary, and Minnano (actor).
+- The branch maintains 11 unique SDK patches for existing-provider correctness and URL/ID validation. The long-term SDK patch workflow applies all patches to the pinned upstream revision and runs focused deterministic tests; latest validation passed in [run 38932602151](https://github.com/strange-dragon/metaX/actions/runs/38932602151).
+- The latest metaX Go tests and formatting checks passed in [run 38932602115](https://github.com/strange-dragon/metaX/actions/runs/38932602115) and [run 38932602108](https://github.com/strange-dragon/metaX/actions/runs/38932602108).
+- These are migration-workspace packages, not yet a claim of end-to-end runtime integration: the existing MetaTube engine must import the Provider packages (or merge them into the SDK) for `init()` registration to take effect. Live-site verification and Jellyfin/MetaTube integration remain pending.
+- No live-site support is claimed until current site behavior and integration are verified.
 
 ## Engineering documents
 
