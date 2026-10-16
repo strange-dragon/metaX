@@ -29,7 +29,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  	"regexp"
  	"strings"
  
-@@ -42,7 +42,7 @@
+@@ -42,8 +42,12 @@
  func (fc2 *FC2) NormalizeMovieID(id string) string {
  	return fc2util.ParseNumber(id)
  }
@@ -43,6 +43,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +	return fc2.GetMovieInfoByURL(fmt.Sprintf(movieURL, number))
  }
  
+@@ -50,7 +54,14 @@
  func (fc2 *FC2) ParseMovieIDFromURL(rawURL string) (string, error) {
  	homepage, err := url.Parse(rawURL)
  	if err != nil {
@@ -61,7 +62,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +	}
 +	return match[1], nil
  }
-@@ -74,6 +84,16 @@
+@@ -74,1 +85,11 @@
  	c := fc2.ClonedCollector()
 +	c.SetRedirectHandler(func(req *http.Request, via []*http.Request) error {
 +		if len(via) >= 10 {
