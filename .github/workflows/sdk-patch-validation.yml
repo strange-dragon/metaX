@@ -1,0 +1,48 @@
+name: Validate upstream SDK patch
+
+on:
+  push:
+    branches:
+      - feat/amane-provider-migration
+    paths:
+      - "patches/metatube-sdk-go/**"
+      - ".github/workflows/sdk-patch-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  javbus-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout metaX migration workspace
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned MetaTube SDK
+        uses: actions/checkout@v4
+        with:
+          repository: metatube-community/metatube-sdk-go
+          ref: c62584675c593816cc07e7b5b977d14c7eb505a3
+          path: upstream-sdk
+
+      - name: Apply patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: upstream-sdk/go.mod
+          cache: true
+          cache-dependency-path: upstream-sdk/go.sum
+
+      - name: Verify formatting
+        working-directory: upstream-sdk
+        run: |
+          gofmt -w provider/javbus/javbus.go provider/javbus/javbus_test.go
+          git diff --exit-code -- provider/javbus/javbus.go provider/javbus/javbus_test.go
+
+      - name: Run deterministic URL validation tests
+        working-directory: upstream-sdk
+        run: go test ./provider/javbus -run '^TestJavBus_ParseMovieIDFromURL$' -count=1
