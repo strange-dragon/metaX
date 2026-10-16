@@ -59,7 +59,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
  	return
  }
  
-@@ -150,3 +164,31 @@
+@@ -150,3 +164,34 @@
  }
  
 +// verifyMovieSlug checks the WordPress REST API before scraping the detail
