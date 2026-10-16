@@ -1,0 +1,776 @@
+// Copyright 2026 metaX contributors.
+//
+/*
+Behavioral reference: the JavDB crawler in https://github.com/sqzw-x/amane
+(GPL-3.0). This Go implementation is adapted for MetaTube's Provider API.
+See ../LICENSE and ../NOTICE.md for licensing and attribution.
+*/
+package javdb
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"path"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/text/language"
+	"golang.org/x/text/unicode/norm"
+
+	"github.com/metatube-community/metatube-sdk-go/common/parser"
+	"github.com/metatube-community/metatube-sdk-go/model"
+	mt "github.com/metatube-community/metatube-sdk-go/provider"
+)
+
+const (
+	Name         = "JavDB"
+	Priority     = 1000 - 10
+	defaultURL   = "https://javdb.com"
+	defaultTimeout = 20 * time.Second
+	maxPageBytes = 8 << 20
+)
+
+var (
+	ErrMovieNotFound = errors.New("javdb: movie not found")
+	movieNumberRE    = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
+	leadingDigitsRE  = regexp.MustCompile(`(?i)^\d+(?=[a-z])`)
+	dayNumberRE      = regexp.MustCompile(`(?i)^(?P<studio>.+?)(?P<sep0>[._-])(?P<year>\d{4}|\d{2})(?P<sep1>[._-])(?P<month>\d{2})(?P<sep2>[._-])(?P<day>\d{2})$`)
+	scoreRE          = regexp.MustCompile(`\d+(?:\.\d+)?`)
+	runtimeRE        = regexp.MustCompile(`\d+`)
+)
+
+var (
+	_ mt.MovieProvider  = (*JavDB)(nil)
+	_ mt.MovieSearcher  = (*JavDB)(nil)
+	_ mt.Fetcher        = (*JavDB)(nil)
+	_ mt.ProxySetter    = (*JavDB)(nil)
+	_ mt.RequestTimeoutSetter = (*JavDB)(nil)
+)
+
+// JavDB implements MetaTube's native movie Provider contract.
+type JavDB struct {
+	baseURL *url.URL
+
+	clientMu sync.RWMutex
+	client   *http.Client
+	timeout  time.Duration
+	proxyURL string
+
+	priorityMu sync.RWMutex
+	priority   float64
+}
+
+func New() *JavDB {
+	u, _ := url.Parse(defaultURL)
+	p := &JavDB{
+		baseURL:  u,
+		timeout:  defaultTimeout,
+		priority: Priority,
+	}
+	p.rebuildClientLocked()
+	return p
+}
+
+func newForTest(base string, client *http.Client) *JavDB {
+	u, _ := url.Parse(base)
+	p := &JavDB{
+		baseURL:  u,
+		timeout:  defaultTimeout,
+		priority: Priority,
+		client:   client,
+	}
+	if p.client == nil {
+		p.rebuildClientLocked()
+	}
+	return p
+}
+
+func (p *JavDB) Name() string { return Name }
+
+func (p *JavDB) Priority() float64 {
+	p.priorityMu.RLock()
+	defer p.priorityMu.RUnlock()
+	return p.priority
+}
+
+func (p *JavDB) SetPriority(v float64) {
+	p.priorityMu.Lock()
+	defer p.priorityMu.Unlock()
+	p.priority = v
+}
+
+func (p *JavDB) Language() language.Tag { return language.SimplifiedChinese }
+
+func (p *JavDB) URL() *url.URL {
+	u := *p.baseURL
+	return &u
+}
+
+// NormalizeMovieID preserves opaque JavDB detail IDs, which need not equal the
+// displayed movie number. URL-shaped values are reduced to their /v/{id} slug.
+func (p *JavDB) NormalizeMovieID(id string) string {
+	id = strings.TrimSpace(id)
+	if u, err := url.Parse(id); err == nil && u.IsAbs() {
+		if parsed, err := p.ParseMovieIDFromURL(id); err == nil {
+			return parsed
+		}
+	}
+	if movieNumberRE.MatchString(id) {
+		return strings.ToUpper(norm.NFKC.String(id))
+	}
+	return id
+}
+
+func (p *JavDB) NormalizeMovieKeyword(keyword string) string {
+	return strings.ToUpper(strings.TrimSpace(norm.NFKC.String(keyword)))
+}
+
+func (p *JavDB) ParseMovieIDFromURL(rawURL string) (string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("javdb: parse URL: %w", err)
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("javdb: expected an absolute detail URL")
+	}
+	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
+	if len(segments) != 2 || segments[0] != "v" || strings.TrimSpace(segments[1]) == "" {
+		return "", fmt.Errorf("javdb: URL is not a /v/{id} detail URL")
+	}
+	return segments[1], nil
+}
+
+// SetRequestTimeout replaces the HTTP client with the requested timeout while
+// preserving its proxy setting. A non-positive value restores the default.
+func (p *JavDB) SetRequestTimeout(timeout time.Duration) {
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	p.timeout = timeout
+	p.rebuildClientLocked()
+}
+
+// SetProxy supports HTTP(S) and SOCKS5 proxy URLs supported by net/http.
+func (p *JavDB) SetProxy(proxyURL string) error {
+	proxyURL = strings.TrimSpace(proxyURL)
+	if proxyURL != "" {
+		u, err := url.Parse(proxyURL)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return fmt.Errorf("javdb: invalid proxy URL %q", proxyURL)
+		}
+		switch strings.ToLower(u.Scheme) {
+		case "http", "https", "socks5", "socks5h":
+		default:
+			return fmt.Errorf("javdb: unsupported proxy scheme %q", u.Scheme)
+		}
+	}
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
+	p.proxyURL = proxyURL
+	p.rebuildClientLocked()
+	return nil
+}
+
+func (p *JavDB) rebuildClientLocked() {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = http.ProxyFromEnvironment
+	if p.proxyURL != "" {
+		u, err := url.Parse(p.proxyURL)
+		if err == nil {
+			transport.Proxy = http.ProxyURL(u)
+		}
+	}
+	timeout := p.timeout
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	p.client = &http.Client{Transport: transport, Timeout: timeout}
+}
+
+func (p *JavDB) httpClient() *http.Client {
+	p.clientMu.RLock()
+	defer p.clientMu.RUnlock()
+	return p.client
+}
+
+// Fetch makes a single request using the Provider's configured HTTP client.
+// Callers are responsible for closing the returned response body.
+func (p *JavDB) Fetch(rawURL string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("javdb: create request: %w", err)
+	}
+	p.setHeaders(req)
+	resp, err := p.httpClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("javdb: GET %s: %w", rawURL, err)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("javdb: GET %s: unexpected HTTP status %s", rawURL, resp.Status)
+	}
+	return resp, nil
+}
+
+func (p *JavDB) setHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.7")
+	req.Header.Set("Referer", p.baseURL.String()+"/")
+}
+
+func (p *JavDB) getHTML(rawURL string) (*goquery.Document, error) {
+	resp, err := p.Fetch(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPageBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("javdb: read %s: %w", rawURL, err)
+	}
+	if len(body) > maxPageBytes {
+		return nil, fmt.Errorf("javdb: response from %s exceeds %d bytes", rawURL, maxPageBytes)
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	if err != nil {
+		return nil, fmt.Errorf("javdb: parse HTML from %s: %w", rawURL, err)
+	}
+	return doc, nil
+}
+
+func (p *JavDB) detailURL(id string) string {
+	u := *p.baseURL
+	u.Path = path.Join(u.Path, "v", id)
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
+}
+
+func (p *JavDB) searchURL(keyword string) string {
+	u := *p.baseURL
+	u.Path = path.Join(u.Path, "search")
+	q := u.Query()
+	q.Set("q", keyword)
+	q.Set("locale", "zh")
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("javdb: empty movie ID")
+	}
+	if u, err := url.Parse(id); err == nil && u.IsAbs() {
+		return p.GetMovieInfoByURL(id)
+	}
+	if !movieNumberRE.MatchString(id) {
+		info, err := p.GetMovieInfoByURL(p.detailURL(id))
+		if err == nil && info != nil {
+			return info, nil
+		}
+		// Opaque IDs are tried as direct detail slugs first. If that does not
+		// resolve to a valid detail page, fall back to searching by the input.
+	}
+	results, err := p.SearchMovie(id)
+	if err != nil {
+		return nil, err
+	}
+	index := selectNumberIndex(results, id)
+	if index < 0 {
+		return nil, ErrMovieNotFound
+	}
+	return p.GetMovieInfoByURL(results[index].Homepage)
+}
+
+func (p *JavDB) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
+	id, err := p.ParseMovieIDFromURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := p.getHTML(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	number := attrText(doc.Find("a.button.is-white.copy-to-clipboard").First(), "data-clipboard-text")
+	if number == "" {
+		// A normal HTTP response without the detail-page marker can be a
+		// not-found page or an anti-bot interstitial. Do not fabricate fields.
+		return nil, ErrMovieNotFound
+	}
+	number = strings.TrimSpace(norm.NFKC.String(number))
+
+	title := cleanText(doc.Find("h2.title.is-4 strong.current-title").First().Text())
+	if title == "" {
+		title = cleanText(doc.Find("h2.title.is-4").First().Text())
+	}
+	if title == "" {
+		return nil, fmt.Errorf("javdb: detail page %s has a number but no title", rawURL)
+	}
+
+	studio := fieldValues(doc, "片商", "片商:", "製作商", "制作商")
+	publisher := fieldValues(doc, "發行", "发行", "發售")
+	releaseText := fieldText(doc, "日期", "發售日", "発売日", "發行日期", "发行日期")
+	runtimeText := fieldText(doc, "時長", "时长", "長度", "长度", "時間", "時間長")
+	series := fieldValues(doc, "系列")
+	directors := fieldValues(doc, "導演", "导演", "監督", "监督")
+	genres := fieldValues(doc, "類別", "类别", "ジャンル", "分類", "分类")
+	actors := actorNames(doc)
+	coverURL := absoluteURL(p.baseURL, firstAttr(doc.Find("img.video-cover").First(), "data-src", "data-original", "src"))
+	previews := absoluteLinks(doc, ".tile-images.preview-images a.tile-item", "href")
+	trailerURL := absoluteURL(p.baseURL, firstAttr(doc.Find("video#preview-video source").First(), "src"))
+	if trailerURL == "" {
+		trailerURL = absoluteURL(p.baseURL, firstAttr(doc.Find("video#preview-video").First(), "src"))
+	}
+	scoreText := cleanText(doc.Find("span.score-stars").First().NextAll().First().Text())
+	if scoreText == "" {
+		scoreText = cleanText(doc.Find("span.score-stars").First().Parent().Text())
+	}
+
+	info := &model.MovieInfo{
+		ID:            id,
+		Number:        number,
+		Title:         title,
+		Provider:      p.Name(),
+		Homepage:      rawURL,
+		Maker:         firstNonEmpty(studio),
+		Label:         firstNonEmpty(publisher),
+		Series:        firstNonEmpty(series),
+		Director:      strings.Join(directors, ", "),
+		Actors:        actors,
+		Genres:        genres,
+		CoverURL:      coverURL,
+		ThumbURL:      coverURL,
+		PreviewImages: previews,
+		PreviewVideoURL: trailerURL,
+		Score:         parseScore(scoreText),
+		Runtime:       parseRuntimeMinutes(runtimeText),
+	}
+	if strings.TrimSpace(releaseText) != "" {
+		info.ReleaseDate = parser.ParseDate(releaseText)
+	}
+	if info.CoverURL == "" {
+		// Some JavDB layouts expose the poster through an og:image meta tag.
+		info.CoverURL = absoluteURL(p.baseURL, attrText(doc.Find("meta[property='og:image']").First(), "content"))
+		info.ThumbURL = info.CoverURL
+	}
+	if info.Number == "" || info.Title == "" {
+		return nil, ErrMovieNotFound
+	}
+	return info, nil
+}
+
+func (p *JavDB) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
+	keyword = p.NormalizeMovieKeyword(keyword)
+	if keyword == "" {
+		return nil, nil
+	}
+
+	terms := searchTerms(keyword)
+	seen := make(map[string]struct{})
+	results := make([]*model.MovieSearchResult, 0, 12)
+	for _, term := range terms {
+		doc, err := p.getHTML(p.searchURL(term))
+		if err != nil {
+			return nil, err
+		}
+		doc.Find("a.box").Each(func(_ int, card *goquery.Selection) {
+			href := strings.TrimSpace(attrText(card, "href"))
+			if href == "" {
+				return
+			}
+			homepage := absoluteURL(p.baseURL, href)
+			id, err := p.ParseMovieIDFromURL(homepage)
+			if err != nil {
+				return
+			}
+			if _, ok := seen[homepage]; ok {
+				return
+			}
+
+			number := cleanText(card.Find(".video-title strong").First().Text())
+			videoTitle := cleanText(card.Find(".video-title").First().Text())
+			if number == "" {
+				number = leadingToken(videoTitle)
+			}
+			if number == "" {
+				return
+			}
+			title := removeLeadingNumber(videoTitle, number)
+			if title == "" {
+				title = number
+			}
+			thumb := absoluteURL(p.baseURL, firstAttr(card.Find("img").First(), "data-src", "data-original", "src"))
+			result := &model.MovieSearchResult{
+				ID:       id,
+				Number:   strings.TrimSpace(norm.NFKC.String(number)),
+				Title:    title,
+				Provider: p.Name(),
+				Homepage: homepage,
+				ThumbURL: thumb,
+			}
+			if !result.IsValid() {
+				return
+			}
+			seen[homepage] = struct{}{}
+			results = append(results, result)
+		})
+	}
+	return results, nil
+}
+
+func init() {
+	mt.Register(Name, New)
+}
+
+func searchTerms(number string) []string {
+	terms := []string{number}
+	if m := leadingDigitsRE.FindStringIndex(number); m != nil && m[1] < len(number) {
+		terms = appendUnique(terms, number[m[1]:])
+	}
+	if alt := alternateWesternNumber(number); alt != "" {
+		terms = appendUnique(terms, alt)
+	}
+	return terms
+}
+
+func selectNumberIndex(results []*model.MovieSearchResult, query string) int {
+	exact := -1
+	loose := make([]int, 0, 2)
+	for i, result := range results {
+		switch numberMatch(result.Number, query) {
+		case 2:
+			if exact < 0 {
+				exact = i
+			}
+		case 1:
+			loose = append(loose, i)
+		}
+	}
+	if exact >= 0 {
+		return exact
+	}
+	if len(loose) == 1 {
+		return loose[0]
+	}
+	return -1
+}
+
+// numberMatch returns 2 for exact equality, 1 only when exactly one side has a
+// leading numeric series prefix, and 0 for unrelated identifiers.
+func numberMatch(found, query string) int {
+	foundFold, queryFold := foldNumber(found), foldNumber(query)
+	if foundFold == "" || queryFold == "" {
+		return 0
+	}
+	if foundFold == queryFold {
+		return 2
+	}
+	if sameWesternDate(found, query) {
+		return 2
+	}
+	foundDigits, foundRest := splitLeadingDigits(found)
+	queryDigits, queryRest := splitLeadingDigits(query)
+	if foundRest == queryRest && !(foundDigits != "" && queryDigits != "") {
+		return 1
+	}
+	return 0
+}
+
+func foldNumber(value string) string {
+	value = strings.ToUpper(norm.NFKC.String(strings.TrimSpace(value)))
+	var b strings.Builder
+	for _, r := range value {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func splitLeadingDigits(value string) (string, string) {
+	folded := foldNumber(value)
+	match := leadingDigitsRE.FindStringIndex(strings.ToLower(folded))
+	if match == nil {
+		return "", folded
+	}
+	return folded[:match[1]], folded[match[1]:]
+}
+
+func sameWesternDate(a, b string) bool {
+	partsA, okA := westernDateParts(a)
+	partsB, okB := westernDateParts(b)
+	if !okA || !okB {
+		return false
+	}
+	return strings.EqualFold(partsA.studio, partsB.studio) && partsA.date == partsB.date
+}
+
+type westernParts struct {
+	studio string
+	date   string
+}
+
+func westernDateParts(value string) (westernParts, bool) {
+	match := dayNumberRE.FindStringSubmatch(strings.TrimSpace(value))
+	if len(match) == 0 {
+		return westernParts{}, false
+	}
+	year := match[dayNumberRE.SubexpIndex("year")]
+	if len(year) == 2 {
+		year = "20" + year
+	}
+	month := match[dayNumberRE.SubexpIndex("month")]
+	day := match[dayNumberRE.SubexpIndex("day")]
+	dateText := year + "-" + month + "-" + day
+	parsed, err := time.Parse("2006-01-02", dateText)
+	if err != nil || parsed.Format("2006-01-02") != dateText {
+		return westernParts{}, false
+	}
+	studio := foldNumber(match[dayNumberRE.SubexpIndex("studio")])
+	// A four-digit year can match its two-digit counterpart, while the rest
+	// of the date and the normalized studio must remain equal.
+	return westernParts{studio: studio, date: dateText}, true
+}
+
+func alternateWesternNumber(value string) string {
+	match := dayNumberRE.FindStringSubmatch(strings.TrimSpace(value))
+	if len(match) == 0 {
+		return ""
+	}
+	yearIndex := dayNumberRE.SubexpIndex("year")
+	year := match[yearIndex]
+	if _, ok := westernDateParts(value); !ok {
+		return ""
+	}
+	var alternateYear string
+	if len(year) == 4 {
+		alternateYear = year[2:]
+	} else {
+		alternateYear = "20" + year
+	}
+	return strings.Replace(value, year, alternateYear, 1)
+}
+
+func fieldValues(doc *goquery.Document, labels ...string) []string {
+	var result []string
+	doc.Find("strong").Each(func(_ int, label *goquery.Selection) {
+		if !labelMatches(cleanText(label.Text()), labels) {
+			return
+		}
+		value := fieldValueNode(label)
+		if value.Length() == 0 {
+			return
+		}
+		links := value.Find("a")
+		if links.Length() > 0 {
+			links.Each(func(_ int, node *goquery.Selection) {
+				if value := cleanText(node.Text()); value != "" {
+					result = appendUnique(result, value)
+				}
+			})
+			return
+		}
+		if value := cleanText(value.Text()); value != "" {
+			result = appendUnique(result, value)
+		}
+	})
+	return result
+}
+
+func fieldText(doc *goquery.Document, labels ...string) string {
+	values := fieldValues(doc, labels...)
+	return strings.Join(values, " ")
+}
+
+func fieldValueNode(label *goquery.Selection) *goquery.Selection {
+	value := label.NextAllFiltered("span.value").First()
+	if value.Length() == 0 {
+		value = label.Parent().Find("span.value").First()
+	}
+	if value.Length() == 0 {
+		value = label.NextAllFiltered("span").First()
+	}
+	return value
+}
+
+func labelMatches(label string, tokens []string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(norm.NFKC.String(label)))
+	for _, token := range tokens {
+		token = strings.ToLower(strings.TrimSpace(norm.NFKC.String(token)))
+		if token != "" && strings.Contains(normalized, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func actorNames(doc *goquery.Document) []string {
+	var names []string
+	doc.Find("strong").Each(func(_ int, label *goquery.Selection) {
+		if !labelMatches(cleanText(label.Text()), []string{"演員", "演员"}) {
+			return
+		}
+		value := fieldValueNode(label)
+		value.Find("a").Each(func(_ int, node *goquery.Selection) {
+			if name := cleanText(node.Text()); name != "" {
+				names = appendUnique(names, name)
+			}
+		})
+	})
+	return names
+}
+
+func absoluteLinks(doc *goquery.Document, selector, attribute string) []string {
+	var links []string
+	doc.Find(selector).Each(func(_ int, node *goquery.Selection) {
+		if value := absoluteURLFromDocument(doc, node, attribute); value != "" {
+			links = appendUnique(links, value)
+		}
+	})
+	return links
+}
+
+// JavDB pages can use either root-relative or absolute URLs; base is the source
+// origin and the raw value is resolved without modifying the resulting URL.
+func absoluteURL(base *url.URL, raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	ref, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return base.ResolveReference(ref).String()
+}
+
+func absoluteURLFromDocument(_ *goquery.Document, _ *goquery.Selection, _ string) string {
+	// This stub is replaced at call sites by p.absoluteLinks so a source base
+	// URL is always available. It intentionally does not guess an origin.
+	return ""
+}
+
+func (p *JavDB) absoluteLinks(doc *goquery.Document, selector, attribute string) []string {
+	var links []string
+	doc.Find(selector).Each(func(_ int, node *goquery.Selection) {
+		if value := absoluteURL(p.baseURL, attrText(node, attribute)); value != "" {
+			links = appendUnique(links, value)
+		}
+	})
+	return links
+}
+
+func attrText(node *goquery.Selection, key string) string {
+	if value, ok := node.Attr(key); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
+}
+
+func firstAttr(node *goquery.Selection, keys ...string) string {
+	for _, key := range keys {
+		if value := attrText(node, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func cleanText(value string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(norm.NFKC.String(value))), " ")
+}
+
+func leadingToken(value string) string {
+	fields := strings.Fields(cleanText(value))
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+func removeLeadingNumber(title, number string) string {
+	title = cleanText(title)
+	number = cleanText(number)
+	if title == "" || number == "" {
+		return title
+	}
+	if len(title) >= len(number) && strings.EqualFold(title[:len(number)], number) {
+		title = strings.TrimSpace(title[len(number):])
+		title = strings.TrimLeft(title, " -—:：|")
+	}
+	return cleanText(title)
+}
+
+func absoluteURLForText(base *url.URL, raw string) string {
+	return absoluteURL(base, raw)
+}
+
+func parseRuntimeMinutes(value string) int {
+	value = cleanText(value)
+	if value == "" {
+		return 0
+	}
+	normalized := strings.ToLower(value)
+	hours := regexp.MustCompile(`(\d+)\s*(?:時間|小時|小时|hours?|hrs?|h)`).FindStringSubmatch(normalized)
+	minutes := regexp.MustCompile(`(\d+)\s*(?:分鐘|分钟|分|minutes?|mins?|m)`).FindStringSubmatch(normalized)
+	if hours != nil || minutes != nil {
+		total := 0
+		if hours != nil {
+			total += parseInt(hours[1]) * 60
+		}
+		if minutes != nil {
+			total += parseInt(minutes[1])
+		}
+		return total
+	}
+	match := runtimeRE.FindString(value)
+	return parseInt(match)
+}
+
+func parseScore(value string) float64 {
+	match := scoreRE.FindString(strings.TrimSpace(value))
+	if match == "" {
+		return 0
+	}
+	score, err := strconv.ParseFloat(match, 64)
+	if err != nil {
+		return 0
+	}
+	return score
+}
+
+func parseInt(value string) int {
+	n, _ := strconv.Atoi(value)
+	return n
+}
+
+func firstNonEmpty(values []string) string {
+	for _, value := range values {
+		if value = cleanText(value); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func appendUnique(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
+}
