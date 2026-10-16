@@ -45,13 +45,13 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | JavBus | `sites/javbus.py` | `provider/javbus` | Compared against pinned SDK source; findings and follow-up decision recorded below |
 | JavDB | `sites/javdb.py` | No Provider in SDK tree; metaX now has `provider/javdb` | Deterministic tests cover search, details, number variants, foreign hosts, and registration; live-site and full server integration pending |
 | JavLibrary | `sites/javlibrary.py` | No direct equivalent in pinned SDK; native `provider/javlibrary` added in metaX | Deterministic search/detail metadata and URL/redirect tests passed in [CI run 38919512864](https://github.com/strange-dragon/metaX/actions/runs/38919512864); live-site availability and current selectors unverified |
-| Kin8 | `sites/kin8.py` | `provider/kin8tengoku` likely related; mapping must be verified | Confirm canonical domain, IDs, and output |
+| Kin8 | `sites/kin8.py` | `provider/kin8tengoku` | Compared on 2026-10-17: SDK uses legacy `/moviepages/{id}/index.html` and legacy selectors, while Amane targets `/movie/{id}` and reads Open Graph/current-page fields. SDK ID normalization also accepts arbitrary numeric strings and does not recognize the full `KIN8TENGOKU-` prefix. Treat as partial/stale equivalence; needs current-page fixture/live verification before changing route or selectors |
 | MGStage | `sites/mgstage.py` | `provider/mgstage` | Compared on 2026-10-16; patch `0007` validates detail URL origins/paths and rejects malformed IDs; temporary patch-application, formatting, and deterministic test workflow reported passing by user |
 | Official | `sites/official.py` | No direct equivalent; this is a 29-manufacturer routing layer, not one site scraper | Source audit completed; defer implementation until SDK/config integration can pass route overrides and prior-studio context without hard-coding a partial solution |
 | Prestige | `sites/prestige.py` | No direct equivalent in pinned SDK | Source audit: uses exact SKU JSON endpoints (`/api/sku/item/{sku}` → `parentProduct.uuid` → `/api/product/{uuid}`), tries dashed/compact and GOOE special SKUs; `/api/search` is fuzzy and unsuitable for identity lookup. Amane reports CloudFront 403/region restriction outside Japan; defer native implementation until API behavior can be tested from an allowed region or reliable fixtures become available |
-| R18Dev | `sites/r18dev.py` | Not confirmed | API schema and identifier mapping |
+| R18Dev | `sites/r18dev.py` | No HTTP Provider equivalent | Compared on 2026-10-17: this is a query adapter over a user-supplied offline PostgreSQL mirror, not a website/API crawler. Porting it as a normal HTTP Provider would change its data-source contract; defer unless metaX explicitly supports an optional local database-backed metadata source |
 | ThePornDB | `sites/theporndb.py` | `provider/theporndb` | Compared on 2026-10-16; patch `0008` adds HTTPS origin, collection-path, and ID validation for scenes, movies, and performers; temporary patch-application, gofmt, and deterministic test workflow passed in run 38898680550 and was deleted afterward; live API/site behavior unverified |
-| XCity | `sites/xcity.py` | Not confirmed | Search/detail and ID rules |
+| XCity | `sites/xcity.py` | No Provider in pinned SDK | Compared on 2026-10-17: Amane searches `/result_published/?q={number-without-hyphens}` and takes the first `/titles/` link without checking the detail page's `kopin` catalog number against the requested number. This is a false-positive risk; any native implementation should exact-match normalized catalog identity and validate detail origin/path before returning metadata |
 
 Amane's actor registry is separate at `src/amane/crawlers/actor/sites/`; inventory it independently and compare with SDK `ActorProvider` / `ActorSearcher` implementations. The pinned SDK tree has a direct actor implementation for ThePornDB; metaX now adds native JavDB and Minnano actor providers. Do not infer that a movie crawler also covers actor profiles or images.
 
@@ -350,3 +350,29 @@ The audit also found two competing files numbered `0005` for Getchu. Kept the ve
 - All maintained patches applied successfully to the pinned SDK; formatting and all focused patch tests passed in [CI run 38932602151](https://github.com/strange-dragon/metaX/actions/runs/38932602151).
 - The metaX Go tests and Go formatting workflows also passed on the same commit: [tests](https://github.com/strange-dragon/metaX/actions/runs/38932602115), [format](https://github.com/strange-dragon/metaX/actions/runs/38932602108).
 - This validates patch application and targeted regression cases, not the entire upstream SDK test suite or live-site behavior.
+
+
+## Focused comparison: KIN8, R18Dev, and XCity (2026-10-17)
+
+### KIN8
+
+The pinned SDK has `provider/kin8tengoku`, but its behavior is not equivalent to Amane current crawler.
+
+- **Route drift.** Amane constructs canonical detail URLs at `https://www.kin8tengoku.com/movie/{four-digit-id}`; the pinned SDK constructs legacy `/moviepages/{four-digit-id}/index.html` URLs and parses legacy DOM selectors.
+- **Identity normalization.** Amane accepts only `KIN8-` / `KIN8TENGOKU-`-style identifiers, validates the numeric portion, pads it to four digits, and rejects zero and overlong IDs. The SDK accepts bare numeric IDs, but its prefix regex does not cover the full `KIN8TENGOKU-` form and does not impose the same four-digit/nonzero constraints.
+- **Decision.** Do not change the SDK detail route based only on the Amane source: the current site full HTML and all relevant metadata fields need deterministic fixtures or live confirmation first. Mark the SDK provider as partial/stale rather than equivalent.
+
+### R18Dev
+
+Amane R18Dev crawler is not an HTTP scraper. It queries a user-configured offline PostgreSQL mirror through `R18Repository`, translates the query number into candidate IDs, maps the database result to metadata, and degrades database errors to a miss so other sources can continue.
+
+- There is no equivalent provider in the pinned SDK tree, but implementing an HTTP Provider would be the wrong abstraction.
+- **Decision.** Defer unless metaX product scope explicitly includes an optional local PostgreSQL metadata source. If added later, design its connection/configuration and schema contract independently from web crawlers; do not port Amane code or assume its database schema.
+
+### XCity
+
+Amane strips hyphens from the requested number, queries `/result_published/?q=...`, and takes the first result link containing `/titles/`. Detail parsing then extracts the actual catalog number from `span.kopin`, but the search flow does not verify that it matches the requested number.
+
+- The pinned SDK has no XCity provider.
+- **Correctness gap.** First-result selection can associate a fuzzy search hit with the wrong title. A native provider should normalize both the requested and returned catalog number, require an exact identity match, and validate the detail URL configured HTTPS origin and canonical `/titles/` path.
+- **Decision.** XCity is a reasonable candidate for a native Go provider because it has a direct HTTP/HTML flow and maps cleanly to existing movie fields. Implement only with deterministic local HTML fixtures; no live-site compatibility is claimed by this audit.
