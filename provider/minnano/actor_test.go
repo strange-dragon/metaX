@@ -85,7 +85,7 @@ func TestMinnanoActorSearchAndProfile(t *testing.T) {
 	require.Equal(t, 160, info.Height)
 	require.Equal(t, "C", info.CupSize)
 	require.Equal(t, "B:85 / W:58 / H:86", info.Measurements)
-	require.Equal(t, []string{server.URL+"/images/actress123.jpg"}, []string(info.Images))
+	require.Equal(t, []string{server.URL + "/images/actress123.jpg"}, []string(info.Images))
 }
 
 func cookieValue(r *http.Request, name string) string {
