@@ -28,198 +28,406 @@ import (
 )
 
 const (
-	Name = "JavLibrary"
-	Priority = 1000 - 25
-	defaultURL = "https://www.javlibrary.com"
+	Name           = "JavLibrary"
+	Priority       = 1000 - 25
+	defaultURL     = "https://www.javlibrary.com"
 	defaultTimeout = 20 * time.Second
-	maxPageBytes = 8 << 20
+	maxPageBytes   = 8 << 20
 )
 
 var (
-	ErrMovieNotFound = errors.New("javlibrary: movie not found")
-	numberTokenRE = regexp.MustCompile(`(?i)^[a-z0-9]+(?:[-_.][a-z0-9]+)*$`)
-	runtimeRE = regexp.MustCompile(`\d+`)
-	scoreRE = regexp.MustCompile(`\(([\d.]+)\)`)
-	_ mt.MovieProvider = (*JavLibrary)(nil)
-	_ mt.MovieSearcher = (*JavLibrary)(nil)
-	_ mt.Fetcher = (*JavLibrary)(nil)
-	_ mt.ProxySetter = (*JavLibrary)(nil)
-	_ mt.RequestTimeoutSetter = (*JavLibrary)(nil)
+	ErrMovieNotFound                         = errors.New("javlibrary: movie not found")
+	numberTokenRE                            = regexp.MustCompile(`(?i)^[a-z0-9]+(?:[-_.][a-z0-9]+)*$`)
+	runtimeRE                                = regexp.MustCompile(`\d+`)
+	scoreRE                                  = regexp.MustCompile(`\(([\d.]+)\)`)
+	_                mt.MovieProvider        = (*JavLibrary)(nil)
+	_                mt.MovieSearcher        = (*JavLibrary)(nil)
+	_                mt.Fetcher              = (*JavLibrary)(nil)
+	_                mt.ProxySetter          = (*JavLibrary)(nil)
+	_                mt.RequestTimeoutSetter = (*JavLibrary)(nil)
 )
 
 type JavLibrary struct {
-	baseURL *url.URL
-	clientMu sync.RWMutex
-	client *http.Client
-	timeout time.Duration
-	proxyURL string
+	baseURL    *url.URL
+	clientMu   sync.RWMutex
+	client     *http.Client
+	timeout    time.Duration
+	proxyURL   string
 	priorityMu sync.RWMutex
-	priority float64
+	priority   float64
 }
 
 func New() *JavLibrary {
 	u, _ := url.Parse(defaultURL)
-	p := &JavLibrary{baseURL:u, timeout:defaultTimeout, priority:Priority}
+	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority}
 	p.rebuildClientLocked()
 	return p
 }
 
 func newForTest(base string, client *http.Client) *JavLibrary {
 	u, _ := url.Parse(base)
-	p := &JavLibrary{baseURL:u, timeout:defaultTimeout, priority:Priority}
+	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority}
 	if client != nil {
 		c := *client
 		c.CheckRedirect = p.checkRedirect
-		if c.Timeout <= 0 { c.Timeout = defaultTimeout }
+		if c.Timeout <= 0 {
+			c.Timeout = defaultTimeout
+		}
 		p.client = &c
-	} else { p.rebuildClientLocked() }
+	} else {
+		p.rebuildClientLocked()
+	}
 	return p
 }
 
 func (p *JavLibrary) Name() string { return Name }
-func (p *JavLibrary) Priority() float64 { p.priorityMu.RLock(); defer p.priorityMu.RUnlock(); return p.priority }
-func (p *JavLibrary) SetPriority(v float64) { p.priorityMu.Lock(); defer p.priorityMu.Unlock(); p.priority=v }
+func (p *JavLibrary) Priority() float64 {
+	p.priorityMu.RLock()
+	defer p.priorityMu.RUnlock()
+	return p.priority
+}
+func (p *JavLibrary) SetPriority(v float64) {
+	p.priorityMu.Lock()
+	defer p.priorityMu.Unlock()
+	p.priority = v
+}
 func (p *JavLibrary) Language() language.Tag { return language.English }
-func (p *JavLibrary) URL() *url.URL { u:=*p.baseURL; return &u }
-func (p *JavLibrary) NormalizeMovieID(id string) string { return strings.TrimSpace(norm.NFKC.String(id)) }
-func (p *JavLibrary) NormalizeMovieKeyword(keyword string) string { return strings.ToUpper(strings.TrimSpace(norm.NFKC.String(keyword))) }
+func (p *JavLibrary) URL() *url.URL          { u := *p.baseURL; return &u }
+func (p *JavLibrary) NormalizeMovieID(id string) string {
+	return strings.TrimSpace(norm.NFKC.String(id))
+}
+func (p *JavLibrary) NormalizeMovieKeyword(keyword string) string {
+	return strings.ToUpper(strings.TrimSpace(norm.NFKC.String(keyword)))
+}
 
 func (p *JavLibrary) validOrigin(u *url.URL) bool {
-	if u == nil || u.User != nil || u.Host == "" || !strings.EqualFold(u.Scheme,p.baseURL.Scheme) { return false }
-	host:=strings.TrimSuffix(strings.ToLower(u.Hostname()),".")
-	base:=strings.TrimSuffix(strings.ToLower(p.baseURL.Hostname()),".")
-	if host!=base && !(base=="www.javlibrary.com" && host=="javlibrary.com") { return false }
-	return effectivePort(u)==effectivePort(p.baseURL)
+	if u == nil || u.User != nil || u.Host == "" || !strings.EqualFold(u.Scheme, p.baseURL.Scheme) {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	base := strings.TrimSuffix(strings.ToLower(p.baseURL.Hostname()), ".")
+	if host != base && !(base == "www.javlibrary.com" && host == "javlibrary.com") {
+		return false
+	}
+	return effectivePort(u) == effectivePort(p.baseURL)
 }
 func effectivePort(u *url.URL) string {
-	if v:=u.Port(); v!="" { return v }
-	if strings.EqualFold(u.Scheme,"https") { return "443" }
-	if strings.EqualFold(u.Scheme,"http") { return "80" }
+	if v := u.Port(); v != "" {
+		return v
+	}
+	if strings.EqualFold(u.Scheme, "https") {
+		return "443"
+	}
+	if strings.EqualFold(u.Scheme, "http") {
+		return "80"
+	}
 	return ""
 }
 func (p *JavLibrary) checkRedirect(req *http.Request, via []*http.Request) error {
-	if len(via)>=10 { return fmt.Errorf("javlibrary: stopped after 10 redirects") }
-	if !p.validOrigin(req.URL) { return fmt.Errorf("javlibrary: refusing cross-origin redirect to %q",req.URL) }
+	if len(via) >= 10 {
+		return fmt.Errorf("javlibrary: stopped after 10 redirects")
+	}
+	if !p.validOrigin(req.URL) {
+		return fmt.Errorf("javlibrary: refusing cross-origin redirect to %q", req.URL)
+	}
 	return nil
 }
 func (p *JavLibrary) SetRequestTimeout(v time.Duration) {
-	p.clientMu.Lock(); defer p.clientMu.Unlock()
-	if v<=0 { v=defaultTimeout }; p.timeout=v; p.rebuildClientLocked()
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
+	if v <= 0 {
+		v = defaultTimeout
+	}
+	p.timeout = v
+	p.rebuildClientLocked()
 }
 func (p *JavLibrary) SetProxy(raw string) error {
-	raw=strings.TrimSpace(raw)
-	if raw!="" {
-		u,err:=url.Parse(raw); if err!=nil || u.Scheme=="" || u.Host=="" { return fmt.Errorf("javlibrary: invalid proxy URL %q",raw) }
-		switch strings.ToLower(u.Scheme) { case "http","https","socks5": default: return fmt.Errorf("javlibrary: unsupported proxy scheme %q",u.Scheme) }
+	raw = strings.TrimSpace(raw)
+	if raw != "" {
+		u, err := url.Parse(raw)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return fmt.Errorf("javlibrary: invalid proxy URL %q", raw)
+		}
+		switch strings.ToLower(u.Scheme) {
+		case "http", "https", "socks5":
+		default:
+			return fmt.Errorf("javlibrary: unsupported proxy scheme %q", u.Scheme)
+		}
 	}
-	p.clientMu.Lock(); defer p.clientMu.Unlock(); p.proxyURL=raw; p.rebuildClientLocked(); return nil
+	p.clientMu.Lock()
+	defer p.clientMu.Unlock()
+	p.proxyURL = raw
+	p.rebuildClientLocked()
+	return nil
 }
 func (p *JavLibrary) rebuildClientLocked() {
 	var tr *http.Transport
-	if base,ok:=http.DefaultTransport.(*http.Transport); ok { tr=base.Clone() } else { tr=&http.Transport{Proxy:http.ProxyFromEnvironment} }
-	tr.Proxy=http.ProxyFromEnvironment
-	if p.proxyURL!="" { if u,e:=url.Parse(p.proxyURL); e==nil { tr.Proxy=http.ProxyURL(u) } }
-	timeout:=p.timeout; if timeout<=0 { timeout=defaultTimeout }
-	p.client=&http.Client{Transport:tr,Timeout:timeout,CheckRedirect:p.checkRedirect}
+	if base, ok := http.DefaultTransport.(*http.Transport); ok {
+		tr = base.Clone()
+	} else {
+		tr = &http.Transport{Proxy: http.ProxyFromEnvironment}
+	}
+	tr.Proxy = http.ProxyFromEnvironment
+	if p.proxyURL != "" {
+		if u, e := url.Parse(p.proxyURL); e == nil {
+			tr.Proxy = http.ProxyURL(u)
+		}
+	}
+	timeout := p.timeout
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	p.client = &http.Client{Transport: tr, Timeout: timeout, CheckRedirect: p.checkRedirect}
 }
-func (p *JavLibrary) httpClient() *http.Client { p.clientMu.RLock(); defer p.clientMu.RUnlock(); return p.client }
-func (p *JavLibrary) Fetch(raw string) (*http.Response,error) {
-	u,err:=url.Parse(raw); if err!=nil { return nil,fmt.Errorf("javlibrary: parse URL: %w",err) }
-	if !p.validOrigin(u) { return nil,fmt.Errorf("javlibrary: refusing request to unexpected origin %q",raw) }
-	req,err:=http.NewRequest(http.MethodGet,raw,nil); if err!=nil { return nil,err }
-	req.Header.Set("User-Agent","Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
-	req.Header.Set("Accept","text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	req.Header.Set("Accept-Language","en-US,en;q=0.9,zh-CN;q=0.7")
-	req.Header.Set("Referer",p.baseURL.String()+"/")
-	resp,err:=p.httpClient().Do(req); if err!=nil { return nil,fmt.Errorf("javlibrary: GET %s: %w",raw,err) }
-	if resp.StatusCode<200 || resp.StatusCode>=300 { resp.Body.Close(); if resp.StatusCode==404 { return nil,ErrMovieNotFound }; return nil,fmt.Errorf("javlibrary: unexpected HTTP status %s",resp.Status) }
-	return resp,nil
+func (p *JavLibrary) httpClient() *http.Client {
+	p.clientMu.RLock()
+	defer p.clientMu.RUnlock()
+	return p.client
 }
-func (p *JavLibrary) getHTML(raw string) (*goquery.Document,error) {
-	resp,err:=p.Fetch(raw); if err!=nil { return nil,err }; defer resp.Body.Close()
-	body,err:=io.ReadAll(io.LimitReader(resp.Body,maxPageBytes+1)); if err!=nil { return nil,err }
-	if len(body)>maxPageBytes { return nil,fmt.Errorf("javlibrary: response exceeds %d bytes",maxPageBytes) }
-	doc,err:=goquery.NewDocumentFromReader(strings.NewReader(string(body))); if err!=nil { return nil,fmt.Errorf("javlibrary: parse HTML: %w",err) }; return doc,nil
+func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("javlibrary: parse URL: %w", err)
+	}
+	if !p.validOrigin(u) {
+		return nil, fmt.Errorf("javlibrary: refusing request to unexpected origin %q", raw)
+	}
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.7")
+	req.Header.Set("Referer", p.baseURL.String()+"/")
+	resp, err := p.httpClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("javlibrary: GET %s: %w", raw, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resp.Body.Close()
+		if resp.StatusCode == 404 {
+			return nil, ErrMovieNotFound
+		}
+		return nil, fmt.Errorf("javlibrary: unexpected HTTP status %s", resp.Status)
+	}
+	return resp, nil
+}
+func (p *JavLibrary) getHTML(raw string) (*goquery.Document, error) {
+	resp, err := p.Fetch(raw)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPageBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxPageBytes {
+		return nil, fmt.Errorf("javlibrary: response exceeds %d bytes", maxPageBytes)
+	}
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	if err != nil {
+		return nil, fmt.Errorf("javlibrary: parse HTML: %w", err)
+	}
+	return doc, nil
 }
 func (p *JavLibrary) detailURL(id string) string {
-	u:=*p.baseURL; u.Path="/cn/"; q:=url.Values{}; q.Set("v",id); u.RawQuery=q.Encode(); u.Fragment=""; return u.String()
+	u := *p.baseURL
+	u.Path = "/cn/"
+	q := url.Values{}
+	q.Set("v", id)
+	u.RawQuery = q.Encode()
+	u.Fragment = ""
+	return u.String()
 }
-func (p *JavLibrary) ParseMovieIDFromURL(raw string) (string,error) {
-	u,err:=url.Parse(raw); if err!=nil { return "",fmt.Errorf("javlibrary: parse URL: %w",err) }
-	if !p.validOrigin(u) { return "",fmt.Errorf("javlibrary: unexpected detail origin %q",raw) }
-	if u.Path!="/cn/" && u.Path!="/en/" && u.Path!="/ja/" && u.Path!="/" { return "",fmt.Errorf("javlibrary: unsupported detail path %q",u.Path) }
-	id:=strings.TrimSpace(u.Query().Get("v"))
-	if id=="" || !numberTokenRE.MatchString(id) { return "",fmt.Errorf("javlibrary: missing or invalid v parameter") }
-	return id,nil
+func (p *JavLibrary) ParseMovieIDFromURL(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("javlibrary: parse URL: %w", err)
+	}
+	if !p.validOrigin(u) {
+		return "", fmt.Errorf("javlibrary: unexpected detail origin %q", raw)
+	}
+	if u.Path != "/cn/" && u.Path != "/en/" && u.Path != "/ja/" && u.Path != "/" {
+		return "", fmt.Errorf("javlibrary: unsupported detail path %q", u.Path)
+	}
+	id := strings.TrimSpace(u.Query().Get("v"))
+	if id == "" || !numberTokenRE.MatchString(id) {
+		return "", fmt.Errorf("javlibrary: missing or invalid v parameter")
+	}
+	return id, nil
 }
 
-func (p *JavLibrary) SearchMovie(keyword string) ([]*model.MovieSearchResult,error) {
-	keyword=p.NormalizeMovieKeyword(keyword); if keyword=="" { return nil,nil }
-	u:=*p.baseURL; u.Path="/cn/vl_searchbyid.php"; q:=url.Values{}; q.Set("keyword",keyword); u.RawQuery=q.Encode()
-	doc,err:=p.getHTML(u.String()); if err!=nil { return nil,err }
+func (p *JavLibrary) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
+	keyword = p.NormalizeMovieKeyword(keyword)
+	if keyword == "" {
+		return nil, nil
+	}
+	u := *p.baseURL
+	u.Path = "/cn/vl_searchbyid.php"
+	q := url.Values{}
+	q.Set("keyword", keyword)
+	u.RawQuery = q.Encode()
+	doc, err := p.getHTML(u.String())
+	if err != nil {
+		return nil, err
+	}
 	var out []*model.MovieSearchResult
-	seen:=map[string]bool{}
+	seen := map[string]bool{}
 	doc.Find("div.video").Each(func(_ int, card *goquery.Selection) {
-		a:=card.Find("a").First(); href,ok:=a.Attr("href"); if !ok { return }
-		ref,e:=url.Parse(strings.TrimSpace(href)); if e!=nil { return }; target:=p.baseURL.ResolveReference(ref)
-		id,e:=p.ParseMovieIDFromURL(target.String()); if e!=nil || seen[id] { return }
-		title,_:=a.Attr("title"); title=cleanText(title)
-		number:=findNumber(title,keyword); if number=="" { return }
-		thumb:=absoluteURL(p.baseURL,firstAttr(card.Find("img").First(),"src","data-src"))
-		display:=strings.TrimSpace(strings.Replace(title,number,"",1)); display=strings.Trim(display," -—:：")
-		item:=&model.MovieSearchResult{ID:id,Number:number,Title:display,Provider:p.Name(),Homepage:target.String(),ThumbURL:thumb}
-		if item.IsValid() { seen[id]=true; out=append(out,item) }
+		a := card.Find("a").First()
+		href, ok := a.Attr("href")
+		if !ok {
+			return
+		}
+		ref, e := url.Parse(strings.TrimSpace(href))
+		if e != nil {
+			return
+		}
+		target := p.baseURL.ResolveReference(ref)
+		id, e := p.ParseMovieIDFromURL(target.String())
+		if e != nil || seen[id] {
+			return
+		}
+		title, _ := a.Attr("title")
+		title = cleanText(title)
+		number := findNumber(title, keyword)
+		if number == "" {
+			return
+		}
+		thumb := absoluteURL(p.baseURL, firstAttr(card.Find("img").First(), "src", "data-src"))
+		display := strings.TrimSpace(strings.Replace(title, number, "", 1))
+		display = strings.Trim(display, " -—:：")
+		item := &model.MovieSearchResult{ID: id, Number: number, Title: display, Provider: p.Name(), Homepage: target.String(), ThumbURL: thumb}
+		if item.IsValid() {
+			seen[id] = true
+			out = append(out, item)
+		}
 	})
-	return out,nil
+	return out, nil
 }
-func findNumber(title,query string) string {
-	for _,field:=range strings.Fields(strings.TrimSpace(title)) {
-		token:=strings.Trim(field,"()[]{}，。:：")
-		if normalizeNumber(token)==normalizeNumber(query) { return token }
+func findNumber(title, query string) string {
+	for _, field := range strings.Fields(strings.TrimSpace(title)) {
+		token := strings.Trim(field, "()[]{}，。:：")
+		if normalizeNumber(token) == normalizeNumber(query) {
+			return token
+		}
 	}
 	return ""
 }
 func normalizeNumber(s string) string {
-	s=strings.ToUpper(norm.NFKC.String(strings.TrimSpace(s)))
-	return strings.NewReplacer("-","","_",""," ","",".","","\t","").Replace(s)
+	s = strings.ToUpper(norm.NFKC.String(strings.TrimSpace(s)))
+	return strings.NewReplacer("-", "", "_", "", " ", "", ".", "", "\t", "").Replace(s)
 }
-func (p *JavLibrary) GetMovieInfoByID(id string) (*model.MovieInfo,error) {
-	id=strings.TrimSpace(id); if id=="" { return nil,fmt.Errorf("javlibrary: empty movie ID") }
-	if u,e:=url.Parse(id); e==nil && u.IsAbs() { return p.GetMovieInfoByURL(id) }
-	if numberTokenRE.MatchString(id) && !strings.ContainsAny(id,"/ ?#") {
-		results,err:=p.SearchMovie(id); if err!=nil { return nil,err }
-		for _,r:=range results { if normalizeNumber(r.Number)==normalizeNumber(id) { return p.GetMovieInfoByURL(r.Homepage) } }
+func (p *JavLibrary) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("javlibrary: empty movie ID")
+	}
+	if u, e := url.Parse(id); e == nil && u.IsAbs() {
+		return p.GetMovieInfoByURL(id)
+	}
+	if numberTokenRE.MatchString(id) && !strings.ContainsAny(id, "/ ?#") {
+		results, err := p.SearchMovie(id)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range results {
+			if normalizeNumber(r.Number) == normalizeNumber(id) {
+				return p.GetMovieInfoByURL(r.Homepage)
+			}
+		}
 	}
 	return p.GetMovieInfoByURL(p.detailURL(id))
 }
-func (p *JavLibrary) GetMovieInfoByURL(raw string) (*model.MovieInfo,error) {
-	id,err:=p.ParseMovieIDFromURL(raw); if err!=nil { return nil,err }
-	doc,err:=p.getHTML(raw); if err!=nil { return nil,err }
-	number:=cleanText(doc.Find("#video_id td.text").First().Text())
-	if number=="" { return nil,ErrMovieNotFound }
-	title:=cleanText(doc.Find("h3.post-title a").First().Text())
-	if title=="" { return nil,fmt.Errorf("javlibrary: detail page %s has no title",raw) }
-	release:=cleanText(doc.Find("#video_date td.text").First().Text())
-	runtimeText:=cleanText(doc.Find("#video_length td.text").First().Text())
-	runtime:=0; if m:=runtimeRE.FindString(runtimeText); m!="" { runtime,_=strconv.Atoi(m) }
-	director:=cleanText(doc.Find("#video_director td.text a").First().Text())
-	studio:=cleanText(doc.Find("#video_maker td.text a").First().Text())
-	label:=cleanText(doc.Find("#video_label td.text a").First().Text())
-	var actors,genres []string
-	doc.Find("span.cast span.star a").Each(func(_ int,s *goquery.Selection){ if v:=cleanText(s.Text()); v!="" { actors=appendUnique(actors,v) } })
-	doc.Find("#video_genres td.text span.genre a").Each(func(_ int,s *goquery.Selection){ if v:=cleanText(s.Text()); v!="" { genres=appendUnique(genres,v) } })
-	cover:=absoluteURL(p.baseURL,firstAttr(doc.Find("#video_jacket_img").First(),"src","data-src"))
-	if cover=="" { cover=absoluteURL(p.baseURL,attrText(doc.Find("meta[property='og:image']").First(),"content")) }
-	if cover=="" { return nil,fmt.Errorf("javlibrary: detail page %s has no cover image",raw) }
-	scoreText:=cleanText(doc.Find("span.score").First().Text()); score:=0.0
-	if m:=scoreRE.FindStringSubmatch(scoreText); len(m)>1 { score,_=strconv.ParseFloat(m[1],64) }
-	info:=&model.MovieInfo{ID:id,Number:number,Title:title,Provider:p.Name(),Homepage:raw,Maker:studio,Label:label,Director:director,Actors:pq.StringArray(actors),Genres:pq.StringArray(genres),CoverURL:cover,ThumbURL:cover,Score:score,Runtime:runtime}
-	if release!="" { info.ReleaseDate=parser.ParseDate(release) }
-	return info,nil
+func (p *JavLibrary) GetMovieInfoByURL(raw string) (*model.MovieInfo, error) {
+	id, err := p.ParseMovieIDFromURL(raw)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := p.getHTML(raw)
+	if err != nil {
+		return nil, err
+	}
+	number := cleanText(doc.Find("#video_id td.text").First().Text())
+	if number == "" {
+		return nil, ErrMovieNotFound
+	}
+	title := cleanText(doc.Find("h3.post-title a").First().Text())
+	if title == "" {
+		return nil, fmt.Errorf("javlibrary: detail page %s has no title", raw)
+	}
+	release := cleanText(doc.Find("#video_date td.text").First().Text())
+	runtimeText := cleanText(doc.Find("#video_length td.text").First().Text())
+	runtime := 0
+	if m := runtimeRE.FindString(runtimeText); m != "" {
+		runtime, _ = strconv.Atoi(m)
+	}
+	director := cleanText(doc.Find("#video_director td.text a").First().Text())
+	studio := cleanText(doc.Find("#video_maker td.text a").First().Text())
+	label := cleanText(doc.Find("#video_label td.text a").First().Text())
+	var actors, genres []string
+	doc.Find("span.cast span.star a").Each(func(_ int, s *goquery.Selection) {
+		if v := cleanText(s.Text()); v != "" {
+			actors = appendUnique(actors, v)
+		}
+	})
+	doc.Find("#video_genres td.text span.genre a").Each(func(_ int, s *goquery.Selection) {
+		if v := cleanText(s.Text()); v != "" {
+			genres = appendUnique(genres, v)
+		}
+	})
+	cover := absoluteURL(p.baseURL, firstAttr(doc.Find("#video_jacket_img").First(), "src", "data-src"))
+	if cover == "" {
+		cover = absoluteURL(p.baseURL, attrText(doc.Find("meta[property='og:image']").First(), "content"))
+	}
+	if cover == "" {
+		return nil, fmt.Errorf("javlibrary: detail page %s has no cover image", raw)
+	}
+	scoreText := cleanText(doc.Find("span.score").First().Text())
+	score := 0.0
+	if m := scoreRE.FindStringSubmatch(scoreText); len(m) > 1 {
+		score, _ = strconv.ParseFloat(m[1], 64)
+	}
+	info := &model.MovieInfo{ID: id, Number: number, Title: title, Provider: p.Name(), Homepage: raw, Maker: studio, Label: label, Director: director, Actors: pq.StringArray(actors), Genres: pq.StringArray(genres), CoverURL: cover, ThumbURL: cover, Score: score, Runtime: runtime}
+	if release != "" {
+		info.ReleaseDate = parser.ParseDate(release)
+	}
+	return info, nil
 }
-func init(){ mt.Register(Name,New) }
-func cleanText(s string) string { return strings.Join(strings.Fields(strings.TrimSpace(norm.NFKC.String(s)))," ") }
-func attrText(s *goquery.Selection,key string) string { v,_:=s.Attr(key); return strings.TrimSpace(v) }
-func firstAttr(s *goquery.Selection,keys ...string) string { for _,k:=range keys { if v:=attrText(s,k); v!="" { return v } }; return "" }
-func absoluteURL(base *url.URL,raw string) string { raw=strings.TrimSpace(raw); if raw=="" { return "" }; ref,e:=url.Parse(raw); if e!=nil { return "" }; return base.ResolveReference(ref).String() }
-func appendUnique(values []string,v string) []string { for _,old:=range values { if old==v { return values } }; return append(values,v) }
+func init() { mt.Register(Name, New) }
+func cleanText(s string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(norm.NFKC.String(s))), " ")
+}
+func attrText(s *goquery.Selection, key string) string {
+	v, _ := s.Attr(key)
+	return strings.TrimSpace(v)
+}
+func firstAttr(s *goquery.Selection, keys ...string) string {
+	for _, k := range keys {
+		if v := attrText(s, k); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+func absoluteURL(base *url.URL, raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	ref, e := url.Parse(raw)
+	if e != nil {
+		return ""
+	}
+	return base.ResolveReference(ref).String()
+}
+func appendUnique(values []string, v string) []string {
+	for _, old := range values {
+		if old == v {
+			return values
+		}
+	}
+	return append(values, v)
+}
