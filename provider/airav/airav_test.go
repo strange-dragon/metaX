@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -147,4 +148,27 @@ func TestRegistrationAndConfiguration(t *testing.T) {
 	require.NoError(t, p.SetProxy(""))
 	p.SetRequestTimeout(3 * time.Second)
 	require.Equal(t, 3*time.Second, p.httpClient().Timeout)
+}
+
+func TestDetailRedirectRejectsDifferentWork(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/video/target", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/video/other", http.StatusFound)
+	})
+	mux.HandleFunc("/video/other", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, detailFixture)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByURL(server.URL + "/video/target")
+	require.ErrorIs(t, err, ErrMovieNotFound)
+	require.Nil(t, info)
+}
+
+func TestAbsoluteURLLeavesMissingValuesEmpty(t *testing.T) {
+	base, err := url.Parse("https://airav.io")
+	require.NoError(t, err)
+	require.Empty(t, absoluteURL(base, ""))
 }
