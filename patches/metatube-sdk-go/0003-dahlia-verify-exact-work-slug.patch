@@ -28,7 +28,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
  	"fmt"
  	"net/http"
  	"net/url"
-@@ -56,6 +57,10 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+@@ -56,5 +57,9 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
  	if err != nil {
  		return
  	}
@@ -40,7 +40,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
  	info = &model.MovieInfo{
  		ID:            id,
  		Number:        parser.ParseIDToNumber(id),
-@@ -140,6 +145,18 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+@@ -140,6 +145,20 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
  		}
  	})
  
@@ -62,6 +62,10 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
  	return
  }
  
+@@ -150,3 +164,31 @@
+ }
+ 
+ func (core *Core) NormalizeMovieKeyword(keyword string) string {
 +// verifyMovieSlug checks the WordPress REST API before scraping the detail
 +// page. A missing slug may otherwise redirect to an unrelated work page.
 +func (core *Core) verifyMovieSlug(id string) error {
