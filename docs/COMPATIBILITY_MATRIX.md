@@ -375,11 +375,11 @@ Amane strips hyphens from the requested number, queries `/result_published/?q=..
 
 - The pinned SDK has no XCity provider; metaX now has a native Go implementation in `provider/xcity/`.
 - **Correctness fix.** The provider treats the search page as a candidate list only, fetches each candidate detail page, and accepts it only when the normalized `span.kopin` value exactly equals the requested catalog number. It rejects off-origin URLs, noncanonical detail paths, query/fragment-bearing detail URLs, and cross-origin redirects.
-- **Coverage.** Deterministic local HTTP fixtures cover exact-vs-near number matching, metadata mapping, age-confirmation cookie, URL rejection, redirect rejection, and provider registration. CI results are pending at the time of this update; no live-site compatibility is claimed.
+- **Coverage.** Deterministic local HTTP fixtures cover exact-vs-near number matching, metadata mapping, age-confirmation cookie, URL rejection, redirect rejection, and provider registration. All deterministic metaX Go tests and formatting passed on [test run 38978044363](https://github.com/strange-dragon/metaX/actions/runs/38978044363) and [format run 38978044255](https://github.com/strange-dragon/metaX/actions/runs/38978044255); no live-site compatibility is claimed.
 
 
 ### KIN8 ID normalization patch (2026-10-17)
 
 Added `patches/metatube-sdk-go/0012-kin8-validate-and-normalize-movie-id.patch`. The patch validates KIN8 IDs before URL construction and normalizes numeric IDs to the four-digit form expected by the current Amane reference. It accepts bare numeric IDs for compatibility with the SDK's existing direct-ID tests, plus `KIN8-` and `KIN8TENGOKU-` prefixes; it rejects unrelated catalog prefixes, zero, overlong values, and path-like input before any network request.
 
-The patch is applied by `.github/workflows/sdk-patch-validation.yml`, with deterministic normalization and invalid-ID tests. This does not fix the legacy-vs-current route difference; that remains deferred until the current site's HTML and field mappings are verified.
+The patch is applied by `.github/workflows/sdk-patch-validation.yml`; patch application, formatting, and all focused deterministic SDK tests passed in [run 38978044278](https://github.com/strange-dragon/metaX/actions/runs/38978044278). This does not fix the legacy-vs-current route difference; that remains deferred until the current site's HTML and field mappings are verified.
