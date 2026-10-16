@@ -76,10 +76,11 @@ new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
 --- /dev/null
 +++ b/provider/fc2ppvdb/fc2ppvdb_migration_test.go
- package fc2ppvdb
++package fc2ppvdb
 +
 +import "testing"
-+@@ -0,0 +1,69 @@
++
+@@ -0,0 +1,69 @@
 +
 +func TestFC2PPVDBNormalizeMovieID(t *testing.T) {
 +	p := New()
