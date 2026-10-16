@@ -6,7 +6,7 @@ This matrix is the evidence log for the Amane → MetaTube SDK migration. A blan
 
 | Component | Repository | Commit SHA | Toolchain / license | Status |
 |---|---|---|---|---|
-| Amane | [sqzw-x/amane](https://github.com/sqzw-x/amane) | `a2d45880e83df7047d461452965919692701e8c9` | Python >=3.14; GPL-3.0 | Source inventory started; code reuse blocked pending licensing decision |
+| Amane | [sqzw-x/amane](https://github.com/sqzw-x/amane) | `a2d45880e83df7047d461452965919692701e8c9` | Python >=3.14; GPL-3.0 | Source inventory started; Amane is a behavioral reference only; do not copy or adapt GPL-3.0 code |
 | MetaTube SDK | [metatube-community/metatube-sdk-go](https://github.com/metatube-community/metatube-sdk-go) | `c62584675c593816cc07e7b5b977d14c7eb505a3` | Go 1.25+ per README (go.mod says 1.26.0); Apache-2.0 | Provider interfaces and representative implementations inspected |
 | Jellyfin plugin | [metatube-community/jellyfin-plugin-metatube](https://github.com/metatube-community/jellyfin-plugin-metatube) | `f7c1f336fc2bd3b35b82af7c6e69da09a196e3d2` | C#/.NET; Apache-2.0 license file present, exact target framework to verify | Repository structure inspected |
 
@@ -50,7 +50,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | Official | `sites/official.py` | No direct equivalent confirmed | Inspect multi-hop/brand routing and fallback |
 | Prestige | `sites/prestige.py` | Not confirmed | Search/detail, IDs, images |
 | R18Dev | `sites/r18dev.py` | Not confirmed | API schema and identifier mapping |
-| ThePornDB | `sites/theporndb.py` | `provider/theporndb` | Compare movie/actor APIs, IDs, optional fields |
+| ThePornDB | `sites/theporndb.py` | `provider/theporndb` | Compared on 2026-10-16; patch `0008` adds HTTPS origin, collection-path, and ID validation for scenes, movies, and performers; deterministic verification pending; live API/site behavior unverified |
 | XCity | `sites/xcity.py` | Not confirmed | Search/detail and ID rules |
 
 Amane's actor registry is separate at `src/amane/crawlers/actor/sites/`; inventory it independently and compare with SDK `ActorProvider` / `ActorSearcher` implementations. Do not infer that a movie crawler also covers actor profiles or images.
@@ -178,3 +178,13 @@ Compared Amane's `sites/fc2ppvdb.py` with the pinned SDK's `provider/fc2ppvdb/fc
 - **URL/ID validation gap.** The SDK previously passed arbitrary IDs into `/articles/%s` and extracted IDs from `path.Base(URL.Path)` without validating scheme, host, or article path. That could construct malformed URLs or accept a non-FC2PPVDB URL as a detail page.
 - **Targeted patch.** Added `patches/metatube-sdk-go/0006-fc2ppvdb-validate-detail-url.patch`: trim input before shared FC2 normalization, reject invalid IDs before constructing a URL, and require HTTPS on `fc2ppvdb.com` with a numeric `/articles/{id}` path (optional trailing slash allowed). Deterministic tests cover valid/invalid IDs and URL origin/path rejection.
 - **Limits / verification status.** No live site requests were made. A malformed regex hunk in the patch file was found and repaired in commit `b44d87c7c6db6e6bf17b92e87fba3064ddc14613`. The temporary workflow's patch-application, formatting, and deterministic FC2PPVDB tests were reported passing by the user; the temporary workflow was deleted afterward. Current HTML compatibility remains unverified.
+
+
+## Focused comparison: ThePornDB (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/theporndb.py` with the pinned SDK's `provider/theporndb/video.go` and `actor.go` at `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+
+- **Architecture and metadata — preserve the SDK implementation.** Amane uses GraphQL while the SDK uses authenticated REST endpoints with separate scene/movie providers. The SDK maps title, description, poster/image, rating, trailer, duration, site, release date, tags, performers, and directors. Replacing the REST implementation with Amane's GraphQL flow would be a broader architectural change and is not part of this hardening patch.
+- **URL validation gap.** SDK movie/scene and actor URL parsers previously accepted any parseable URL and returned its last path segment. The patch requires absolute HTTPS URLs on `theporndb.net`, rejects userinfo and non-default ports, and accepts only the expected `/scenes/{id}`, `/movies/{id}`, or `/performers/{id}` paths.
+- **ID validation gap.** Movie/scene and actor detail IDs were interpolated into REST API URLs without validation. The patch permits alphanumeric slugs/IDs separated by single hyphens, trims surrounding whitespace, and rejects malformed IDs before making a request. Existing metadata mapping and search behavior are unchanged.
+- **Verification status.** A temporary workflow has been added to check patch application, gofmt, and deterministic URL/ID tests. This is not yet evidence of passing until the workflow result is inspected. No live ThePornDB API calls have been made.
