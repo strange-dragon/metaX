@@ -57,43 +57,6 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
 +	}
  	return
  }
-@@ -142,3 +160,34 @@
- }
- 
-+// verifyMovieSlug checks the WordPress REST API before scraping the detail
-+// page. A missing slug may otherwise redirect to an unrelated work page.
-+func (core *Core) verifyMovieSlug(id string) error {
-+	endpoint := strings.TrimRight(core.BaseURL, "/") + "/wp-json/wp/v2/works?slug=" + url.QueryEscape(id)
-+	c := core.ClonedCollector()
-+	c.ParseHTTPErrorResponse = true
-+	var slugs []struct {
-+		Slug string `json:"slug"`
-+	}
-+	var decodeErr error
-+	c.OnResponse(func(r *colly.Response) {
-+		if r.StatusCode < http.StatusOK || r.StatusCode >= http.StatusMultipleChoices {
-+			decodeErr = fmt.Errorf("work slug lookup returned HTTP %d", r.StatusCode)
-+			return
-+		}
-+		decodeErr = json.Unmarshal(r.Body, &slugs)
-+	})
-+	if err := c.Visit(endpoint); err != nil {
-+		return err
-+	}
-+	if decodeErr != nil {
-+		return decodeErr
-+	}
-+	for _, post := range slugs {
-+		if core.NormalizeMovieID(post.Slug) == id {
-+			return nil
-+		}
-+	}
-+	return fmt.Errorf("work slug %q not found", id)
-+}
-+
- func (core *Core) NormalizeMovieKeyword(keyword string) string {
- 	return strings.ToLower(strings.ReplaceAll(keyword, "-", ""))
- }
 diff --git a/provider/dahlia/core/core_test.go b/provider/dahlia/core/core_test.go
 new file mode 100644
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000
@@ -177,4 +140,39 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +}
 +
 -- 
-2.46.0
+2.46.0@@ -44,3 +45,34 @@
+ func (core *Core) NormalizeMovieID(id string) string { return strings.ToLower(id) }
+ 
++// verifyMovieSlug checks the WordPress REST API before scraping the detail
++// page. A missing slug may otherwise redirect to an unrelated work page.
++func (core *Core) verifyMovieSlug(id string) error {
++	endpoint := strings.TrimRight(core.BaseURL, "/") + "/wp-json/wp/v2/works?slug=" + url.QueryEscape(id)
++	c := core.ClonedCollector()
++	c.ParseHTTPErrorResponse = true
++	var slugs []struct {
++		Slug string `json:"slug"`
++	}
++	var decodeErr error
++	c.OnResponse(func(r *colly.Response) {
++		if r.StatusCode < http.StatusOK || r.StatusCode >= http.StatusMultipleChoices {
++			decodeErr = fmt.Errorf("work slug lookup returned HTTP %d", r.StatusCode)
++			return
++		}
++		decodeErr = json.Unmarshal(r.Body, &slugs)
++	})
++	if err := c.Visit(endpoint); err != nil {
++		return err
++	}
++	if decodeErr != nil {
++		return decodeErr
++	}
++	for _, post := range slugs {
++		if core.NormalizeMovieID(post.Slug) == id {
++			return nil
++		}
++	}
++	return fmt.Errorf("work slug %q not found", id)
++}
++
+ func (core *Core) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
+
