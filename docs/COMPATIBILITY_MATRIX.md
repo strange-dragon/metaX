@@ -36,7 +36,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | Faleno | `sites/faleno.py` | `provider/faleno` | Compare output and error behavior |
 | FC2 | `sites/fc2.py` | `provider/fc2` | Compare ID normalization and metadata |
 | FC2Club | `sites/fc2club.py` | Not confirmed | Site-specific ID and result semantics |
-| FC2PPVDB | `sites/fc2ppvdb.py` | `provider/fc2ppvdb` | Compare source mapping and field coverage |
+| FC2PPVDB | `sites/fc2ppvdb.py` | `provider/fc2ppvdb` | Compared on 2026-10-16; patch `0006` hardens article URL/ID validation; live HTML mapping remains unverified |
 | Freejavbt | `sites/freejavbt.py` | Not confirmed | Search/detail and anti-bot behavior |
 | Getchu | `sites/getchu.py` | `provider/getchu` | Compared on 2026-10-16; patch `0005` hardens ID/URL validation; search behavior/catalog mismatch remains open |
 | Giga | `sites/giga.py` | Not confirmed | Search/detail and ID rules |
@@ -158,3 +158,12 @@ Compared Amane's `sites/getchu.py` with the pinned SDK's `provider/getchu/getchu
 - **Targeted patch.** Added `patches/metatube-sdk-go/0005-getchu-validate-detail-url.patch`: normalize only numeric IDs with optional `GETCHU-` / `GETCHU_` prefixes; reject invalid IDs before URL construction; require HTTPS, the exact `dl.getchu.com` host, default HTTPS port, no userinfo, and the exact `/i/item{digits}` path. Deterministic tests cover valid IDs, malformed IDs, URL origin/path rejection, and invalid-ID short-circuiting.
 - **Limits and verification.** No live Getchu requests were made. This patch does not add search support or change the existing metadata parser. The temporary SDK regression workflow was extended to apply and test this patch, then deleted as requested. Its run result could not be confirmed through the available status interface.
 
+## Focused comparison: FC2PPVDB (2026-10-16)
+
+Compared Amane's `sites/fc2ppvdb.py` with the pinned SDK's `provider/fc2ppvdb/fc2ppvdb.go` at `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+
+- **Lookup behavior.** Both implementations derive an article URL from the numeric part of an FC2 number. Amane checks that the response contains a title before accepting the URL; the SDK parses the detail page directly. Amane's numeric extraction removes optional `FC2` / `PPV` prefixes, while the SDK delegates normalization to shared `fc2util.ParseNumber`.
+- **Metadata mapping.** Amane extracts title, actresses, article cover, tags, and release date from its current selectors. The SDK additionally maps maker, runtime, and score, and has a more specific Japanese-label parser. It is not safe to replace that parser wholesale without fixtures or a live-site check; current HTML compatibility remains unverified.
+- **URL/ID validation gap.** The SDK previously passed arbitrary IDs into `/articles/%s` and extracted IDs from `path.Base(URL.Path)` without validating scheme, host, or article path. That could construct malformed URLs or accept a non-FC2PPVDB URL as a detail page.
+- **Targeted patch.** Added `patches/metatube-sdk-go/0006-fc2ppvdb-validate-detail-url.patch`: trim input before shared FC2 normalization, reject invalid IDs before constructing a URL, and require HTTPS on `fc2ppvdb.com` with a numeric `/articles/{id}` path (optional trailing slash allowed). Deterministic tests cover valid/invalid IDs and URL origin/path rejection.
+- **Limits.** No live site requests were made, and the temporary SDK workflow was deliberately not recreated because the user asked to remove it after use. The new patch has not yet been applied to a local SDK checkout or test-run in CI.
