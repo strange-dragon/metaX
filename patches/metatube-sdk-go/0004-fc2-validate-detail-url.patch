@@ -81,7 +81,7 @@ diff --git a/provider/fc2/fc2_test.go b/provider/fc2/fc2_test.go
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/provider/fc2/fc2_test.go
 +++ b/provider/fc2/fc2_test.go
-@@ -1,9 +1,52 @@
+@@ -1,9 +1,51 @@
  package fc2
  
  import (
