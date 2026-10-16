@@ -183,7 +183,6 @@ func TestGetMovieInfoByIDPreservesTransportFailures(t *testing.T) {
 	require.Zero(t, searchHits, "transport errors must not be disguised as search misses")
 }
 
-
 func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
 	destinationHits := 0
 	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
