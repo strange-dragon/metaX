@@ -69,7 +69,7 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
  }
  
  func (bus *JavBus) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
-@@ -173,4 +173,81 @@
+@@ -173,4 +173,89 @@
  	return strings.ToUpper(keyword)
  }
  
@@ -130,7 +130,8 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
 +}
 +
 +func selectMovieNumberResult(results []*model.MovieSearchResult, query string) []*model.MovieSearchResult {
-+	exact, loose, looseCount := -1, -1, 0
++	exact, loose := -1, -1
++	looseURLs := make(map[string]bool)
 +	for i, result := range results {
 +		switch movieNumberMatch(result.Number, query) {
 +		case 2:
@@ -138,13 +139,20 @@ index 2ee9d6f5f45af47aac376f4cd5432ab07ea64478..00000000000000000000000000000000
 +				exact = i
 +			}
 +		case 1:
-+			loose, looseCount = i, looseCount+1
++			key := result.Homepage
++			if key == "" {
++				key = result.ID + "\x00" + result.Number
++			}
++			if !looseURLs[key] {
++				looseURLs[key] = true
++				loose = i
++			}
 +		}
 +	}
 +	if exact >= 0 {
 +		return []*model.MovieSearchResult{results[exact]}
 +	}
-+	if looseCount == 1 {
++	if len(looseURLs) == 1 {
 +		return []*model.MovieSearchResult{results[loose]}
 +	}
 +	return nil
@@ -193,7 +201,7 @@ diff --git a/provider/javbus/javbus_test.go b/provider/javbus/javbus_test.go
 index 20319f9553716a14eee8e162efb4872b3d926c6e..0000000000000000000000000000000000000000 100644
 --- a/provider/javbus/javbus_test.go
 +++ b/provider/javbus/javbus_test.go
-@@ -1,10 +1,124 @@
+@@ -1,10 +1,125 @@
  package javbus
  
  import (
@@ -287,7 +295,7 @@ index 20319f9553716a14eee8e162efb4872b3d926c6e..00000000000000000000000000000000
 +
 +func TestSelectMovieNumberResult(t *testing.T) {
 +	result := func(number string) *model.MovieSearchResult {
-+		return &model.MovieSearchResult{Number: number}
++		return &model.MovieSearchResult{Number: number, Homepage: "/" + number}
 +	}
 +	tests := []struct {
 +		name    string
@@ -297,6 +305,7 @@ index 20319f9553716a14eee8e162efb4872b3d926c6e..00000000000000000000000000000000
 +	}{
 +		{"exact beats loose", []*model.MovieSearchResult{result("261ARA-423"), result("ARA-423")}, "ARA-423", "ARA-423"},
 +		{"unique loose accepted", []*model.MovieSearchResult{result("261ARA-423")}, "ARA-423", "261ARA-423"},
++		{"duplicate same URL is still unique", []*model.MovieSearchResult{result("261ARA-423"), result("261ARA-423")}, "ARA-423", "261ARA-423"},
 +		{"ambiguous loose rejected", []*model.MovieSearchResult{result("261ARA-423"), result("300ARA-423")}, "ARA-423", ""},
 +		{"wrong number rejected", []*model.MovieSearchResult{result("ABF-375")}, "ABF-35", ""},
 +	}
