@@ -34,7 +34,7 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 +	if err != nil {
 +		return "", fmt.Errorf("invalid provider base URL: %w", err)
 +	}
-+	if homepage.Scheme != "https" || !strings.EqualFold(homepage.Hostname(), base.Hostname()) ||
++	if !strings.EqualFold(homepage.Scheme, base.Scheme) || !strings.EqualFold(homepage.Hostname(), base.Hostname()) ||
 +		effectivePort(homepage) != effectivePort(base) || homepage.User != nil ||
 +		homepage.RawQuery != "" || homepage.Fragment != "" {
 +		return "", fmt.Errorf("invalid detail URL origin or components: %q", rawURL)
