@@ -122,7 +122,11 @@ func TestDetailRejectsRedirectToDifferentProduct(t *testing.T) {
 			http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "active-session", Path: "/"})
 			return
 		}
-		http.Redirect(w, r, "/product/index.php?product_id=1002", http.StatusFound)
+		if r.URL.Query().Get("product_id") == "1001" {
+			http.Redirect(w, r, "/product/index.php?product_id=1002", http.StatusFound)
+			return
+		}
+		_, _ = fmt.Fprint(w, detailFixture("ABC-123", "ABC-123 title"))
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
