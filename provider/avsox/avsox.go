@@ -583,7 +583,7 @@ func (p *AVSOX) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		Provider: p.Name(), Homepage: rawURL, Director: namedValue(movie.Director, "director"),
 		Actors: pq.StringArray(actors), CoverURL: cover,
 		ThumbURL:      p.absoluteAssetURL(firstString(movie.PosterLarge, movie.PosterSmall)),
-		PreviewImages: pq.StringArray(p.absoluteAssets(nonEmpty(movie.SampleLarge)),
+		PreviewImages: pq.StringArray(p.absoluteAssets(nonEmpty(movie.SampleLarge))),
 		Maker:         namedValue(movie.Studio, "studio"), Label: namedValue(movie.Label, "label"),
 		Series: namedValue(movie.Series, "series"), Genres: pq.StringArray(genres),
 		Runtime: parseLength(movie.Length),
