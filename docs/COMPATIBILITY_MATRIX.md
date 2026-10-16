@@ -46,7 +46,7 @@ The current Amane `src/amane/crawlers/sites/__init__.py` exports these 24 crawle
 | JavDB | `sites/javdb.py` | No Provider in SDK tree; metaX now has `provider/javdb` | Deterministic tests cover search, details, number variants, foreign hosts, and registration; live-site and full server integration pending |
 | JavLibrary | `sites/javlibrary.py` | Not confirmed | Login/session, parsing, source availability |
 | Kin8 | `sites/kin8.py` | `provider/kin8tengoku` likely related; mapping must be verified | Confirm canonical domain, IDs, and output |
-| MGStage | `sites/mgstage.py` | `provider/mgstage` | Compare field coverage and request behavior |
+| MGStage | `sites/mgstage.py` | `provider/mgstage` | Compared on 2026-10-16; patch `0007` validates detail URL origins/paths and rejects malformed IDs; deterministic verification pending |
 | Official | `sites/official.py` | No direct equivalent confirmed | Inspect multi-hop/brand routing and fallback |
 | Prestige | `sites/prestige.py` | Not confirmed | Search/detail, IDs, images |
 | R18Dev | `sites/r18dev.py` | Not confirmed | API schema and identifier mapping |
@@ -89,6 +89,17 @@ Compared Amane `src/amane/crawlers/sites/fc2.py` with the pinned SDK's `provider
 - **URL and ID correctness — SDK gap found.** SDK `ParseMovieIDFromURL` previously accepted any URL and used its final path segment; `GetMovieInfoByID` interpolated the caller's ID directly into the URL. This allowed unrelated origins and malformed IDs to enter the detail-fetch path.
 - **Decision and patch.** Added `patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch`: validate HTTPS, exact official host, default HTTPS port, no userinfo, and the `/article/{numeric-id}` path; normalize numeric IDs before constructing URLs; reject redirects unless they remain on the same FC2 article, with a 10-hop cap. Existing metadata extraction remains unchanged.
 - **Verification.** Combined patch application, formatting, and deterministic JavBus, AVBase, DAHLIA/FALENO, and FC2 tests passed in [CI run 38885581605](https://github.com/strange-dragon/metaX/actions/runs/38885581605). The full metaX Go test workflow also passed in [run 38885581539](https://github.com/strange-dragon/metaX/actions/runs/38885581539). No live FC2 requests or full upstream SDK regression suite were run.
+
+
+## Focused comparison: MGStage (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/mgstage.py` with the pinned SDK's `provider/mgstage/mgstage.go` at `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+
+- **Metadata coverage — SDK is broader.** Amane extracts title, actors, studio, publisher, series, runtime, release date, tags, cover, sample images, and plot. SDK additionally exposes thumbnail variants, preview video, score, label, and movie reviews. Keep the existing SDK mapping; replacing it with Amane's narrower metadata extraction would lose fields.
+- **Lookup behavior — both try direct detail lookup and use MGStage's product-detail URL shape.** Amane tries known number variants and verifies a direct page by requiring a title, then searches and selects a matching catalog number rather than returning the first result. SDK search returns the provider's result list; do not replace its search semantics with Amane's single-result resolver.
+- **URL/ID validation gap.** SDK previously uppercased any input and used `path.Base(URL.Path)` without validating origin or route. Both detail and review-by-ID methods interpolate IDs into request URLs, so malformed input could reach the fetcher.
+- **Targeted patch.** Added `patches/metatube-sdk-go/0007-mgstage-validate-detail-url.patch`: constrain IDs to alphanumeric segments separated by hyphens, normalize accepted IDs to uppercase, require HTTPS on `www.mgstage.com` with the default port and no userinfo, and accept only `/product/product_detail/{id}/` routes. Invalid IDs are rejected before detail or review requests. Existing metadata parsing and search behavior remain unchanged.
+- **Limits / verification.** No live MGStage requests were made. A temporary workflow was added to check patch application, gofmt, and deterministic MGStage tests. The available GitHub status interface has not returned a workflow run yet, so this patch remains unverified; delete the temporary workflow after its result is confirmed if it has no continuing use.
 
 ## Per-site acceptance checklist
 
