@@ -18,10 +18,14 @@ func apiServer(t *testing.T, searchData, detailData string) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/cn/", func(w http.ResponseWriter, _ *http.Request) {
+		http.SetCookie(w, &http.Cookie{Name: "avsox_session", Value: "session-test", Path: "/"})
 		_, _ = fmt.Fprint(w, csrfPage)
 	})
 	mux.HandleFunc("/javu/data/api/search", func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, http.MethodPost, r.Method)
+		cookie, err := r.Cookie("avsox_session")
+		require.NoError(t, err, "session cookie from the CSRF bootstrap must be retained")
+		require.Equal(t, "session-test", cookie.Value)
 		require.Equal(t, "csrf-test", r.Header.Get("X-CSRF-Token"))
 		require.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		w.Header().Set("Content-Type", "application/json")
