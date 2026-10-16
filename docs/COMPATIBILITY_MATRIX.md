@@ -83,3 +83,13 @@ Compared Amane `sites/javbus.py` and its shared number-matching helpers at Amane
 - [ ] Focused tests and format checks pass.
 - [ ] SDK regression suite run, or exact reason for not running recorded.
 - [ ] Status updated with test evidence and known limitations.
+
+
+## Focused comparison: AVBase (2026-10-16)
+
+Compared Amane `src/amane/crawlers/sites/avbase.py` and the pinned SDK `provider/avbase/avbase.go` at `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+
+- **Detail URL correctness — SDK search result bug found.** Amane explicitly builds canonical detail routes as `/works/{prefix}:{work_id}` when a prefix exists, and notes that `/works/{number}` is not a valid direct route. SDK `SearchMovie` returned a prefixed ID via `JoinPrefixID`, but built `Homepage` from `work.WorkID` alone, dropping the prefix. This can make a result's detail URL point at the wrong/nonexistent route.
+- **Metadata strategy — SDK is broader.** Amane reads the embedded Next.js `work` payload and selects fields from products. SDK also tries source-specific providers (DUGA, FANZA, Getchu, MGStage, Pcolle), then falls back to AVBase's own work payload and supplements missing fields. Do not replace this fallback with Amane's simpler extraction.
+- **Search semantics differ.** Amane's `_search` is a single exact-number resolver: it tries query forms, normalizes work IDs, and rejects ambiguous candidates. SDK `SearchMovie` is a search-results API and should retain its list semantics; blindly porting Amane's single-result selection would be a regression. Exact matching can be considered separately only if observed SDK false positives warrant it.
+- **Decision and patch.** Added `patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch`, which uses `JoinPrefixID` when building search-result `Homepage` and adds deterministic tests for prefixed and unprefixed works. Combined patch application, gofmt, JavBus focused tests, and the AVBase URL test passed in [CI run 38880331157](https://github.com/strange-dragon/metaX/actions/runs/38880331157). No live AVBase requests were made; full SDK regression and end-to-end MetaTube integration remain unverified.
