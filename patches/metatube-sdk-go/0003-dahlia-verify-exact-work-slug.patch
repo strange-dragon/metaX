@@ -39,10 +39,7 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
 +	}
 +
  	info = &model.MovieInfo{
-@@ -140,7 +145,21 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
- 		}
- 	})
- 
+@@ -145,3 +150,17 @@
 +	var identityErr error
 +	c.OnResponse(func(r *colly.Response) {
 +		resolvedID := path.Base(r.Request.URL.Path)
@@ -60,7 +57,6 @@ index 59c9eb417151fea4f4bcef38931a1088541d541f..00000000000000000000000000000000
 +	}
  	return
  }
- 
 @@ -150,3 +164,34 @@
  }
  
