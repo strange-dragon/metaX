@@ -65,6 +65,13 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	require.Equal(t, "2024-02-19", time.Time(info.ReleaseDate).Format("2006-01-02"))
 }
 
+func TestSearchMovieIgnoresNonNumberKeywords(t *testing.T) {
+	p := New()
+	results, err := p.SearchMovie("actor name instead of number")
+	require.NoError(t, err)
+	require.Empty(t, results)
+}
+
 func TestNotFoundPageAndRegistration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, "<html><body>not found</body></html>")
