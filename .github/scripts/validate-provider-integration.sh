@@ -92,7 +92,7 @@ func TestMetaXProvidersEndpointListsIntegratedProviders(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode providers response: %v", err)
 	}
-	for _, name := range []string{"Jav321", "Airav"} {
+	for _, name := range []string{"Airav", "AVSOX", "FC2Club", "Freejavbt", "GIGA", "IQQTV", "Jav321", "JavDB", "JavLibrary", "XCity"} {
 		if _, ok := response.Data.MovieProviders[name]; !ok {
 			t.Errorf("GET /v1/providers did not expose movie provider %q", name)
 		}
