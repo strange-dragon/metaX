@@ -193,4 +193,21 @@ Before changing the SDK integration surface, build a repeatable integration over
 3. runs the pinned SDK's full tests and verifies the new names appear in `engine.Default().GetMovieProviders()` / `GetActorProviders()` (or an equivalent deterministic registry test);
 4. records licensing notices and keeps the public Jellyfin plugin/API contract unchanged.
 
-This integration mechanism is not implemented yet. The next implementation milestone is to prototype it with one low-complexity native provider before integrating all packages.
+The integration overlay has now been prototyped with the native Jav321 provider. The permanent SDK validation workflow copies the provider package into the disposable pinned SDK checkout, adds the required blank import, and adds a deterministic engine registration test. This avoids an SDK → metaX → SDK import cycle and does not change the public Jellyfin plugin/API contract.
+
+## First engine-registration prototype validated (2026-10-18)
+
+- Added `.github/scripts/validate-provider-integration.sh` and wired it into `.github/workflows/sdk-patch-validation.yml`.
+- The overlay copies `provider/jav321` into the temporary SDK checkout, registers it through `engine/register.go`, and adds a test that constructs the engine and asserts `Jav321` is discoverable as a movie provider.
+- The first run exposed a workflow invocation issue (the script lacked executable permission); the workflow now explicitly invokes it with `bash`.
+- On commit `39374f5a555f0ed3f17799e1009a7792ad2b6ed3`, the integration overlay and provider-registration test passed in [SDK validation run 39136860932](https://github.com/strange-dragon/metaX/actions/runs/39136860932). The metaX Go tests passed in [run 39136861054](https://github.com/strange-dragon/metaX/actions/runs/39136861054), and formatting passed in [run 39136860939](https://github.com/strange-dragon/metaX/actions/runs/39136860939).
+- **What this proves:** the Jav321 package can be placed inside the pinned SDK tree and discovered by the SDK engine using the proposed registration pattern.
+- **What it does not prove:** live Jav321 site access, correctness of all scraped fields against current pages, integration of the other ten native packages, or a full Jellyfin → MetaTube API → provider end-to-end request.
+
+### Next implementation steps
+
+1. Generalize the overlay to a small provider batch only after checking each package's SDK imports, dependencies, tests, and license provenance.
+2. Add a deterministic discovery test for each integrated provider, including actor providers where applicable.
+3. Inspect the actual MetaTube server/API repository and its supported provider configuration path before changing deployment integration.
+4. Continue the remaining source-by-source comparison; prioritize JavBus behavior and actor enrichment/identity matching.
+5. Raise the overall progress estimate only after broader engine discovery and at least one end-to-end API request are verified.
