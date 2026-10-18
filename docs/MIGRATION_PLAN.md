@@ -211,3 +211,22 @@ The integration overlay has now been prototyped with the native Jav321 provider.
 3. Inspect the actual MetaTube server/API repository and its supported provider configuration path before changing deployment integration.
 4. Continue the remaining source-by-source comparison; prioritize JavBus behavior and actor enrichment/identity matching.
 5. Raise the overall progress estimate only after broader engine discovery and at least one end-to-end API request are verified.
+
+## Jellyfin API contract inspection (2026-10-18)
+
+Inspected the public `metatube-community/jellyfin-plugin-metatube` client implementation at its `main` branch. The plugin sends movie and actor searches to `/v1/movies/search` and `/v1/actors/search`, and detail requests to `/v1/movies/{provider}/{id}` and `/v1/actors/{provider}/{id}`; requests use the configured MetaTube server URL and optionally a bearer token. The plugin's provider argument is passed through to the API rather than being a client-side crawler registry.
+
+Implications for this migration:
+
+- The plugin's HTTP contract can remain unchanged if the backend recognizes the migrated provider names, returns the existing response schema, and exposes their search/detail flows through these routes.
+- Adding a package only to the separate metaX module does not make a running server discover it. The backend build must include the provider in the SDK engine or an equivalent supported extension mechanism.
+- The public plugin repository establishes the client-side route contract, but does not by itself prove the deployed server implementation's provider wiring. Do not assume a server repository or edit an unofficial fork without verifying provenance and the actual deployment source.
+- The dual-provider overlay (Jav321 + Airav) now applies cleanly and both registration assertions passed in the latest SDK validation run; the full pinned SDK regression suite was still running when this note was prepared. See [run 39137797585](https://github.com/strange-dragon/metaX/actions/runs/39137797585). metaX unit tests passed on that commit in [run 39137797591](https://github.com/strange-dragon/metaX/actions/runs/39137797591), and formatting passed in [run 39137797581](https://github.com/strange-dragon/metaX/actions/runs/39137797581).
+
+### Next steps
+
+1. Wait for the full SDK regression result on the two-provider overlay; fix any compile or regression failure before expanding the batch.
+2. Inspect the SDK's movie/actor factory interfaces and decide the next small batch based on import dependencies and test coverage. Actor providers need separate discovery assertions, not movie-provider checks.
+3. Verify the backend distribution/build path that the user actually runs. If only released server binaries are available, determine whether a maintained SDK/server fork is required; do not imply that the existing plugin alone can load external Go packages.
+4. Only after the server-side inclusion path is established, run a real API request through the documented routes and verify response fields and plugin display.
+
