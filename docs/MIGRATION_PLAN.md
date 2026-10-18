@@ -243,3 +243,17 @@ Implications for this migration:
 - The official MetaTube organization identifies `metatube-community/metatube-sdk-go` as “MetaTube SDK & API Server in Golang”; its separate `metatube-server-releases` repository publishes binary releases rather than the server source tree. The project documentation also describes deployment from released binaries or a container image. See the [official organization repositories](https://github.com/metatube-community) and [server deployment guide](https://metatube-community.github.io/wiki/server-deployment/).
 - The SDK is therefore the appropriate source integration point for this migration. A separate public `metatube-server` source repository was not found in the official organization; do not invent one or assume the release binary can load external Provider packages dynamically.
 - Practical next step: prepare a clean, reproducible SDK fork/patch series that includes selected native provider packages and the required engine blank imports, then build/test the server binary from that source. Before replacing or deploying the user's current service, verify its exact image/tag or binary version and whether its build provenance points to the official SDK source. The four-provider overlay is currently CI proof only; it does not yet alter a published server release.
+
+
+## Reproducible SDK integration build (2026-10-18)
+
+A single build entry point now applies the pinned SDK patch set, overlays the currently integration-tested native providers, runs API/registration tests, runs the full SDK regression suite, and builds the actual server executable:
+
+```bash
+# Start from a clean checkout of metatube-sdk-go at c62584675c593816cc07e7b5b977d14c7eb505a3.
+bash .github/scripts/build-metatube-server.sh /path/to/metatube-sdk-go /path/to/output/metatube-server
+```
+
+The script intentionally rejects a dirty SDK checkout or a different SDK commit so that patches cannot silently apply to an unreviewed baseline. It currently integrates and tests four providers in the actual SDK engine/API: movie providers `Jav321` and `Airav`, actor providers `JavDBActor` and `MinnanoActor`. The other native metaX provider packages remain in the migration workspace and are **not** implied to be included in this binary.
+
+The CI workflow now invokes this same build entry point and uploads the generated server as a short-lived artifact. A green run proves patch application, the covered provider registration and `/v1/providers` discovery contract, the full pinned SDK test suite, and compilation of the integrated server. It does not prove live-site scraping or a running Jellyfin deployment.
