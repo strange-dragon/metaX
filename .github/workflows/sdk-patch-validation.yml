@@ -93,9 +93,9 @@ jobs:
       - name: Integrate native movie and actor providers into SDK engine (prototype)
         run: bash .github/scripts/validate-provider-integration.sh "$GITHUB_WORKSPACE/upstream-sdk"
 
-      - name: Verify native movie and actor provider registration
+      - name: Verify native movie and actor provider registration and API discovery
         working-directory: upstream-sdk
-        run: go test ./engine ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -count=1
+        run: go test ./engine ./route ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -run 'TestMetaXProvidersEndpointListsIntegratedProviders|TestMetaXNativeProvidersAreRegistered|Test' -count=1
 
       - name: Verify formatting
         working-directory: upstream-sdk
