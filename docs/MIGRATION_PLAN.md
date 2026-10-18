@@ -150,3 +150,12 @@ The new KIN8 ID normalization patch applies cleanly to the pinned SDK. The perma
 - Confirmed an additional field-mapping difference for FALENO: publisher/label depends on slug prefixes, while studio remains FALENO. Existing URL/slug patches do not close this behavior gap.
 - Recorded the evidence and implementation criteria in `docs/COMPATIBILITY_MATRIX.md`.
 - Next step: design the smallest SDK patch that keeps public work-page URLs in `MovieInfo.Homepage`, fetches the JSON endpoint for data, and tests exact-slug selection, null/missing ACF fields, images, and publisher routing with independent fixtures. Do not change production endpoints without deterministic coverage; live-site behavior remains unverified.
+
+
+## DAHLIA/FALENO REST metadata patch validated (2026-10-18)
+
+- Added `patches/metatube-sdk-go/0013-dahlia-faleno-wordpress-metadata.patch` after the existing exact-slug and URL-origin patches.
+- Detail retrieval now reads the exact REST work record and maps title, actors, plot, runtime, release date, poster, thumbnail, gallery images, and FALENO publisher labels. The public work-page URL remains `MovieInfo.Homepage`.
+- Added independent local HTTP/JSON tests for metadata mapping and rejection of non-exact slugs. Existing redirect identity tests remain enabled.
+- The pinned SDK patch workflow, focused tests, Go formatting, and metaX Go tests passed on commit `0b3086e95c8153259e939180a4c2ef9d87e3ce36`: [SDK patch validation](https://github.com/strange-dragon/metaX/actions/runs/39134683828), [Go tests](https://github.com/strange-dragon/metaX/actions/runs/39134683778), [formatting](https://github.com/strange-dragon/metaX/actions/runs/39134683752).
+- Search remains on the legacy HTML path; no live-site validation or full engine integration is claimed.
