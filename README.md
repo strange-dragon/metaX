@@ -27,3 +27,17 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 - [Compatibility matrix](docs/COMPATIBILITY_MATRIX.md)
 - [Initial implementation comparison](docs/INITIAL_FINDINGS.md)
 - [Licensing and attribution policy](docs/LICENSING.md)
+
+## Reproducible integrated server build
+
+The branch includes a build script that applies the 13 maintained SDK patches, integrates the four providers currently covered by engine and API discovery tests, runs deterministic and upstream regression tests, then builds a MetaTube server binary. It requires a clean checkout of the pinned SDK revision.
+
+```bash
+git clone https://github.com/metatube-community/metatube-sdk-go.git
+cd metatube-sdk-go
+git checkout c62584675c593816cc07e7b5b977d14c7eb505a3
+cd -
+bash .github/scripts/build-metatube-server.sh /path/to/metatube-sdk-go ./dist/metatube-server
+```
+
+The script refuses a dirty SDK checkout or a different commit. The generated binary includes movie providers `Jav321` and `Airav`, and actor providers `JavDBActor` and `MinnanoActor`, plus the maintained SDK patches. It does **not** yet include every native provider package in this repository, and CI does not yet prove live scraping or a running Jellyfin deployment. The GitHub Actions workflow uploads the built binary as a seven-day artifact after all checks pass.
