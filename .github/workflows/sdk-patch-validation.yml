@@ -134,11 +134,8 @@ jobs:
 
       - name: Run deterministic KIN8 ID normalization tests
         working-directory: upstream-sdk
-        run: go test ./provider/kin8tengoku -run '^Test(NormalizeMovieIDMigration|GetMovieInfoByIDRejectsInvalidIDBeforeNetwork)
- -count=1
+        run: go test ./provider/kin8tengoku -run '^Test(NormalizeMovieIDMigration|GetMovieInfoByIDRejectsInvalidIDBeforeNetwork)$' -count=1
 
       - name: Run deterministic DAHLIA/FALENO WordPress metadata tests
         working-directory: upstream-sdk
-        run: go test ./provider/dahlia/core -run '^Test(WordPressMetadataMapping|WordPressMetadataRejectsNonExactSlug)
- -count=1
-
+        run: go test ./provider/dahlia/core -run '^Test(WordPressMetadataMapping|WordPressMetadataRejectsNonExactSlug)$' -count=1
