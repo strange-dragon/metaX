@@ -13,7 +13,14 @@ index 0000000..0000000 100644
  		return nil, err
  	}
  
-@@ -215,2 +215,129 @@
+@@ -140,9 +140,136 @@
+ 	err = c.Visit(info.Homepage)
+ 	if err == nil {
+ 		err = identityErr
+ 	}
+ 	if err != nil {
+ 		return nil, err
+ 	}
 +	core.applyWordPressWork(info, work)
  	return
  }
@@ -143,7 +150,6 @@ index 0000000..0000000 100644
 +		}
 +	}
 +}
-
 diff --git a/provider/dahlia/core/core_wordpress_metadata_test.go b/provider/dahlia/core/core_wordpress_metadata_test.go
 new file mode 100644
 index 0000000..0000000
