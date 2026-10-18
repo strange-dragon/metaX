@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Overlay the current four-provider integration prototype into a disposable SDK checkout
+# Overlay the all native-provider integration overlay into a disposable SDK checkout
 # of the pinned metatube-sdk-go repository.
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 /path/to/metatube-sdk-go" >&2
@@ -10,7 +10,7 @@ fi
 
 workspace_root="$(cd "$(dirname "$0")/../.." && pwd)"
 sdk_root="$(cd "$1" && pwd)"
-providers=(jav321 airav javdb minnano)
+providers=(airav avsox fc2club freejavbt giga iqqtv jav321 javdb javlibrary minnano xcity)
 test -f "$sdk_root/engine/register.go"
 
 for provider in "${providers[@]}"; do
@@ -33,7 +33,7 @@ text = path.read_text()
 marker = "import (\n"
 if marker not in text:
     raise SystemExit("engine/register.go import block not found")
-for provider in ("jav321", "airav", "javdb", "minnano"):
+for provider in ("airav", "avsox", "fc2club", "freejavbt", "giga", "iqqtv", "jav321", "javdb", "javlibrary", "minnano", "xcity"):
     line = f'\t_ "github.com/metatube-community/metatube-sdk-go/provider/{provider}"'
     if line not in text:
         text = text.replace(marker, marker + line + "\n", 1)
@@ -48,7 +48,7 @@ import "testing"
 
 func TestMetaXNativeProvidersAreRegistered(t *testing.T) {
 	e := New(nil)
-	for _, name := range []string{"Jav321", "Airav"} {
+	for _, name := range []string{"Airav", "AVSOX", "FC2Club", "Freejavbt", "GIGA", "IQQTV", "Jav321", "JavDB", "JavLibrary", "XCity"} {
 		if !e.IsMovieProvider(name) {
 			t.Errorf("movie provider %s was not discovered by the SDK engine", name)
 		}
@@ -107,7 +107,7 @@ EOF
 
 gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test.go" "$sdk_root/route/metax_integration_test.go"
 
-echo "Four-package movie/actor integration overlay applied. Validate from: $sdk_root"
-echo "Focused tests: go test ./engine ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -count=1"
+echo "Eleven-package native movie/actor integration overlay applied. Validate from: $sdk_root"
+echo "Focused tests: go test ./engine ./route ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1"
 echo "Full regression: go test \$(go list ./... | grep -Ev \"github.com/metatube-community/metatube-sdk-go/translate\")"
 echo "Server build: go build -o /tmp/metatube-server ./cmd/server"
