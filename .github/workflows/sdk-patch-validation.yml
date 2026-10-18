@@ -6,6 +6,8 @@ on:
       - feat/amane-provider-migration
     paths:
       - "patches/metatube-sdk-go/**"
+      - "provider/jav321/**"
+      - ".github/scripts/validate-provider-integration.sh"
       - ".github/workflows/sdk-patch-validation.yml"
   workflow_dispatch:
 
@@ -84,6 +86,13 @@ jobs:
           go-version-file: upstream-sdk/go.mod
           cache: true
           cache-dependency-path: upstream-sdk/go.sum
+
+      - name: Integrate native Jav321 provider into SDK engine (prototype)
+        run: .github/scripts/validate-provider-integration.sh "$GITHUB_WORKSPACE/upstream-sdk"
+
+      - name: Verify native Jav321 provider registration
+        working-directory: upstream-sdk
+        run: go test ./engine ./provider/jav321 -count=1
 
       - name: Verify formatting
         working-directory: upstream-sdk
