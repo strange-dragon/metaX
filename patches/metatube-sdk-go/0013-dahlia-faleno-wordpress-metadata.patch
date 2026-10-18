@@ -10,7 +10,7 @@ index 0000000..0000000 100644
  	"fmt"
  	"net/http"
  	"net/url"
-@@ -83,6 +84,7 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+@@ -58,8 +58,9 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
  	if err != nil {
  		return
  	}
@@ -21,7 +21,7 @@ index 0000000..0000000 100644
  		return nil, err
  	}
  
-@@ -175,6 +176,91 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+@@ -176,5 +177,132 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
  	if err != nil {
  		return nil, err
  	}
@@ -30,28 +30,28 @@ index 0000000..0000000 100644
  }
 +
 +type wpRendered struct {
-+	Rendered string \`json:"rendered"\`
++	Rendered string `json:"rendered"`
 +}
 +
 +type wpWorkACF struct {
-+	Title   string \`json:"作品名"\`
-+	Actors  string \`json:"出演女優"\`
-+	Plot    string \`json:"作品紹介文"\`
-+	Runtime string \`json:"収録時間"\`
-+	Release string \`json:"発売日（表示用）"\`
++	Title   string `json:"作品名"`
++	Actors  string `json:"出演女優"`
++	Plot    string `json:"作品紹介文"`
++	Runtime string `json:"収録時間"`
++	Release string `json:"発売日（表示用）"`
 +}
 +
 +type wpWorkImages struct {
-+	Main    string   \`json:"main_photo_url"\`
-+	Sub     string   \`json:"sub_photo_url"\`
-+	Gallery []string \`json:"gallery_urls"\`
++	Main    string   `json:"main_photo_url"`
++	Sub     string   `json:"sub_photo_url"`
++	Gallery []string `json:"gallery_urls"`
 +}
 +
 +type wpWork struct {
-+	Slug   string       \`json:"slug"\`
-+	Title  *wpRendered  \`json:"title"\`
-+	ACF    wpWorkACF    \`json:"acf"\`
-+	Images wpWorkImages \`json:"acf_custom_images"\`
++	Slug   string       `json:"slug"`
++	Title  *wpRendered  `json:"title"`
++	ACF    wpWorkACF    `json:"acf"`
++	Images wpWorkImages `json:"acf_custom_images"`
 +}
 +
 +func (core *Core) fetchWordPressWork(id string) (*wpWork, error) {
