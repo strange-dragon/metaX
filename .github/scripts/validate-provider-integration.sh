@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Apply the first native-provider integration prototype to a disposable checkout
+# Overlay the current four-provider integration prototype into a disposable SDK checkout
 # of the pinned metatube-sdk-go repository.
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 /path/to/metatube-sdk-go" >&2
@@ -63,5 +63,7 @@ EOF
 
 gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test.go"
 
-echo "Four-package movie/actor integration overlay applied. Run the SDK test suite from: $sdk_root"
-echo "At minimum: go test ./engine ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano"
+echo "Four-package movie/actor integration overlay applied. Validate from: $sdk_root"
+echo "Focused tests: go test ./engine ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -count=1"
+echo "Full regression: go test \$(go list ./... | grep -Ev \"github.com/metatube-community/metatube-sdk-go/translate\")"
+echo "Server build: go build -o /tmp/metatube-server ./cmd/server"
