@@ -1,0 +1,156 @@
+diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
+index 0000000..0000000 100644
+--- a/provider/dahlia/core/core.go
++++ b/provider/dahlia/core/core.go
+@@ -1,6 +1,7 @@
+ package core
+ 
+ import (
++	"encoding/json"
+ 	"fmt"
+ 	"net/http"
+ 	"net/url"
+@@ -83,6 +84,7 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+ 	if err != nil {
+ 		return
+ 	}
+ 
+-	if err = core.verifyMovieSlug(id); err != nil {
++	work, err := core.fetchWordPressWork(id)
++	if err != nil {
+ 		return nil, err
+ 	}
+ 
+@@ -175,6 +176,91 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	core.applyWordPressWork(info, work)
+ 	return
+ }
++
++type wpRendered struct {
++	Rendered string \`json:"rendered"\`
++}
++
++type wpWorkACF struct {
++	Title   string \`json:"作品名"\`
++	Actors  string \`json:"出演女優"\`
++	Plot    string \`json:"作品紹介文"\`
++	Runtime string \`json:"収録時間"\`
++	Release string \`json:"発売日（表示用）"\`
++}
++
++type wpWorkImages struct {
++	Main    string   \`json:"main_photo_url"\`
++	Sub     string   \`json:"sub_photo_url"\`
++	Gallery []string \`json:"gallery_urls"\`
++}
++
++type wpWork struct {
++	Slug   string       \`json:"slug"\`
++	Title  *wpRendered  \`json:"title"\`
++	ACF    wpWorkACF    \`json:"acf"\`
++	Images wpWorkImages \`json:"acf_custom_images"\`
++}
++
++func (core *Core) fetchWordPressWork(id string) (*wpWork, error) {
++	endpoint := strings.TrimRight(core.BaseURL, "/") + "/wp-json/wp/v2/works?slug=" + url.QueryEscape(id)
++	c := core.ClonedCollector()
++	c.ParseHTTPErrorResponse = true
++	var works []wpWork
++	var decodeErr error
++	c.OnResponse(func(r *colly.Response) {
++		if r.StatusCode < http.StatusOK || r.StatusCode >= http.StatusMultipleChoices {
++			decodeErr = fmt.Errorf("work slug lookup returned HTTP %d", r.StatusCode)
++			return
++		}
++		decodeErr = json.Unmarshal(r.Body, &works)
++	})
++	if err := c.Visit(endpoint); err != nil {
++		return nil, err
++	}
++	if decodeErr != nil {
++		return nil, decodeErr
++	}
++	for i := range works {
++		if strings.EqualFold(strings.TrimSpace(works[i].Slug), id) {
++			return &works[i], nil
++		}
++	}
++	return nil, fmt.Errorf("work slug %q not found", id)
++}
++
++func splitWordPressActors(value string) []string {
++	parts := strings.FieldsFunc(value, func(r rune) bool {
++		return r == '/' || r == '、' || r == ' ' || r == '\t' || r == '\n' || r == '\r'
++	})
++	actors := make([]string, 0, len(parts))
++	for _, part := range parts {
++		if part = strings.TrimSpace(part); part != "" {
++			actors = append(actors, part)
++		}
++	}
++	return actors
++}
++
++func (core *Core) applyWordPressWork(info *model.MovieInfo, work *wpWork) {
++	actors := splitWordPressActors(work.ACF.Actors)
++	title := strings.TrimSpace(work.ACF.Title)
++	if title == "" && work.Title != nil {
++		title = strings.TrimSpace(work.Title.Rendered)
++	}
++	for _, actor := range actors {
++		if strings.HasSuffix(title, actor) {
++			title = strings.TrimSpace(strings.TrimSuffix(title, actor))
++			break
++		}
++	}
++	if title != "" {
++		info.Title = title
++	}
++	if len(actors) > 0 {
++		info.Actors = actors
++	}
++	if plot := strings.TrimSpace(work.ACF.Plot); plot != "" {
++		info.Summary = plot
++	}
++	if runtime := parser.ParseRuntime(work.ACF.Runtime); runtime > 0 {
++		info.Runtime = runtime
++	}
++	release := parser.ParseDate(work.ACF.Release)
++	if time.Time(info.ReleaseDate).IsZero() && !time.Time(release).IsZero() {
++		info.ReleaseDate = release
++	}
++	if work.Images.Sub != "" {
++		info.CoverURL = work.Images.Sub
++	}
++	if work.Images.Main != "" {
++		info.ThumbURL = work.Images.Main
++	}
++	if len(work.Images.Gallery) > 0 {
++		images := make([]string, 0, len(work.Images.Gallery))
++		for _, image := range work.Images.Gallery {
++			if strings.TrimSpace(image) != "" {
++				images = append(images, strings.TrimSpace(image))
++			}
++		}
++		info.PreviewImages = images
++	}
++	if strings.EqualFold(core.Name(), "FALENO") {
++		info.Label = "FALENOstar"
++		prefix := id
++		for i, r := range prefix {
++			if r >= '0' && r <= '9' {
++				prefix = prefix[:i]
++				break
++			}
++		}
++		switch strings.ToLower(prefix) {
++		case "mgold":
++			info.Label = "maryGOLD"
++		case "jimmy":
++			info.Label = "JimmyScandal"
++		}
++	}
++}
