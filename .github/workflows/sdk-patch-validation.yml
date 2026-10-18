@@ -95,7 +95,7 @@ jobs:
 
       - name: Verify native movie and actor provider registration and API discovery
         working-directory: upstream-sdk
-        run: go test ./engine ./route ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -run 'TestMetaXProvidersEndpointListsIntegratedProviders|TestMetaXNativeProvidersAreRegistered|Test' -count=1
+        run: go test ./engine ./route ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -count=1
 
       - name: Verify formatting
         working-directory: upstream-sdk
