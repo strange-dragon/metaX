@@ -180,3 +180,17 @@ The new KIN8 ID normalization patch applies cleanly to the pinned SDK. The perma
 6. Update user-facing migration and licensing documentation, review the complete diff, and only then assess release readiness.
 
 The 40% estimate should increase materially only after the engine integration path and at least one end-to-end request are verified; passing SDK regression tests alone is necessary but not sufficient.
+
+## Engine registration boundary verified (2026-10-18)
+
+Inspection of the pinned SDK source confirms the concrete integration point: `engine/register.go` blank-imports each built-in provider package, which triggers each package's `init()` registration; `engine/init.go` then enumerates the movie and actor factory registries. A provider's `init()` in the separate metaX module is therefore insufficient by itself.
+
+The current module boundary matters. metaX is module `github.com/strange-dragon/metaX` and its new providers import `github.com/metatube-community/metatube-sdk-go`. Making the SDK import those metaX packages would create an import cycle (SDK → metaX provider → SDK). The safe integration route is to merge or port the independently authored provider packages into the SDK module's own `provider/` tree, then add blank imports in `engine/register.go`, or maintain a deliberate SDK fork that contains both changes. Do not add a direct SDK-to-metaX import.
+
+Before changing the SDK integration surface, build a repeatable integration overlay that:
+1. copies the intended provider source and tests into matching SDK package paths without importing Amane GPL-3.0 source/fixtures;
+2. adds only the required imports to `engine/register.go`;
+3. runs the pinned SDK's full tests and verifies the new names appear in `engine.Default().GetMovieProviders()` / `GetActorProviders()` (or an equivalent deterministic registry test);
+4. records licensing notices and keeps the public Jellyfin plugin/API contract unchanged.
+
+This integration mechanism is not implemented yet. The next implementation milestone is to prototype it with one low-complexity native provider before integrating all packages.
