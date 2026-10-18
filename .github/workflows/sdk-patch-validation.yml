@@ -138,4 +138,10 @@ jobs:
 
       - name: Run deterministic DAHLIA/FALENO WordPress metadata tests
         working-directory: upstream-sdk
-        run: go test ./provider/dahlia/core -run '^Test(WordPressMetadataMapping|WordPressMetadataRejectsNonExactSlug)$' -count=1
+        run: go test ./provider/dahlia/core -run '^Test(WordPressMetadataMapping|WordPressMetadataRejectsNonExactSlug)
+ -count=1
+
+      - name: Run full upstream SDK regression suite
+        working-directory: upstream-sdk
+        # Match the pinned SDK's own CI command, excluding its translation package.
+        run: go test $(go list ./... | grep -Ev "github.com/metatube-community/metatube-sdk-go/translate")
