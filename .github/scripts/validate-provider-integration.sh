@@ -10,17 +10,19 @@ fi
 
 workspace_root="$(cd "$(dirname "$0")/../.." && pwd)"
 sdk_root="$(cd "$1" && pwd)"
-source_dir="$workspace_root/provider/jav321"
-target_dir="$sdk_root/provider/jav321"
-
-test -d "$source_dir"
+providers=(jav321 airav)
 test -f "$sdk_root/engine/register.go"
-if [[ -e "$target_dir" ]]; then
-  echo "refusing to overwrite existing directory: $target_dir" >&2
-  exit 1
-fi
 
-cp -R "$source_dir" "$target_dir"
+for provider in "${providers[@]}"; do
+  source_dir="$workspace_root/provider/$provider"
+  target_dir="$sdk_root/provider/$provider"
+  test -d "$source_dir"
+  if [[ -e "$target_dir" ]]; then
+    echo "refusing to overwrite existing directory: $target_dir" >&2
+    exit 1
+  fi
+  cp -R "$source_dir" "$target_dir"
+done
 
 python3 - "$sdk_root/engine/register.go" <<'PY'
 from pathlib import Path
@@ -28,13 +30,15 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text()
-line = '\t_ "github.com/metatube-community/metatube-sdk-go/provider/jav321"'
-if line not in text:
-    marker = 'import (\n'
-    if marker not in text:
-        raise SystemExit("engine/register.go import block not found")
-    text = text.replace(marker, marker + line + '\n', 1)
-    path.write_text(text)
+marker = "import (\n"
+if marker not in text:
+    raise SystemExit("engine/register.go import block not found")
+for provider in ("jav321", "airav"):
+    line = f'\t_ "github.com/metatube-community/metatube-sdk-go/provider/{provider}"'
+    if line not in text:
+        text = text.replace(marker, marker + line + "\n", 1)
+        marker = marker + line + "\n"
+path.write_text(text)
 PY
 
 cat > "$sdk_root/engine/metax_integration_test.go" <<'EOF'
@@ -42,15 +46,17 @@ package engine
 
 import "testing"
 
-func TestMetaXJav321ProviderIsRegistered(t *testing.T) {
+func TestMetaXNativeMovieProvidersAreRegistered(t *testing.T) {
 	e := New(nil)
-	if !e.IsMovieProvider("Jav321") {
-		t.Fatal("Jav321 provider was not discovered by the SDK engine")
+	for _, name := range []string{"Jav321", "Airav"} {
+		if !e.IsMovieProvider(name) {
+			t.Errorf("%s provider was not discovered by the SDK engine", name)
+		}
 	}
 }
 EOF
 
 gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test.go"
 
-echo "Prototype applied. Run the SDK's normal test suite from: $sdk_root"
-echo "At minimum: go test ./engine ./provider/jav321"
+echo "Two-provider integration overlay applied. Run the SDK test suite from: $sdk_root"
+echo "At minimum: go test ./engine ./provider/jav321 ./provider/airav"
