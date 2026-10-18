@@ -50,6 +50,10 @@ jobs:
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0012-kin8-validate-and-normalize-movie-id.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0012-kin8-validate-and-normalize-movie-id.patch"
 
+      - name: Apply DAHLIA/FALENO WordPress metadata patch
+        working-directory: upstream-sdk
+        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0013-dahlia-faleno-wordpress-metadata.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0013-dahlia-faleno-wordpress-metadata.patch"
+
       - name: Apply FC2 patch
         working-directory: upstream-sdk
         run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch"
@@ -84,7 +88,7 @@ jobs:
       - name: Verify formatting
         working-directory: upstream-sdk
         run: |
-          files="provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/dahlia/core/core_url_validation_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go provider/fc2ppvdb/fc2ppvdb.go provider/fc2ppvdb/fc2ppvdb_migration_test.go provider/mgstage/mgstage.go provider/mgstage/mgstage_test.go provider/theporndb/video.go provider/theporndb/actor.go provider/theporndb/validation_test.go provider/fanza/fanza.go provider/fanza/fanza_migration_test.go provider/kin8tengoku/kin8tengoku.go provider/kin8tengoku/kin8tengoku_migration_test.go"
+          files="provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/dahlia/core/core_url_validation_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go provider/fc2ppvdb/fc2ppvdb.go provider/fc2ppvdb/fc2ppvdb_migration_test.go provider/mgstage/mgstage.go provider/mgstage/mgstage_test.go provider/theporndb/video.go provider/theporndb/actor.go provider/theporndb/validation_test.go provider/fanza/fanza.go provider/fanza/fanza_migration_test.go provider/kin8tengoku/kin8tengoku.go provider/kin8tengoku/kin8tengoku_migration_test.go provider/dahlia/core/core_wordpress_metadata_test.go"
           gofmt -d $files
           test -z "$(gofmt -l $files)"
 
@@ -130,4 +134,11 @@ jobs:
 
       - name: Run deterministic KIN8 ID normalization tests
         working-directory: upstream-sdk
-        run: go test ./provider/kin8tengoku -run '^Test(NormalizeMovieIDMigration|GetMovieInfoByIDRejectsInvalidIDBeforeNetwork)$' -count=1
+        run: go test ./provider/kin8tengoku -run '^Test(NormalizeMovieIDMigration|GetMovieInfoByIDRejectsInvalidIDBeforeNetwork)
+ -count=1
+
+      - name: Run deterministic DAHLIA/FALENO WordPress metadata tests
+        working-directory: upstream-sdk
+        run: go test ./provider/dahlia/core -run '^Test(WordPressMetadataMapping|WordPressMetadataRejectsNonExactSlug)
+ -count=1
+
