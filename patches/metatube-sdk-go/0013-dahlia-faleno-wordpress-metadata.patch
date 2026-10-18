@@ -144,7 +144,7 @@ index 0000000..0000000 100644
 +		}
 +	}
 +}
- 	func (core *Core) NormalizeMovieKeyword(keyword string) string {
+ func (core *Core) NormalizeMovieKeyword(keyword string) string {
 diff --git a/provider/dahlia/core/core_wordpress_metadata_test.go b/provider/dahlia/core/core_wordpress_metadata_test.go
 new file mode 100644
 index 0000000..0000000
