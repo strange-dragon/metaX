@@ -159,3 +159,24 @@ The new KIN8 ID normalization patch applies cleanly to the pinned SDK. The perma
 - Added independent local HTTP/JSON tests for metadata mapping and rejection of non-exact slugs. Existing redirect identity tests remain enabled.
 - The pinned SDK patch workflow, focused tests, Go formatting, and metaX Go tests passed on commit `0b3086e95c8153259e939180a4c2ef9d87e3ce36`: [SDK patch validation](https://github.com/strange-dragon/metaX/actions/runs/39134683828), [Go tests](https://github.com/strange-dragon/metaX/actions/runs/39134683778), [formatting](https://github.com/strange-dragon/metaX/actions/runs/39134683752).
 - Search remains on the legacy HTML path; no live-site validation or full engine integration is claimed.
+
+## Progress snapshot (2026-10-18, after SDK regression validation)
+
+- **Approximate overall progress: 40%.** This is a stage-weighted engineering estimate, not a count of files or a claim that 40% of sites work live.
+- **Workspace and licensing baseline:** substantially complete; Amane source and fixtures remain behavioral references rather than copied GPL-3.0 implementation.
+- **Native provider work:** 11 Go Provider packages exist. They have varying levels of deterministic test coverage; live availability and engine discovery have not been established.
+- **Existing SDK corrections:** 13 maintained patches apply to the pinned SDK. The permanent workflow now runs patch application, formatting, focused deterministic tests, and the full upstream SDK test suite. All steps passed for commit `3eecaaf76a6b14e26d72a9803e3f2190fc4d7012` in [SDK patch validation run 39135970713](https://github.com/strange-dragon/metaX/actions/runs/39135970713); metaX Go tests and formatting also passed in [run 39135970715](https://github.com/strange-dragon/metaX/actions/runs/39135970715) and [run 39135970712](https://github.com/strange-dragon/metaX/actions/runs/39135970712).
+- **Source comparisons:** focused reviews now include FC2 and Getchu, and the six registered Amane actor-source contracts have been audited. This is still not a completed source-by-source review of all 24 movie crawlers and 6 actor crawlers.
+- **Engine integration:** not complete. Provider packages in this workspace do not register themselves in a separately built MetaTube process unless the engine imports them or they are incorporated into the SDK.
+- **Runtime validation:** no current live-site verification or complete Jellyfin → MetaTube API → migrated-provider end-to-end test is claimed.
+
+### Remaining work, in priority order
+
+1. Identify and inspect the actual MetaTube engine repository and its provider-discovery/configuration path; verify the repository and supported integration point before editing it.
+2. Finish per-source comparisons and decide which gaps justify implementation, especially actor-source aggregation, JavBus search behavior, and deferred catalog/region-specific sources.
+3. Integrate provider packages through the supported engine/SDK boundary, preserving the existing Jellyfin plugin API contract.
+4. Add or verify integration-level tests for provider discovery, configuration, error handling, and field-level merge behavior.
+5. Run selective live-site checks where access permits, then verify actual Jellyfin plugin search/metadata display against the running MetaTube service.
+6. Update user-facing migration and licensing documentation, review the complete diff, and only then assess release readiness.
+
+The 40% estimate should increase materially only after the engine integration path and at least one end-to-end request are verified; passing SDK regression tests alone is necessary but not sufficient.
