@@ -1,4 +1,4 @@
-name: Validate and build patched MetaTube server
+name: Validate and build MetaTube server with native providers
 
 on:
   push:
@@ -8,8 +8,15 @@ on:
       - "patches/metatube-sdk-go/**"
       - "provider/jav321/**"
       - "provider/airav/**"
+      - "provider/avsox/**"
+      - "provider/fc2club/**"
+      - "provider/freejavbt/**"
+      - "provider/giga/**"
+      - "provider/iqqtv/**"
       - "provider/javdb/**"
       - "provider/minnano/**"
+      - "provider/javlibrary/**"
+      - "provider/xcity/**"
       - ".github/scripts/validate-provider-integration.sh"
       - ".github/scripts/build-metatube-server.sh"
       - ".github/workflows/sdk-patch-validation.yml"
@@ -39,7 +46,7 @@ jobs:
           cache: true
           cache-dependency-path: upstream-sdk/go.sum
 
-      - name: Apply patches, integrate providers, test, and build server
+      - name: Apply patches, integrate all native providers, test, and build server
         run: |
           bash .github/scripts/build-metatube-server.sh "$GITHUB_WORKSPACE/upstream-sdk" "$GITHUB_WORKSPACE/dist/metatube-server"
 
