@@ -257,3 +257,18 @@ bash .github/scripts/build-metatube-server.sh /path/to/metatube-sdk-go /path/to/
 The script intentionally rejects a dirty SDK checkout or a different SDK commit so that patches cannot silently apply to an unreviewed baseline. The original validated overlay covered four providers. The integration has now been expanded to all eleven native provider packages in this repository: ten movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `XCity`) and two actor providers (`JavDBActor`, `MinnanoActor`). The expanded build passed in [run 39139794806](https://github.com/strange-dragon/metaX/actions/runs/39139794806): all 13 SDK patches applied, all eleven packages were overlaid and registered, the `/v1/providers` endpoint exposed the expected movie/actor provider names, focused tests and the full pinned SDK regression suite passed, and the server binary built successfully. Artifact `metatube-server-cd8ba9f73e2409a9dce7efd73a8266fc2a295a8c` is available until 2026-10-25. This still does not establish live-site scraping or Jellyfin end-to-end behavior.
 
 The CI workflow now invokes this same build entry point and uploads the generated server as a short-lived artifact. A green run proves patch application, the covered provider registration and `/v1/providers` discovery contract, the full pinned SDK test suite, and compilation of the integrated server. It does not prove live-site scraping or a running Jellyfin deployment.
+
+
+## API search/detail contract validation (2026-10-18)
+
+The SDK integration overlay now includes route-level contract tests backed by in-memory SQLite and deterministic fake providers. It exercises the actual SDK engine and Gin routes for all four plugin-facing flows:
+
+- `GET /v1/movies/search?q=...&provider=...` — verifies list response shape and movie search fields.
+- `GET /v1/movies/{provider}/{id}?lazy=false` — verifies movie detail response shape and metadata fields.
+- `GET /v1/actors/search?q=...&provider=...` — verifies list response shape and actor search fields.
+- `GET /v1/actors/{provider}/{id}?lazy=false` — verifies actor detail response shape and metadata fields.
+- Both search routes reject a missing required `q` with HTTP 400 and an `error` envelope.
+
+Validation passed on commit [940d62e](https://github.com/strange-dragon/metaX/commit/940d62ef95fd23d953187826490affa96b6201c0): [integrated server build and API tests](https://github.com/strange-dragon/metaX/actions/runs/39140651962), [metaX Go tests](https://github.com/strange-dragon/metaX/actions/runs/39140651888), and [format check](https://github.com/strange-dragon/metaX/actions/runs/39140651869). The build workflow produced artifact `metatube-server-940d62ef95fd23d953187826490affa96b6201c0`, available until 2026-10-25.
+
+These route tests validate the SDK/plugin wire contract with controlled providers. They do not establish that each live provider website currently returns parseable pages; live scraping and an actual Jellyfin instance remain separate validation steps.
