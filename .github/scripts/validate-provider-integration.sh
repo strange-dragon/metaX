@@ -10,7 +10,7 @@ fi
 
 workspace_root="$(cd "$(dirname "$0")/../.." && pwd)"
 sdk_root="$(cd "$1" && pwd)"
-providers=(jav321 airav)
+providers=(jav321 airav javdb minnano)
 test -f "$sdk_root/engine/register.go"
 
 for provider in "${providers[@]}"; do
@@ -33,7 +33,7 @@ text = path.read_text()
 marker = "import (\n"
 if marker not in text:
     raise SystemExit("engine/register.go import block not found")
-for provider in ("jav321", "airav"):
+for provider in ("jav321", "airav", "javdb", "minnano"):
     line = f'\t_ "github.com/metatube-community/metatube-sdk-go/provider/{provider}"'
     if line not in text:
         text = text.replace(marker, marker + line + "\n", 1)
@@ -46,11 +46,16 @@ package engine
 
 import "testing"
 
-func TestMetaXNativeMovieProvidersAreRegistered(t *testing.T) {
+func TestMetaXNativeProvidersAreRegistered(t *testing.T) {
 	e := New(nil)
 	for _, name := range []string{"Jav321", "Airav"} {
 		if !e.IsMovieProvider(name) {
-			t.Errorf("%s provider was not discovered by the SDK engine", name)
+			t.Errorf("movie provider %s was not discovered by the SDK engine", name)
+		}
+	}
+	for _, name := range []string{"JavDBActor", "MinnanoActor"} {
+		if !e.IsActorProvider(name) {
+			t.Errorf("actor provider %s was not discovered by the SDK engine", name)
 		}
 	}
 }
@@ -58,5 +63,5 @@ EOF
 
 gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test.go"
 
-echo "Two-provider integration overlay applied. Run the SDK test suite from: $sdk_root"
-echo "At minimum: go test ./engine ./provider/jav321 ./provider/airav"
+echo "Four-package movie/actor integration overlay applied. Run the SDK test suite from: $sdk_root"
+echo "At minimum: go test ./engine ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano"
