@@ -13,9 +13,11 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 ## Current status
 
 - The `feat/amane-provider-migration` branch currently contains 11 native Go Provider packages: Airav, AVSOX, FC2Club, FreeJAVBT, GIGA, IQQTV, Jav321, JavDB (movie and actor), JavLibrary, Minnano (actor), and XCity.
-- The branch maintains 13 unique SDK patches for existing-provider correctness and URL/ID validation. The long-term SDK patch workflow applies all patches to the pinned upstream revision and runs focused deterministic tests; latest validation, including KIN8 ID hardening and DAHLIA/FALENO REST metadata mapping, passed in [run 39134683828](https://github.com/strange-dragon/metaX/actions/runs/39134683828).
-- The latest metaX Go tests and formatting checks passed in [run 38932602115](https://github.com/strange-dragon/metaX/actions/runs/38932602115) and [run 38932602108](https://github.com/strange-dragon/metaX/actions/runs/38932602108).
+- The branch maintains 13 unique SDK patches for existing-provider correctness and URL/ID validation. The permanent SDK patch workflow applies all patches to the pinned upstream revision, checks formatting, runs focused deterministic tests, and runs the full upstream SDK regression suite. All steps passed on commit [`3eecaaf`](https://github.com/strange-dragon/metaX/commit/3eecaaf76a6b14e26d72a9803e3f2190fc4d7012) in [run 39135970713](https://github.com/strange-dragon/metaX/actions/runs/39135970713).
+- The metaX Go tests and formatting checks also passed on that commit in [run 39135970715](https://github.com/strange-dragon/metaX/actions/runs/39135970715) and [run 39135970712](https://github.com/strange-dragon/metaX/actions/runs/39135970712).
 - These are migration-workspace packages, not yet a claim of end-to-end runtime integration: the existing MetaTube engine must import the Provider packages (or merge them into the SDK) for `init()` registration to take effect. Live-site verification and Jellyfin/MetaTube integration remain pending.
+- A focused audit of all six Amane actor-source contracts is recorded in the compatibility matrix. The pinned SDK engine's registration mechanism is confirmed to be `engine/register.go`; native packages in this separate workspace still need to be integrated into the SDK provider tree or another supported server build path.
+- Current overall migration estimate is approximately 40%; this is a stage-weighted estimate, not a live-site success rate. See [migration plan](docs/MIGRATION_PLAN.md) for the breakdown and remaining integration work.
 - No live-site support is claimed until current site behavior and integration are verified.
 
 ## Engineering documents
