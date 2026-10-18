@@ -124,8 +124,9 @@ import (
 
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
-	"github.com/glebarez/sqlite"
+	"gorm.io/gorm/logger"
+	"github.com/gin-gonic/gin"
+		"github.com/glebarez/sqlite"
 
 	"github.com/metatube-community/metatube-sdk-go/engine"
 	"github.com/metatube-community/metatube-sdk-go/model"
@@ -177,10 +178,9 @@ func init() {
 
 func newContractRouter(t *testing.T) *gin.Engine {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open("file:metax-api-contract?mode=memory&cache=shared"), &gorm.Config{Logger: logger.Discard})
+	db, err := gorm.Open(sqlite.Open("file:metax-api-contract?mode=memory&cache=shared"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil { t.Fatalf("open in-memory database: %v", err) }
 	if err := db.AutoMigrate(&model.MovieInfo{}, &model.ActorInfo{}); err != nil { t.Fatalf("migrate test database: %v", err) }
-	_ = clause.OnConflict{} // Keep imports aligned with the SDK's model persistence behavior.
 	return route.New(engine.New(db), nil)
 }
 
