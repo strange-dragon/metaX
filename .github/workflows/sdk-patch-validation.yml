@@ -8,6 +8,8 @@ on:
       - "patches/metatube-sdk-go/**"
       - "provider/jav321/**"
       - "provider/airav/**"
+      - "provider/javdb/**"
+      - "provider/minnano/**"
       - ".github/scripts/validate-provider-integration.sh"
       - ".github/workflows/sdk-patch-validation.yml"
   workflow_dispatch:
@@ -88,12 +90,12 @@ jobs:
           cache: true
           cache-dependency-path: upstream-sdk/go.sum
 
-      - name: Integrate native Jav321 and Airav providers into SDK engine (prototype)
+      - name: Integrate native movie and actor providers into SDK engine (prototype)
         run: bash .github/scripts/validate-provider-integration.sh "$GITHUB_WORKSPACE/upstream-sdk"
 
-      - name: Verify native movie provider registration
+      - name: Verify native movie and actor provider registration
         working-directory: upstream-sdk
-        run: go test ./engine ./provider/jav321 ./provider/airav -count=1
+        run: go test ./engine ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -count=1
 
       - name: Verify formatting
         working-directory: upstream-sdk
