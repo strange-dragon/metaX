@@ -156,3 +156,7 @@ jobs:
         working-directory: upstream-sdk
         # Match the pinned SDK's own CI command, excluding its translation package.
         run: go test $(go list ./... | grep -Ev "github.com/metatube-community/metatube-sdk-go/translate")
+
+      - name: Build integrated MetaTube server binary
+        working-directory: upstream-sdk
+        run: go build -o /tmp/metatube-server ./cmd/server
