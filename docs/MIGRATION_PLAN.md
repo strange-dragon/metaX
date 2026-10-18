@@ -230,3 +230,16 @@ Implications for this migration:
 3. Verify the backend distribution/build path that the user actually runs. If only released server binaries are available, determine whether a maintained SDK/server fork is required; do not imply that the existing plugin alone can load external Go packages.
 4. Only after the server-side inclusion path is established, run a real API request through the documented routes and verify response fields and plugin display.
 
+
+## Four-provider engine overlay validated (2026-10-18)
+
+- Expanded `.github/scripts/validate-provider-integration.sh` to overlay four native packages into a disposable checkout of the pinned SDK: movie providers `Jav321` and `Airav`, actor providers `JavDBActor` and `MinnanoActor`.
+- The overlay adds blank imports in `engine/register.go` and a deterministic engine test that verifies all four names are discoverable through the correct movie/actor registry.
+- On commit `be37f37916e28f556d1c3194d17df79e37f860e9`, the overlay, focused package/registration tests, and full upstream SDK regression suite passed in [run 39138091636](https://github.com/strange-dragon/metaX/actions/runs/39138091636). metaX tests passed in [run 39138091625](https://github.com/strange-dragon/metaX/actions/runs/39138091625); formatting passed in [run 39138091638](https://github.com/strange-dragon/metaX/actions/runs/39138091638).
+- **Proven:** the four packages compile in the pinned SDK tree and register with its engine. **Not proven:** current live-site behavior or a real request through a built/deployed MetaTube server and Jellyfin plugin.
+
+## Server distribution and integration boundary follow-up (2026-10-18)
+
+- The official MetaTube organization identifies `metatube-community/metatube-sdk-go` as “MetaTube SDK & API Server in Golang”; its separate `metatube-server-releases` repository publishes binary releases rather than the server source tree. The project documentation also describes deployment from released binaries or a container image. See the [official organization repositories](https://github.com/metatube-community) and [server deployment guide](https://metatube-community.github.io/wiki/server-deployment/).
+- The SDK is therefore the appropriate source integration point for this migration. A separate public `metatube-server` source repository was not found in the official organization; do not invent one or assume the release binary can load external Provider packages dynamically.
+- Practical next step: prepare a clean, reproducible SDK fork/patch series that includes selected native provider packages and the required engine blank imports, then build/test the server binary from that source. Before replacing or deploying the user's current service, verify its exact image/tag or binary version and whether its build provenance points to the official SDK source. The four-provider overlay is currently CI proof only; it does not yet alter a published server release.
