@@ -13,7 +13,7 @@ index 0000000..0000000 100644
  		return nil, err
  	}
  
-@@ -140,2 +140,129 @@
+@@ -215,2 +215,129 @@
 +	core.applyWordPressWork(info, work)
  	return
  }
