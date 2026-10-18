@@ -425,3 +425,22 @@ Compared Amane `src/amane/crawlers/sites/getchu.py` with the pinned SDK `provide
 - **Detail metadata.** Amane extracts title, cover, release date, brand, genres, and a leading token as the number. The SDK additionally maps circle/label, summary, preview images, and Open Graph fallbacks. Keep the SDK's richer existing detail parser.
 - **Decision.** Do not add a `MovieSearcher` implementation in this task. First define whether the desired feature is legacy retail catalog search, digital-download search, or both; then implement only with deterministic fixtures and exact identity checks. Patch `0005` remains limited to safe detail ID normalization and URL validation.
 - **Verification limits.** This is a source-level comparison only. No live Getchu requests, current catalog fixtures, full upstream SDK regression suite, or end-to-end MetaTube/Jellyfin test was run.
+
+## Focused comparison: actor-source contracts (2026-10-18)
+
+Audited the six registered Amane actor crawlers at commit `a2d45880e83df7047d461452965919692701e8c9`. These sources do not form one interchangeable "actor scraper" category; their capabilities and data contracts differ.
+
+- **AVBase** is a name-to-profile adapter for `/talents/{name}`, not a conventional search endpoint. It reads Next.js `talent` data and maps canonical name, alternate identities, gender, birthday, prefecture, body measurements, image, and AVBase ID. A native implementation should preserve 404-as-not-found semantics and accept both male and female profiles; a generic fuzzy searcher would not be equivalent.
+- **GFriends** is an actor-image index over a GitHub-hosted `Filetree.json`, with optional local index caching. It supplies image URLs and a content path, not a biographical profile. The index's deterministic folder ordering and duplicate filename policy affect which image is selected. Treat it as an image enrichment source, not an `ActorProvider` replacement for profile sources.
+- **JavDB** is an actor profile source; metaX already has a native JavDB actor package. It still needs its own field-by-field comparison and tests against the pinned SDK actor interfaces before parity can be claimed.
+- **Minnano** performs a name search, handles exact-hit redirects, and otherwise selects only a normalized exact-name result. Its detail mapping includes aliases/readings, birthday, birthplace, height, measurements, cup size, and image. The native metaX package exists, but current-site selectors and live availability remain unverified.
+- **ThePornDB** is the actor implementation already present in the pinned SDK and should be compared before duplicating it. Actor profile fields and movie-scene metadata are separate contracts.
+- **Wikipedia/Wikidata** is an enrichment source rather than a conventional studio catalog: it searches Wikidata in Japanese, Chinese, and English, filters candidates for AV-industry relevance, and extracts localized biography text from Wikipedia. Its occupation/gender/entity disambiguation and text cleanup are substantial behavior; it should not be approximated by a simple title search or folded into a site-specific profile parser.
+
+### Actor migration decision
+
+The native actor packages currently present in metaX cover JavDB and Minnano. That does not yet reproduce the complete actor-source set: AVBase profile support, GFriends image enrichment, and Wikipedia/Wikidata biography enrichment are distinct candidate work items. ThePornDB should be extended only if comparison identifies a concrete SDK gap. Before implementation, verify how the MetaTube engine consumes `ActorProvider` results and whether it can merge profile, image, and biography sources without discarding populated fields.
+
+### Verification limits
+
+This pass is a source-contract audit, not a runtime test. No live actor site/API request, captured-site fixture test, actor-source aggregation test, MetaTube engine registration check, or Jellyfin end-to-end test was performed.
