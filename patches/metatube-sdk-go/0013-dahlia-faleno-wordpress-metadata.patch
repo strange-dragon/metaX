@@ -17,7 +17,6 @@ index 0000000..0000000 100644
 +	c.OnScraped(func(_ *colly.Response) { core.applyWordPressWork(info, work) })
  	err = c.Visit(info.Homepage)
 @@ -226,1 +226,127 @@
-+
 +type wpRendered struct {
 +	Rendered string `json:"rendered"`
 +}
