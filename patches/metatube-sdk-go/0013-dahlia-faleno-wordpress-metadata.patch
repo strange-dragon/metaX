@@ -13,17 +13,11 @@ index 0000000..0000000 100644
  		return nil, err
  	}
  
-@@ -216,9 +216,136 @@
+@@ -216,1 +216,2 @@
++	c.OnScraped(func(_ *colly.Response) { core.applyWordPressWork(info, work) })
  	err = c.Visit(info.Homepage)
- 	if err == nil {
- 		err = identityErr
- 	}
- 	if err != nil {
- 		return nil, err
- 	}
-+	core.applyWordPressWork(info, work)
- 	return
- }
+
+@@ -226,1 +226,127 @@
 +
 +type wpRendered struct {
 +	Rendered string `json:"rendered"`
@@ -150,6 +144,7 @@ index 0000000..0000000 100644
 +		}
 +	}
 +}
+ 	func (core *Core) NormalizeMovieKeyword(keyword string) string {
 diff --git a/provider/dahlia/core/core_wordpress_metadata_test.go b/provider/dahlia/core/core_wordpress_metadata_test.go
 new file mode 100644
 index 0000000..0000000
