@@ -1,4 +1,4 @@
-name: Validate upstream SDK patches
+name: Validate and build patched MetaTube server
 
 on:
   push:
@@ -11,6 +11,7 @@ on:
       - "provider/javdb/**"
       - "provider/minnano/**"
       - ".github/scripts/validate-provider-integration.sh"
+      - ".github/scripts/build-metatube-server.sh"
       - ".github/workflows/sdk-patch-validation.yml"
   workflow_dispatch:
 
@@ -31,58 +32,6 @@ jobs:
           ref: c62584675c593816cc07e7b5b977d14c7eb505a3
           path: upstream-sdk
 
-      - name: Apply JavBus patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0001-javbus-validate-detail-url.patch"
-
-      - name: Apply AVBase URL patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0002-avbase-preserve-prefixed-detail-url.patch"
-
-      - name: Apply AVBase exact-search patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0010-avbase-exact-search-identity.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0010-avbase-exact-search-identity.patch"
-
-      - name: Apply DAHLIA/FALENO exact-slug patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0003-dahlia-verify-exact-work-slug.patch"
-
-      - name: Apply DAHLIA/FALENO URL validation patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0011-dahlia-validate-detail-url-origin.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0011-dahlia-validate-detail-url-origin.patch"
-
-      - name: Apply KIN8 ID validation patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0012-kin8-validate-and-normalize-movie-id.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0012-kin8-validate-and-normalize-movie-id.patch"
-
-      - name: Apply DAHLIA/FALENO WordPress metadata patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0013-dahlia-faleno-wordpress-metadata.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0013-dahlia-faleno-wordpress-metadata.patch"
-
-      - name: Apply FC2 patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0004-fc2-validate-detail-url.patch"
-
-      - name: Apply Getchu patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0005-getchu-normalize-and-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0005-getchu-normalize-and-validate-detail-url.patch"
-
-      - name: Apply FC2PPVDB patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0006-fc2ppvdb-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0006-fc2ppvdb-validate-detail-url.patch"
-
-      - name: Apply MGStage patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0007-mgstage-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0007-mgstage-validate-detail-url.patch"
-
-      - name: Apply ThePornDB patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0008-theporndb-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0008-theporndb-validate-detail-url.patch"
-
-      - name: Apply FANZA/DMM patch
-        working-directory: upstream-sdk
-        run: git apply --check "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0009-fanza-validate-detail-url.patch" && git apply "$GITHUB_WORKSPACE/patches/metatube-sdk-go/0009-fanza-validate-detail-url.patch"
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -90,73 +39,14 @@ jobs:
           cache: true
           cache-dependency-path: upstream-sdk/go.sum
 
-      - name: Integrate native movie and actor providers into SDK engine (prototype)
-        run: bash .github/scripts/validate-provider-integration.sh "$GITHUB_WORKSPACE/upstream-sdk"
-
-      - name: Verify native movie and actor provider registration and API discovery
-        working-directory: upstream-sdk
-        run: go test ./engine ./route ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -count=1
-
-      - name: Verify formatting
-        working-directory: upstream-sdk
+      - name: Apply patches, integrate providers, test, and build server
         run: |
-          files="provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/dahlia/core/core_url_validation_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go provider/fc2ppvdb/fc2ppvdb.go provider/fc2ppvdb/fc2ppvdb_migration_test.go provider/mgstage/mgstage.go provider/mgstage/mgstage_test.go provider/theporndb/video.go provider/theporndb/actor.go provider/theporndb/validation_test.go provider/fanza/fanza.go provider/fanza/fanza_migration_test.go provider/kin8tengoku/kin8tengoku.go provider/kin8tengoku/kin8tengoku_migration_test.go provider/dahlia/core/core_wordpress_metadata_test.go"
-          gofmt -d $files
-          test -z "$(gofmt -l $files)"
+          bash .github/scripts/build-metatube-server.sh "$GITHUB_WORKSPACE/upstream-sdk" "$GITHUB_WORKSPACE/dist/metatube-server"
 
-      - name: Run deterministic JavBus tests
-        working-directory: upstream-sdk
-        run: go test ./provider/javbus -run 'TestJavBus_ParseMovieIDFromURL|TestHasRequiredMovieFields|TestMovieNumberMatch|TestMovieNumberVariants|TestSelectMovieNumberResult' -count=1
-
-      - name: Run deterministic AVBase exact-search tests
-        working-directory: upstream-sdk
-        run: go test ./provider/avbase -run '^Test(MovieURLForWork|NormalizeAVBaseNumber|AVBaseQueryForms|PickAVBaseWorkExactAndCollision)$' -count=1
-
-      - name: Run deterministic DAHLIA/FALENO slug tests
-        working-directory: upstream-sdk
-        run: go test ./provider/dahlia/core -run '^TestGetMovieInfoByURLVerifiesExactSlug$' -count=1
-
-      - name: Run deterministic DAHLIA/FALENO URL validation tests
-        working-directory: upstream-sdk
-        run: go test ./provider/dahlia/core -run '^TestParseMovieIDFromURLValidatesOriginAndPath$' -count=1
-
-      - name: Run deterministic FC2 URL and ID validation tests
-        working-directory: upstream-sdk
-        run: go test ./provider/fc2 -run 'TestFC2_(ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)' -count=1
-
-      - name: Run deterministic Getchu ID and URL validation tests
-        working-directory: upstream-sdk
-        run: go test ./provider/getchu -run 'Test(NormalizeMovieIDForDetailLookup|GetMovieInfoByIDRejectsInvalidID|ParseMovieIDFromURLValidatesOriginAndPath)' -count=1
-
-      - name: Run deterministic FC2PPVDB ID and URL validation tests
-        working-directory: upstream-sdk
-        run: go test ./provider/fc2ppvdb -run '^TestFC2PPVDB(NormalizeMovieID|ParseMovieIDFromURL|GetMovieInfoByIDRejectsInvalidID)$' -count=1
-
-      - name: Run deterministic MGStage ID and URL validation tests
-        working-directory: upstream-sdk
-        run: go test ./provider/mgstage -run '^TestMGS(NormalizeMovieID|ParseMovieIDFromURL|GetMovieInfoByIDRejectsInvalidID|GetMovieReviewsByIDRejectsInvalidID)$' -count=1
-
-      - name: Run deterministic ThePornDB URL and ID validation tests
-        working-directory: upstream-sdk
-        run: go test ./provider/theporndb -run '^Test(ParseThePornDBDetailID|ThePornDBVideoGetMovieInfoByIDRejectsInvalidID|ThePornDBActorGetActorInfoByIDRejectsInvalidID)$' -count=1
-
-      - name: Run deterministic FANZA/DMM ID and URL validation tests
-        working-directory: upstream-sdk
-        run: go test ./provider/fanza -run '^TestFANZA(NormalizeMovieIDValidation|ParseMovieIDFromURLValidation|GetMovieInfoByIDRejectsInvalidID)$' -count=1
-
-      - name: Run deterministic KIN8 ID normalization tests
-        working-directory: upstream-sdk
-        run: go test ./provider/kin8tengoku -run '^Test(NormalizeMovieIDMigration|GetMovieInfoByIDRejectsInvalidIDBeforeNetwork)$' -count=1
-
-      - name: Run deterministic DAHLIA/FALENO WordPress metadata tests
-        working-directory: upstream-sdk
-        run: go test ./provider/dahlia/core -run "^Test(WordPressMetadataMapping|WordPressMetadataRejectsNonExactSlug)$" -count=1
-
-      - name: Run full upstream SDK regression suite
-        working-directory: upstream-sdk
-        # Match the pinned SDK's own CI command, excluding its translation package.
-        run: go test $(go list ./... | grep -Ev "github.com/metatube-community/metatube-sdk-go/translate")
-
-      - name: Build integrated MetaTube server binary
-        working-directory: upstream-sdk
-        run: go build -o /tmp/metatube-server ./cmd/server
+      - name: Upload built MetaTube server
+        uses: actions/upload-artifact@v4
+        with:
+          name: metatube-server-${{ github.sha }}
+          path: dist/metatube-server
+          if-no-files-found: error
+          retention-days: 7
