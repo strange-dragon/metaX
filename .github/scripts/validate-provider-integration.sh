@@ -61,7 +61,51 @@ func TestMetaXNativeProvidersAreRegistered(t *testing.T) {
 }
 EOF
 
-gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test.go"
+cat > "$sdk_root/route/metax_integration_test.go" <<'EOF'
+package route_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/metatube-community/metatube-sdk-go/engine"
+	"github.com/metatube-community/metatube-sdk-go/route"
+)
+
+func TestMetaXProvidersEndpointListsIntegratedProviders(t *testing.T) {
+	router := route.New(engine.New(nil), nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/v1/providers", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET /v1/providers status = %d, want %d; body: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var response struct {
+		Data struct {
+			ActorProviders map[string]string `json:"actor_providers"`
+			MovieProviders map[string]string `json:"movie_providers"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode providers response: %v", err)
+	}
+	for _, name := range []string{"Jav321", "Airav"} {
+		if _, ok := response.Data.MovieProviders[name]; !ok {
+			t.Errorf("GET /v1/providers did not expose movie provider %q", name)
+		}
+	}
+	for _, name := range []string{"JavDBActor", "MinnanoActor"} {
+		if _, ok := response.Data.ActorProviders[name]; !ok {
+			t.Errorf("GET /v1/providers did not expose actor provider %q", name)
+		}
+	}
+}
+EOF
+
+gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test.go" "$sdk_root/route/metax_integration_test.go"
 
 echo "Four-package movie/actor integration overlay applied. Validate from: $sdk_root"
 echo "Focused tests: go test ./engine ./provider/jav321 ./provider/airav ./provider/javdb ./provider/minnano -count=1"
