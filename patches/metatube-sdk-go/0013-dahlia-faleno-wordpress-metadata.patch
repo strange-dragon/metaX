@@ -2,14 +2,6 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 index 0000000..0000000 100644
 --- a/provider/dahlia/core/core.go
 +++ b/provider/dahlia/core/core.go
-@@ -1,6 +1,7 @@
- package core
- 
- import (
-+	"encoding/json"
- 	"fmt"
- 	"net/http"
- 	"net/url"
 @@ -58,8 +58,9 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
  	if err != nil {
  		return
