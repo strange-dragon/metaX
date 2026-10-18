@@ -127,7 +127,7 @@ index 0000000..0000000 100644
 +	}
 +	if strings.EqualFold(core.Name(), "FALENO") {
 +		info.Label = "FALENOstar"
-+		prefix := id
++		prefix := work.Slug
 +		for i, r := range prefix {
 +			if r >= '0' && r <= '9' {
 +				prefix = prefix[:i]
