@@ -44,6 +44,16 @@ func TestDMMRouteResolvesToRegisteredFANZAProvider(t *testing.T) {
 	}
 }
 
+func TestExplicitDMMSelectionResolvesToFANZA(t *testing.T) {
+	got, err := DefaultConfig().Resolve(CategoryCensored, "DMM", []string{"FANZA", "JavDB"})
+	if err != nil {
+		t.Fatalf("Resolve(explicit DMM) error = %v", err)
+	}
+	if want := []string{"FANZA"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Resolve(explicit DMM) = %#v, want %#v", got, want)
+	}
+}
+
 func TestUncensoredRouteIncludesFC2ProvidersInOrder(t *testing.T) {
 	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	got, err := DefaultConfig().Resolve(CategoryUncensored, "", registered)
