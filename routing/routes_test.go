@@ -44,6 +44,39 @@ func TestDMMRouteResolvesToRegisteredFANZAProvider(t *testing.T) {
 	}
 }
 
+func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
+	// Mirrors the pinned SDK providers plus the native providers integrated by
+	// build-metatube-server.sh. Official is intentionally absent: Amane's
+	// Official entry is a studio-aware routing layer, not a registered scraper.
+	registered := []string{
+		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
+		"FC2", "Airav", "IQQTV", "MGStage", "ThePornDB", "Getchu",
+	}
+	tests := []struct {
+		category Category
+		want     []string
+	}{
+		{CategoryCensored, []string{"FANZA", "JavDB", "JavBus"}},
+		{CategoryUncensored, []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}},
+		{CategoryChinese, []string{"IQQTV", "JavDB", "Airav", "Freejavbt"}},
+		{CategoryAmateur, []string{"MGStage", "FANZA", "JavDB", "JavBus"}},
+		{CategoryWestern, []string{"ThePornDB", "JavDB", "Freejavbt"}},
+		{CategoryHentai, []string{"Getchu", "FANZA", "JavDB"}},
+	}
+	config := DefaultConfig()
+	for _, tc := range tests {
+		t.Run(string(tc.category), func(t *testing.T) {
+			got, err := config.Resolve(tc.category, "", registered)
+			if err != nil {
+				t.Fatalf("Resolve(%s) error = %v", tc.category, err)
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("Resolve(%s) = %#v, want %#v", tc.category, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestExplicitDMMSelectionResolvesToFANZA(t *testing.T) {
 	got, err := DefaultConfig().Resolve(CategoryCensored, "DMM", []string{"FANZA", "JavDB"})
 	if err != nil {
