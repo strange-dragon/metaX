@@ -45,7 +45,7 @@ The script refuses a dirty SDK checkout or a different commit. The generated bin
 
 The backend orchestration layer is being implemented separately from the Jellyfin plugin.
 
-- A standalone `routing` package now defines ordered category routes for censored, uncensored, FC2, Chinese-subtitle, amateur, western, and animation content. It preserves explicit provider selection as an override and skips providers not registered in the current SDK build.
+- A standalone `routing` package now defines category routes for censored, uncensored, FC2, Chinese-subtitle, amateur, western, and animation content. It preserves explicit provider selection as an override and skips providers not registered in the current SDK build.
 - This routing package is currently a tested building block, not yet wired into MetaTube's HTTP search handler. Until that integration is complete, the SDK's existing no-provider search path still searches all registered providers.
-- Next backend milestones: wire category selection into the SDK search route without breaking existing callers; implement ordered execution and fallback semantics; add stable result/detail resolution and field-level metadata merge; then unify network resilience and verify live sources.
+- Next backend milestones: wire category selection into the SDK search route without breaking existing callers; fan out to all registered providers for the selected category concurrently; keep successful results when other providers return no data or errors; add stable result/detail resolution and field-level metadata merge and field-level metadata merge; then unify network resilience and verify live sources.
 - Jellyfin plugin changes are explicitly out of scope for this backend phase.
