@@ -590,20 +590,34 @@ func selectNumberIndex(results []*model.MovieSearchResult, query string) int {
 
 // numberMatch returns 2 for exact equality, 1 only when exactly one side has a
 // leading numeric series prefix, and 0 for unrelated identifiers.
-)
-
-func fc2ArticleID(value string) string {
-	value = strings.TrimSpace(norm.NFKC.String(value))
-	match := fc2ArticleRE.FindStringSubmatch(value)
-	if len(match) != 2 {
-		return ""
+func numberMatch(found, query string) int {
+	foundFold, queryFold := foldNumber(found), foldNumber(query)
+	if foundFold == "" || queryFold == "" {
+		return 0
 	}
-	return match[1]
+	if foundFold == queryFold {
+		return 2
+	}
+	if sameWesternDate(found, query) {
+		return 2
+	}
+	foundDigits, foundRest := splitLeadingDigits(found)
+	queryDigits, queryRest := splitLeadingDigits(query)
+	if foundRest == queryRest && !(foundDigits != "" && queryDigits != "") {
+		return 1
+	}
+	return 0
 }
 
-func sameFC2Article(a, b string) bool {
-	left, right := fc2ArticleID(a), fc2ArticleID(b)
-	return left != "" && left == right
+func foldNumber(value string) string {
+	value = strings.ToUpper(norm.NFKC.String(strings.TrimSpace(value)))
+	var b strings.Builder
+	for _, r := range value {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func leadingDigitPrefix(value string) string {
@@ -657,21 +671,10 @@ func westernDateParts(value string) (westernParts, bool) {
 	if err != nil || parsed.Format("2006-01-02") != dateText {
 		return westernParts{}, false
 	}
-	studio := foldStudio(match[dayNumberRE.SubexpIndex("studio")])
+	studio := foldNumber(match[dayNumberRE.SubexpIndex("studio")])
 	// A four-digit year can match its two-digit counterpart, while the rest
 	// of the date and the normalized studio must remain equal.
 	return westernParts{studio: studio, date: dateText}, true
-}
-
-func foldStudio(value string) string {
-	value = strings.ToLower(norm.NFKC.String(value))
-	var b strings.Builder
-	for _, r := range value {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }
 
 func alternateWesternNumber(value string) string {
