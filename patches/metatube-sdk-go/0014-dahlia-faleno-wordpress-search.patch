@@ -1,0 +1,287 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: metaX contributors
+Subject: [PATCH] dahlia: use exact WordPress REST lookup for search
+
+The shared DAHLIA/FALENO provider still used legacy HTML search even after
+detail metadata moved to the WordPress REST API. Use the same exact-slug
+lookup for search, return the public work-page URL, and reject fuzzy slug
+matches before they can be shown to Jellyfin.
+
+Based on metatube-community/metatube-sdk-go commit
+c62584675c593816cc07e7b5b977d14c7eb505a3.
+
+---
+ provider/dahlia/core/core.go                       | search implementation
+ provider/dahlia/core/core_wordpress_search_test.go | 110 +++
+ 2 files changed
+
+diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
+--- a/provider/dahlia/core/core.go
++++ b/provider/dahlia/core/core.go
+@@ -3,16 +3,17 @@
+-import (
+-	"encoding/json"
+-	"fmt"
+-	"net/http"
+-	"net/url"
+-	"path"
+-	"strings"
+-	"time"
+-
+-	"github.com/gocolly/colly/v2"
+-	"golang.org/x/text/language"
+-
+-	"github.com/metatube-community/metatube-sdk-go/common/parser"
+-	"github.com/metatube-community/metatube-sdk-go/model"
+-	"github.com/metatube-community/metatube-sdk-go/provider/internal/scraper"
+-)
++import (
++	"encoding/json"
++	"errors"
++	"fmt"
++	"net/http"
++	"net/url"
++	"path"
++	"strings"
++	"time"
++
++	"github.com/gocolly/colly/v2"
++	"golang.org/x/text/language"
++
++	"github.com/metatube-community/metatube-sdk-go/common/parser"
++	"github.com/metatube-community/metatube-sdk-go/model"
++	"github.com/metatube-community/metatube-sdk-go/provider/internal/scraper"
++)
+@@ -25,3 +26,5 @@
+ 	DefaultPriority float64
+ 	DefaultName     string
+ }
++
++var ErrWordPressWorkNotFound = errors.New("dahlia/faleno: WordPress work not found")
+
+@@ -1,1 +1,1 @@
+-	return nil, fmt.Errorf("work slug %q not found", id)
++	return nil, fmt.Errorf("%w: work slug %q not found", ErrWordPressWorkNotFound, id)
+@@ -175,28 +176,78 @@
+-func (core *Core) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
+-	c := core.ClonedCollector()
+-	c.ParseHTTPErrorResponse = true
+-	c.SetRedirectHandler(func(req *http.Request, via []*http.Request) error {
+-		return http.ErrUseLastResponse
+-	})
+-	// Set max search timeout.
+-	// c.SetRequestTimeout(8 * time.Second)
+-
+-	c.OnXML(`//div[@class="box_kanren01"]//li`, func(e *colly.XMLElement) {
+-		cover := e.Request.AbsoluteURL(e.ChildAttr(`.//img`, "src"))
+-
+-		homepage := e.Request.AbsoluteURL(e.ChildAttr(`.//a`, "href"))
+-		id, _ := core.ParseMovieIDFromURL(homepage)
+-		results = append(results, &model.MovieSearchResult{
+-			ID:          id,
+-			Number:      parser.ParseIDToNumber(id),
+-			Title:       strings.SplitN(e.ChildText(`.//div[@class="text_name"]/a`), "\n", 2)[0],
+-			Provider:    core.Name(),
+-			Homepage:    homepage,
+-			CoverURL:    cover,
+-			ReleaseDate: parser.ParseDate(strings.Fields(e.ChildText(`.//div[contains(text(), "発売開始")]`))[0]),
+-		})
+-	})
+-
+-	err = c.Visit(fmt.Sprintf(core.SearchURL, url.QueryEscape(keyword)))
+-	return
+-}
++func slugifyWordPressNumber(number string) string {
++	var slug strings.Builder
++	for _, r := range strings.ToLower(strings.TrimSpace(number)) {
++		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
++			slug.WriteRune(r)
++		}
++	}
++	return slug.String()
++}
++
++func wordPressNumberFromSlug(slug string) string {
++	value := strings.ToLower(strings.TrimSpace(slug))
++	i := 0
++	for i < len(value) && value[i] >= 'a' && value[i] <= 'z' {
++		i++
++	}
++	j := i
++	for j < len(value) && value[j] >= '0' && value[j] <= '9' {
++		j++
++	}
++	if i == 0 || j == i {
++		return strings.ToUpper(slug)
++	}
++	for k := j; k < len(value); k++ {
++		if value[k] < 'a' || value[k] > 'z' {
++			return strings.ToUpper(slug)
++		}
++	}
++	return strings.ToUpper(value[:i]) + "-" + value[i:j] + strings.ToUpper(value[j:])
++}
++
++func stripWordPressActorSuffix(title string, actors []string) string {
++	title = strings.TrimSpace(title)
++	for _, actor := range actors {
++		if strings.HasSuffix(title, actor) {
++			return strings.TrimSpace(strings.TrimSuffix(title, actor))
++		}
++	}
++	return title
++}
++
++// SearchMovie uses the same WordPress REST record as detail lookup. The exact
++// slug check prevents a fuzzy HTML redirect from being reported as a match.
++func (core *Core) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
++	slug := slugifyWordPressNumber(keyword)
++	if slug == "" {
++		return nil, nil
++	}
++	work, err := core.fetchWordPressWork(slug)
++	if errors.Is(err, ErrWordPressWorkNotFound) {
++		return nil, nil
++	}
++	if err != nil {
++		return nil, err
++	}
++	actors := splitWordPressActors(work.ACF.Actors)
++	title := strings.TrimSpace(work.ACF.Title)
++	if title == "" && work.Title != nil {
++		title = strings.TrimSpace(work.Title.Rendered)
++	}
++	title = stripWordPressActorSuffix(title, actors)
++	result := &model.MovieSearchResult{
++		ID:       core.NormalizeMovieID(work.Slug),
++		Number:   wordPressNumberFromSlug(work.Slug),
++		Title:    title,
++		Provider: core.Name(),
++		Homepage: fmt.Sprintf(core.MovieURL, work.Slug),
++		CoverURL: strings.TrimSpace(work.Images.Sub),
++		ThumbURL: strings.TrimSpace(work.Images.Main),
++	}
++	if release := parser.ParseDate(work.ACF.Release); !time.Time(release).IsZero() {
++		result.ReleaseDate = release
++	}
++	if !result.IsValid() {
++		return nil, nil
++	}
++	return []*model.MovieSearchResult{result}, nil
++}
+
+diff --git a/provider/dahlia/core/core_wordpress_search_test.go b/provider/dahlia/core/core_wordpress_search_test.go
+new file mode 100644
+--- /dev/null
++++ b/provider/dahlia/core/core_wordpress_search_test.go
+@@ -0,0 +1,110 @@
++package core
++
++import (
++	"fmt"
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++	"time"
++)
++
++func TestWordPressSearchUsesExactRESTSlug(t *testing.T) {
++	var detailRequested bool
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if r.URL.Path != "/top/wp-json/wp/v2/works" {
++			detailRequested = true
++			http.NotFound(w, r)
++			return
++		}
++		if got := r.URL.Query().Get("slug"); got != "fns257" {
++			t.Errorf("REST slug = %q, want fns257", got)
++		}
++		w.Header().Set("Content-Type", "application/json")
++		_, _ = fmt.Fprint(w, `[{
++			"slug":"fns257",
++			"title":{"rendered":"Fallback title"},
++			"acf":{"作品名":"","出演女優":"葵 / 乙","発売日（表示用）":"2024-01-02"},
++			"acf_custom_images":{
++				"main_photo_url":"https://img.example/thumb.jpg",
++				"sub_photo_url":"https://img.example/poster.jpg",
++				"gallery_urls":[]
++			}
++		}]`)
++	}))
++	defer server.Close()
++
++	core := (&Core{
++		BaseURL:         server.URL + "/top/",
++		MovieURL:        server.URL + "/top/works/%s/",
++		SearchURL:       server.URL + "/top/?s=%s",
++		DefaultName:     "FALENO",
++		DefaultPriority: 1,
++	}).Init()
++	results, err := core.SearchMovie("FNS-257")
++	if err != nil {
++		t.Fatalf("SearchMovie() error = %v", err)
++	}
++	if detailRequested {
++		t.Fatal("search should use the REST record without requesting the HTML detail page")
++	}
++	if len(results) != 1 {
++		t.Fatalf("SearchMovie() returned %d results, want 1", len(results))
++	}
++	result := results[0]
++	if result.ID != "fns257" || result.Number != "FNS-257" || result.Title != "Fallback title" {
++		t.Errorf("unexpected identity/title: %#v", result)
++	}
++	if result.Provider != "FALENO" || result.Homepage != server.URL+"/top/works/fns257/" {
++		t.Errorf("provider/homepage mismatch: %#v", result)
++	}
++	if result.CoverURL != "https://img.example/poster.jpg" || result.ThumbURL != "https://img.example/thumb.jpg" {
++		t.Errorf("image mapping mismatch: %#v", result)
++	}
++	if got := time.Time(result.ReleaseDate).Format("2006-01-02"); got != "2024-01-02" {
++		t.Errorf("ReleaseDate = %q, want 2024-01-02", got)
++	}
++}
++
++func TestWordPressSearchRejectsNonExactSlug(t *testing.T) {
++	var detailRequested bool
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		if strings.HasPrefix(r.URL.Path, "/wp-json/") {
++			w.Header().Set("Content-Type", "application/json")
++			_, _ = fmt.Fprint(w, `[{"slug":"fns257sp"}]`)
++			return
++		}
++		detailRequested = true
++		http.NotFound(w, r)
++	}))
++	defer server.Close()
++
++	core := testCore(server.URL)
++	results, err := core.SearchMovie("FNS-257")
++	if err != nil {
++		t.Fatalf("SearchMovie() error = %v", err)
++	}
++	if len(results) != 0 {
++		t.Fatalf("SearchMovie() returned a fuzzy match: %#v", results)
++	}
++	if detailRequested {
++		t.Fatal("HTML detail page should not be requested for a non-exact slug")
++	}
++}
++
++func TestWordPressSearchPropagatesMalformedRESTResponse(t *testing.T) {
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
++		w.Header().Set("Content-Type", "application/json")
++		_, _ = fmt.Fprint(w, `{"slug":"fns257"}`)
++	}))
++	defer server.Close()
++
++	core := testCore(server.URL)
++	results, err := core.SearchMovie("FNS-257")
++	if err == nil {
++		t.Fatal("expected malformed REST response error")
++	}
++	if results != nil {
++		t.Fatalf("results = %#v, want nil on REST parse error", results)
++	}
++}
