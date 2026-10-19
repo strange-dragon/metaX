@@ -356,8 +356,9 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if u, err := url.Parse(id); err == nil && u.IsAbs() {
 		return p.GetMovieInfoByURL(id)
 	}
-	// Recognized work numbers are search terms. Other values are treated as
-	// opaque detail slugs, including slugs that happen to contain hyphens.
+	// Recognized work numbers are search terms. FC2 needs its own recognizer
+	// because the prefix contains a digit. Other values are treated as opaque
+	// detail slugs, including slugs that happen to contain hyphens.
 	if !movieNumberRE.MatchString(id) && !numericUnderscoreNumberRE.MatchString(id) && fc2ArticleID(id) == "" {
 		info, err := p.GetMovieInfoByURL(p.detailURL(id))
 		if err == nil && info != nil {
