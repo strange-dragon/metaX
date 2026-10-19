@@ -3,6 +3,7 @@ package engine
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/metatube-community/metatube-sdk-go/collection/sets"
 	"github.com/metatube-community/metatube-sdk-go/common/comparer"
@@ -40,8 +41,9 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 	}
 
 	type response struct {
-		provider mt.MovieProvider
 		results  []*model.MovieSearchResult
+		err      error
+		elapsed  time.Duration
 	}
 	responses := make([]response, len(providers))
 	var wg sync.WaitGroup
@@ -50,18 +52,26 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		i, provider := i, provider
 		go func() {
 			defer wg.Done()
+			started := time.Now()
 			results, err := e.searchMovie(keyword, provider, false)
-			if err != nil {
-				return
+			responses[i] = response{
+				results: results,
+				err:     err,
+				elapsed: time.Since(started),
 			}
-			responses[i] = response{provider: provider, results: results}
 		}()
 	}
 	wg.Wait()
 
 	results := make([]*model.MovieSearchResult, 0)
 	for i, provider := range providers {
-		results = append(results, responses[i].results...)
+			response := responses[i]
+			if response.err != nil {
+				e.logger.Printf("Search keyword %s: %s(%s): <%v>", keyword, provider.Name(), response.elapsed, response.err)
+			} else {
+				e.logger.Printf("Search keyword %s: %s(%s): %d result(s)", keyword, provider.Name(), response.elapsed, len(response.results))
+				results = append(results, response.results...)
+			}
 		if fallback {
 			// Keep database fallback inside the selected category; querying the
 			// whole database here could leak matches from unrelated categories.
