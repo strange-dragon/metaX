@@ -233,13 +233,13 @@ type fingerprintProfile struct {
 	userAgent string
 }
 
-// Keep the same Chrome generations as Amane where the Go TLS client exposes them.
-// Chrome 133 is used as the closest supported profile to Amane's Chrome 136 entry.
+// Use Amane's supported browser generations where available; Chrome 133 is the
+// closest exposed TLS profile to Amane's Chrome 136 entry in tls-client v1.14.0.
 var javLibraryFingerprintProfiles = []fingerprintProfile{
-	{name: "Chrome 123", profile: profiles.Chrome_123, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"},
 	{name: "Chrome 124", profile: profiles.Chrome_124, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
 	{name: "Chrome 131", profile: profiles.Chrome_131, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
 	{name: "Chrome 133", profile: profiles.Chrome_133, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"},
+	{name: "Firefox 133", profile: profiles.Firefox_133, userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"},
 }
 
 func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http.Response, error) {
