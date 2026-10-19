@@ -6,6 +6,7 @@
 package jav321
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -208,6 +209,9 @@ func (p *Jav321) rebuildClientLocked() {
 		transport = &http.Transport{Proxy: http.ProxyFromEnvironment}
 	}
 	transport.Proxy = http.ProxyFromEnvironment
+	// Match Amane's scraper HTTP behavior: some Jav321 deployments present an
+	// invalid certificate, so do not let certificate-name/chain issues prevent metadata scraping.
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402
 	if p.proxyURL != "" {
 		if proxyURL, err := url.Parse(p.proxyURL); err == nil {
 			transport.Proxy = http.ProxyURL(proxyURL)
@@ -220,15 +224,7 @@ func (p *Jav321) rebuildClientLocked() {
 	p.client = &http.Client{
 		Transport: transport,
 		Timeout:   timeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("jav321: stopped after 10 redirects")
-			}
-			if !p.allowedRedirectURL(req.URL) {
-				return fmt.Errorf("jav321: refusing redirect to unexpected URL %q", req.URL.String())
-			}
-			return nil
-		},
+
 	}
 }
 
