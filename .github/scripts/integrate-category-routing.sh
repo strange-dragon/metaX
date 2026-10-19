@@ -47,6 +47,12 @@ source = source.replace(
 )
 
 
+source = source.replace(
+    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
+    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\n\treturn getSearchWithConfig(app, typ, routing.DefaultConfig())\n}\n\nfunc getSearchWithConfig(app *engine.Engine, typ searchType, config routing.Config) gin.HandlerFunc {',
+    1,
+)
+
 start = source.find('\t\tcase movieSearchType:')
 end = source.find('\t\tdefault:', start)
 if start < 0 or end < 0:
