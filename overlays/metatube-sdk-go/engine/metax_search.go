@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 
@@ -105,4 +104,3 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 	return results, nil
 }
 
-var _ = fmt.Sprintf
