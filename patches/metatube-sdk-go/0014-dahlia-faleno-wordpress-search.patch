@@ -12,7 +12,7 @@ c62584675c593816cc07e7b5b977d14c7eb505a3.
 
 ---
  provider/dahlia/core/core.go                       | search implementation
- provider/dahlia/core/core_wordpress_search_test.go | 110 +++
+ provider/dahlia/core/core_wordpress_search_test.go | 117 +++
  2 files changed
 
 diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
@@ -145,7 +145,7 @@ diff --git a/provider/dahlia/core/core_wordpress_search_test.go b/provider/dahli
 new file mode 100644
 --- /dev/null
 +++ b/provider/dahlia/core/core_wordpress_search_test.go
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,117 @@
 +package core
 +
 +import (
@@ -189,6 +189,13 @@ new file mode 100644
 +		DefaultName:     "FALENO",
 +		DefaultPriority: 1,
 +	}).Init()
++	work, err := core.fetchWordPressWork("fns257")
++	if err != nil {
++		t.Fatalf("fetchWordPressWork() error = %v", err)
++	}
++	if work.ACF.Release != "2024-01-02" {
++		t.Fatalf("REST release field = %q, want 2024-01-02", work.ACF.Release)
++	}
 +	results, err := core.SearchMovie("FNS-257")
 +	if err != nil {
 +		t.Fatalf("SearchMovie() error = %v", err)
