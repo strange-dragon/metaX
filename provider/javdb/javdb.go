@@ -358,7 +358,7 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	}
 	// Recognized work numbers are search terms. Other values are treated as
 	// opaque detail slugs, including slugs that happen to contain hyphens.
-	if !movieNumberRE.MatchString(id) && !numericUnderscoreNumberRE.MatchString(id) {
+	if !movieNumberRE.MatchString(id) && !numericUnderscoreNumberRE.MatchString(id) && fc2ArticleID(id) == "" {
 		info, err := p.GetMovieInfoByURL(p.detailURL(id))
 		if err == nil && info != nil {
 			return info, nil
