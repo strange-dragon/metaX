@@ -6,6 +6,29 @@ import (
 	"testing"
 )
 
+
+func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
+	config := DefaultConfig()
+	want := map[Category][]string{
+		CategoryCensored:         {"DMM", "JavDB", "JavBus", "Official"},
+		CategoryUncensored:       {"JavDB", "JavBus", "AVSOX", "Freejavbt"},
+		CategoryFC2:              {"JavDB", "FC2PPVDB", "FC2", "Freejavbt", "Airav"},
+		CategoryChineseSubtitles: {"IQQTV", "JavDB", "Airav", "Freejavbt"},
+		CategoryAmateur:          {"MGStage", "DMM", "JavDB", "JavBus"},
+		CategoryWestern:          {"ThePornDB", "JavDB", "Freejavbt"},
+		CategoryHentai:           {"Getchu", "DMM", "JavDB"},
+		CategoryAnimation:        {"Getchu", "DMM", "JavDB"},
+	}
+	for category, expected := range want {
+		if got := config.Routes[category]; !reflect.DeepEqual(got, expected) {
+			t.Errorf("route %q = %#v, want %#v", category, got, expected)
+		}
+	}
+	if err := config.Validate(); err != nil {
+		t.Fatalf("default route config is invalid: %v", err)
+	}
+}
+
 func TestDefaultRoutesResolveInConfiguredOrderAndSkipUnavailableProviders(t *testing.T) {
 	config := DefaultConfig()
 	registered := []string{"javdb", "JavBus", "AVSOX", "Freejavbt"}
