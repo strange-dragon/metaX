@@ -9,6 +9,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/metatube-community/metatube-sdk-go v0.0.0-20261011210842-c62584675c59
 	github.com/stretchr/testify v1.12.1
+	golang.org/x/net v0.61.0
 	golang.org/x/text v0.43.0
 )
 
@@ -31,7 +32,6 @@ require (
 	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	gorm.io/datatypes v1.2.7 // indirect
 	gorm.io/driver/mysql v1.6.0 // indirect
