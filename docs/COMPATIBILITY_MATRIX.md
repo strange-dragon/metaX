@@ -444,3 +444,13 @@ The native actor packages currently present in metaX cover JavDB and Minnano. Th
 ### Verification limits
 
 This pass is a source-contract audit, not a runtime test. No live actor site/API request, captured-site fixture test, actor-source aggregation test, MetaTube engine registration check, or Jellyfin end-to-end test was performed.
+
+
+## Airav FC2 catalog query fallback (2026-10-19)
+
+A focused follow-up to the Airav source comparison found a behavior gap in the native Go provider: Amane recognizes that Airav indexes FC2 articles under the canonical `FC2-PPV-{id}` form and tries that form before the caller's original number. The Go provider previously queried only the original input, so searches using `FC2-{id}` could miss a record that Airav indexed under the PPV spelling.
+
+- **Change.** The Go provider now recognizes FC2 article IDs across hyphenated, compact, and supported underscore-separated spellings, tries the canonical `FC2-PPV-{id}` query first when it differs from the input, then falls back to the original query. It stops at the first exact semantic match, and if the canonical request fails it still attempts the fallback query before returning an error.
+- **Identity safety.** FC2 variants compare equal only when both parse as FC2 article numbers with the same numeric article ID. Near-number matches remain rejected; non-FC2 matching behavior is unchanged.
+- **Tests.** Added deterministic local HTTP tests for canonical-first ordering, empty-result fallback to the original query, and matching `FC2-{id}`, compact `FC2PPV{id}`, and underscore-separated variants against a canonical Airav result.
+- **Limits.** No live Airav requests were made. Current website behavior, current selectors, and runtime metadata coverage remain unverified; this closes the source-derived FC2 query-variant gap only.
