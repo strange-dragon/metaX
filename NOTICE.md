@@ -13,4 +13,4 @@ metaX's intended Apache-2.0 licensing applies to project-authored code that can 
 
 ## TLS fingerprint client
 
-The JavLibrary provider uses [tls-client](https://github.com/bogdanfinn/tls-client), Copyright the tls-client contributors, under its BSD 4-Clause license. Source distributions and advertising materials mentioning this software must retain the upstream license notice and satisfy its attribution conditions.
+The JavLibrary provider uses [tls-client](https://github.com/bogdanfinn/tls-client), Copyright the tls-client contributors, under its BSD 4-Clause license. Source distributions must retain the upstream license notice and disclaimer. Advertising materials mentioning this software must display: “This product includes software developed by Bogdan Finn.” See `third_party/licenses/tls-client-LICENSE.txt` for the complete license.
