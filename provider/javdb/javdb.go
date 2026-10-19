@@ -39,13 +39,13 @@ const (
 )
 
 var (
-	ErrMovieNotFound = errors.New("javdb: movie not found")
-	movieNumberRE    = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
+	ErrMovieNotFound          = errors.New("javdb: movie not found")
+	movieNumberRE             = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
 	numericUnderscoreNumberRE = regexp.MustCompile(`^[0-9]{3,}(?:_[0-9]+)+$`)
-	leadingDigitsRE  = regexp.MustCompile(`(?i)^\d+`)
-	dayNumberRE      = regexp.MustCompile(`(?i)^(?P<studio>.+?)(?P<sep0>[._-])(?P<year>\d{4}|\d{2})(?P<sep1>[._-])(?P<month>\d{2})(?P<sep2>[._-])(?P<day>\d{2})$`)
-	scoreRE          = regexp.MustCompile(`\d+(?:\.\d+)?`)
-	runtimeRE        = regexp.MustCompile(`\d+`)
+	leadingDigitsRE           = regexp.MustCompile(`(?i)^\d+`)
+	dayNumberRE               = regexp.MustCompile(`(?i)^(?P<studio>.+?)(?P<sep0>[._-])(?P<year>\d{4}|\d{2})(?P<sep1>[._-])(?P<month>\d{2})(?P<sep2>[._-])(?P<day>\d{2})$`)
+	scoreRE                   = regexp.MustCompile(`\d+(?:\.\d+)?`)
+	runtimeRE                 = regexp.MustCompile(`\d+`)
 )
 
 var (
