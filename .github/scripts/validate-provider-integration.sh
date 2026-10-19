@@ -242,3 +242,63 @@ func TestMetaXSearchRequiresQuery(t *testing.T) {
 	}
 }
 EOF
+
+
+# Add the category router and category-scoped search implementation to the
+# disposable SDK checkout. Existing SDK search result models and JSON envelope
+# remain unchanged.
+mkdir -p "$sdk_root/engine"
+cp "$workspace_root/overlays/metatube-sdk-go/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
+if [[ ! -e "$sdk_root/routing" ]]; then
+  cp -R "$workspace_root/routing" "$sdk_root/routing"
+fi
+
+python3 - "$sdk_root/route/search.go" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+if 'github.com/metatube-community/metatube-sdk-go/routing' not in source:
+    source = source.replace(
+        '"github.com/metatube-community/metatube-sdk-go/model"\n',
+        '"github.com/metatube-community/metatube-sdk-go/model"\n'
+        '"github.com/metatube-community/metatube-sdk-go/routing"\n',
+        1,
+    )
+source = source.replace(
+    'Provider string `form:"provider"`\n\tFallback bool   `form:"fallback"`',
+    'Provider string `form:"provider"`\n\tCategory string `form:"category"`\n\tFallback bool   `form:"fallback"`',
+    1,
+)
+old = '''} else if searchAll {
+				results, err = app.SearchMovieAll(query.Q, query.Fallback)
+			} else {
+				results, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
+			}'''
+new = '''} else if searchAll {
+				if query.Category == "" {
+					results, err = app.SearchMovieAll(query.Q, query.Fallback)
+				} else {
+					registered := app.GetMovieProviders()
+					names := make([]string, 0, len(registered))
+					for name := range registered {
+						names = append(names, name)
+					}
+					selected, resolveErr := routing.DefaultConfig().Resolve(routing.Category(query.Category), "", names)
+					if resolveErr != nil {
+						abortWithStatusMessage(c, http.StatusBadRequest, resolveErr)
+						return
+					}
+					results, err = app.SearchMovieProviders(query.Q, selected, query.Fallback)
+				}
+			} else {
+				results, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
+			}'''
+if old not in source:
+    raise SystemExit("movie search dispatch block not found; SDK route/search.go changed")
+source = source.replace(old, new, 1)
+path.write_text(source)
+PY
+
+gofmt -w "$sdk_root/engine/metax_search.go" "$sdk_root/route/search.go"
