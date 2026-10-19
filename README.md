@@ -30,7 +30,7 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 
 ## Reproducible integrated server build
 
-The branch includes a build script that applies the 13 maintained SDK patches, integrates the four providers currently covered by engine and API discovery tests, runs deterministic and upstream regression tests, then builds a MetaTube server binary. It requires a clean checkout of the pinned SDK revision.
+The branch includes a reproducible build script that applies 13 maintained SDK patches, integrates eleven native provider packages, applies the category-search overlay, runs engine/API contract tests and upstream regression tests, then builds a MetaTube server binary. It requires a clean checkout of the pinned SDK revision.
 
 ```bash
 git clone https://github.com/metatube-community/metatube-sdk-go.git ./metatube-sdk-go
@@ -38,14 +38,16 @@ git -C ./metatube-sdk-go checkout c62584675c593816cc07e7b5b977d14c7eb505a3
 bash .github/scripts/build-metatube-server.sh ./metatube-sdk-go ./dist/metatube-server
 ```
 
-The script refuses a dirty SDK checkout or a different commit. The generated binary is intended to include ten movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `XCity`) and two actor providers (`JavDBActor`, `MinnanoActor`), plus the maintained SDK patches. The expanded eleven-package integration passed in [GitHub Actions run 39139794806](https://github.com/strange-dragon/metaX/actions/runs/39139794806), including provider registration, `/v1/providers` API discovery, focused tests, the full pinned SDK regression suite, and server compilation. Live scraping and a running Jellyfin deployment remain unverified. The workflow uploads the built binary as a seven-day artifact after all checks pass.
+The script refuses a dirty SDK checkout or a different commit. The generated binary is intended to include ten movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `XCity`) and two actor providers (`JavDBActor`, `MinnanoActor`), plus the maintained SDK patches. The eleven-package integration has passed in [GitHub Actions run 39191776372](https://github.com/strange-dragon/metaX/actions/runs/39191776372), including provider registration, `/v1/providers` API discovery, focused tests, the full pinned SDK regression suite, and server compilation. Live scraping and a running Jellyfin deployment remain unverified. The workflow uploads the built binary as a seven-day artifact after all checks pass.
 
 
 ## Backend orchestration work
 
 The backend orchestration layer is being implemented separately from the Jellyfin plugin.
 
-- A standalone `routing` package now defines category routes for censored, uncensored, FC2, Chinese-subtitle, amateur, western, and animation content. It preserves explicit provider selection as an override and skips providers not registered in the current SDK build.
-- This routing package is currently a tested building block, not yet wired into MetaTube's HTTP search handler. Until that integration is complete, the SDK's existing no-provider search path still searches all registered providers.
-- Next backend milestones: wire category selection into the SDK search route without breaking existing callers; fan out to all registered providers for the selected category concurrently; keep successful results when other providers return no data or errors; add stable result/detail resolution and field-level metadata merge and field-level metadata merge; then unify network resilience and verify live sources.
+- The `routing` package defines category routes for censored, uncensored, FC2, Chinese-subtitle, amateur, western, and animation content. It preserves explicit provider selection as a manual override and skips providers not registered in the current SDK build.
+- The SDK overlay adds an optional `category` query parameter to `/v1/movies/search`. For example, `/v1/movies/search?q=ABC-123&category=uncensored` fans out concurrently to all registered providers in that category. Omitting `category` preserves MetaTube's original all-provider behavior; specifying `provider` preserves single-provider behavior.
+- Search results keep MetaTube's existing response envelope and model, including each record's `provider` + `id` identity for detail lookup. Per-provider errors and empty results do not discard successful results from other providers. Results are deduplicated by provider + ID and sorted using MetaTube's existing relevance/priority approach.
+- The SDK overlay includes API contract tests for search/detail response shape, unknown-category rejection, and explicit-provider override. The latest category-routing validation run is [GitHub Actions run 39192134634](https://github.com/strange-dragon/metaX/actions/runs/39192134634); final status should be confirmed before treating this milestone as complete.
+- Next backend milestones: validate live-source behavior, review category membership against Amane's original route definitions, then address any remaining metadata-field enrichment and network resilience. Avoid cross-provider record merging unless a clear matching key and merge policy are established.
 - Jellyfin plugin changes are explicitly out of scope for this backend phase.
