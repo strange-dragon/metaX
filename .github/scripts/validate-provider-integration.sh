@@ -271,6 +271,19 @@ source = source.replace(
     'Provider string `form:"provider"`\n\tCategory string `form:"category"`\n\tFallback bool   `form:"fallback"`',
     1,
 )
+
+old_handler = '''func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {
+\treturn func(c *gin.Context) {'''
+new_handler = '''func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {
+\treturn getSearchWithConfig(app, typ, routing.DefaultConfig())
+}
+
+func getSearchWithConfig(app *engine.Engine, typ searchType, routingConfig routing.Config) gin.HandlerFunc {
+\treturn func(c *gin.Context) {'''
+if old_handler not in source:
+    raise SystemExit("search handler declaration not found; SDK route/search.go changed")
+source = source.replace(old_handler, new_handler, 1)
+source = source.replace("routing.DefaultConfig().Resolve(routing.Category(query.Category), \"\", names)", "routingConfig.Resolve(routing.Category(query.Category), \"\", names)", 1)
 old = '''} else if searchAll {
 				results, err = app.SearchMovieAll(query.Q, query.Fallback)
 			} else {
@@ -302,5 +315,6 @@ path.write_text(source)
 PY
 
 cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
+cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
 
-gofmt -w "$sdk_root/engine/metax_search.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go"
+gofmt -w "$sdk_root/engine/metax_search.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" "$sdk_root/route/metax_category_fanout_test.go"
