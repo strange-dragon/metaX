@@ -301,4 +301,6 @@ source = source.replace(old, new, 1)
 path.write_text(source)
 PY
 
-gofmt -w "$sdk_root/engine/metax_search.go" "$sdk_root/route/search.go"
+cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
+
+gofmt -w "$sdk_root/engine/metax_search.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go"
