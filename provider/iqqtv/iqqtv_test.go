@@ -154,6 +154,24 @@ func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
 	require.Zero(t, externalRequests)
 }
 
+func TestFetchRejectsUnexpectedInitialOrigin(t *testing.T) {
+	var requests int
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		_, _ = fmt.Fprint(w, detailFixture)
+	}))
+	defer target.Close()
+
+	p := New()
+	resp, err := p.Fetch(target.URL + "/cn/detail/abc123")
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "refusing request to unexpected origin")
+	require.Zero(t, requests, "unexpected origin must be rejected before network access")
+}
+
 func TestRegistrationAndConfiguration(t *testing.T) {
 	found := false
 	for name, factory := range mt.RangeMovieFactory {
