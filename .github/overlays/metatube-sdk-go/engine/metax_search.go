@@ -65,13 +65,13 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 
 	results := make([]*model.MovieSearchResult, 0)
 	for i, provider := range providers {
-			response := responses[i]
-			if response.err != nil {
-				e.logger.Printf("Search keyword %s: %s(%s): <%v>", keyword, provider.Name(), response.elapsed, response.err)
-			} else {
-				e.logger.Printf("Search keyword %s: %s(%s): %d result(s)", keyword, provider.Name(), response.elapsed, len(response.results))
-				results = append(results, response.results...)
-			}
+		response := responses[i]
+		if response.err != nil {
+			e.logger.Printf("Search keyword %s: %s(%s): <%v>", keyword, provider.Name(), response.elapsed, response.err)
+		} else {
+			e.logger.Printf("Search keyword %s: %s(%s): %d result(s)", keyword, provider.Name(), response.elapsed, len(response.results))
+			results = append(results, response.results...)
+		}
 		if fallback {
 			// Keep database fallback inside the selected category; querying the
 			// whole database here could leak matches from unrelated categories.
