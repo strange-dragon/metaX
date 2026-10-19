@@ -294,6 +294,41 @@ func normalizeNumber(value string) string {
 	return value
 }
 
+/*
+fc2ArticleID recognizes the FC2 catalog variants used by Airav and Amane.
+Hyphens and spaces are insignificant; underscores are accepted only at the
+FC2/PPV and PPV/ID boundaries.
+*/
+func fc2ArticleID(number string) string {
+	value := strings.ToLower(strings.NewReplacer("-", "", " ", "", "\t", "").Replace(norm.NFKC.String(strings.TrimSpace(number))))
+	if !strings.HasPrefix(value, "fc2") {
+		return ""
+	}
+	suffix := strings.TrimPrefix(value, "fc2")
+	suffix = strings.TrimPrefix(suffix, "_")
+	if strings.HasPrefix(suffix, "ppv") {
+		suffix = strings.TrimPrefix(suffix, "ppv")
+		suffix = strings.TrimPrefix(suffix, "_")
+	}
+	if suffix == "" {
+		return ""
+	}
+	for _, r := range suffix {
+		if r < '0' || r > '9' {
+			return ""
+		}
+	}
+	return suffix
+}
+
+func sameNumber(left, right string) bool {
+	if normalizeNumber(left) == normalizeNumber(right) {
+		return true
+	}
+	leftID, rightID := fc2ArticleID(left), fc2ArticleID(right)
+	return leftID != "" && leftID == rightID
+}
+
 func leadingToken(value string) string {
 	fields := strings.Fields(strings.TrimSpace(norm.NFKC.String(value)))
 	if len(fields) == 0 {
@@ -329,18 +364,50 @@ func (p *Airav) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) 
 	if keyword == "" {
 		return nil, nil
 	}
-	doc, err := p.getHTML(p.searchURL(keyword))
+
+	// Airav indexes FC2 articles under FC2-PPV-<id> even when the caller
+	// supplies the shorter FC2-<id> form. Try that canonical variant first,
+	// then the original query; stop at the first exact result like Amane.
+	terms := make([]string, 0, 2)
+	if articleID := fc2ArticleID(keyword); articleID != "" {
+		canonical := "FC2-PPV-" + articleID
+		if normalizeNumber(canonical) != normalizeNumber(keyword) {
+			terms = append(terms, canonical)
+		}
+	}
+	terms = append(terms, keyword)
+
+	var firstErr error
+	for _, term := range terms {
+		results, err := p.searchMovieTerm(term, keyword)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if len(results) > 0 {
+			return results, nil
+		}
+	}
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return nil, nil
+}
+
+func (p *Airav) searchMovieTerm(term, requestedNumber string) ([]*model.MovieSearchResult, error) {
+	doc, err := p.getHTML(p.searchURL(term))
 	if err != nil {
 		return nil, err
 	}
 	results := make([]*model.MovieSearchResult, 0, 4)
 	seen := make(map[string]struct{})
-	queryNumber := normalizeNumber(keyword)
 	doc.Find("div.oneVideo").Each(func(_ int, card *goquery.Selection) {
 		href, _ := card.Find("a[href]").First().Attr("href")
 		title := strings.TrimSpace(card.Find("h5").First().Text())
 		token := leadingToken(title)
-		if href == "" || token == "" || normalizeNumber(token) != queryNumber {
+		if href == "" || token == "" || !sameNumber(token, requestedNumber) {
 			return
 		}
 		homepage := absoluteURL(p.baseURL, href)
@@ -394,9 +461,8 @@ func (p *Airav) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	query := normalizeNumber(id)
 	for _, result := range results {
-		if normalizeNumber(result.Number) == query {
+		if sameNumber(result.Number, id) {
 			return p.GetMovieInfoByURL(result.Homepage)
 		}
 	}
