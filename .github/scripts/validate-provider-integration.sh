@@ -248,7 +248,7 @@ EOF
 # disposable SDK checkout. Existing SDK search result models and JSON envelope
 # remain unchanged.
 mkdir -p "$sdk_root/engine"
-cp "$workspace_root/overlays/metatube-sdk-go/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
+cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
 if [[ ! -e "$sdk_root/routing" ]]; then
   cp -R "$workspace_root/routing" "$sdk_root/routing"
 fi
