@@ -389,7 +389,12 @@ func (p *JavDB) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		return nil, err
 	}
 
-	number := attrText(doc.Find("a.button.is-white.copy-to-clipboard").First(), "data-clipboard-text")
+	number := attrText(doc.Find(".copy-to-clipboard[data-clipboard-text]").First(), "data-clipboard-text")
+	if number == "" {
+		// Keep the extraction tolerant of markup changes to the copy control while
+		// still requiring an explicit work-number attribute on the detail page.
+		number = attrText(doc.Find("[data-clipboard-text]").First(), "data-clipboard-text")
+	}
 	if number == "" {
 		// A normal HTTP response without the detail-page marker can be a
 		// not-found page or an anti-bot interstitial. Do not fabricate fields.
