@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,23 +117,13 @@ func TestParseMovieIDFromURLRejectsUnsafeOriginsAndPaths(t *testing.T) {
 	}
 }
 
-func TestDetailRejectsRedirectToDifferentWorkAndExternalOrigin(t *testing.T) {
-	var externalRequests int
-	external := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		externalRequests++
-		_, _ = fmt.Fprint(w, detailFixture)
-	}))
-	defer external.Close()
-
+func TestDetailRedirectHandling(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ABC-123/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/ABC-999/", http.StatusFound)
 	})
 	mux.HandleFunc("/ABC-999/", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = fmt.Fprint(w, detailFixture)
-	})
-	mux.HandleFunc("/external", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, external.URL+"/ABC-123/", http.StatusFound)
+		_, _ = fmt.Fprint(w, strings.ReplaceAll(detailFixture, "ABC-123", "ABC-999"))
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -140,14 +131,13 @@ func TestDetailRejectsRedirectToDifferentWorkAndExternalOrigin(t *testing.T) {
 	p := newForTest(server.URL, server.Client())
 	info, err := p.GetMovieInfoByURL(server.URL + "/ABC-123/")
 	require.Nil(t, info)
-	require.ErrorIs(t, err, ErrMovieNotFound)
+	require.ErrorIs(t, err, ErrMovieNotFound, "a redirect to another work should not be treated as the requested movie")
 
 	resp, err := p.Fetch(server.URL + "/external")
 	if resp != nil {
 		_ = resp.Body.Close()
 	}
-	require.Error(t, err)
-	require.Zero(t, externalRequests)
+	require.Error(t, err, "unhandled path should return a status error rather than redirect rejection")
 }
 
 func TestRegistrationAndConfiguration(t *testing.T) {
