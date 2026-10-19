@@ -40,7 +40,6 @@ func TestGetMovieInfoByIDFallsBackToExactSearchCardWhenDetailNumberMissing(t *te
 	require.Equal(t, "https://images.example/101926.jpg", info.CoverURL)
 }
 
-
 func TestGetMovieInfoByIDTreatsFC2PPVAsSearchNumber(t *testing.T) {
 	directSlugHits := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
