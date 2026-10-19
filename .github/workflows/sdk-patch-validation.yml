@@ -18,6 +18,7 @@ on:
       - "provider/javlibrary/**"
       - "provider/xcity/**"
       - ".github/scripts/validate-provider-integration.sh"
+      - ".github/overlays/**"
       - ".github/scripts/build-metatube-server.sh"
       - ".github/workflows/sdk-patch-validation.yml"
   workflow_dispatch:
