@@ -355,10 +355,9 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if u, err := url.Parse(id); err == nil && u.IsAbs() {
 		return p.GetMovieInfoByURL(id)
 	}
-	// IDs containing common work-number separators (for example 101926_01)
-	// are search terms, not opaque detail slugs. Trying /v/{number} first can
-	// turn a valid search fallback into an early HTTP 404.
-	if !movieNumberRE.MatchString(id) && !strings.ContainsAny(id, "._-") {
+	// Recognized work numbers are search terms. Other values are treated as
+	// opaque detail slugs, including slugs that happen to contain hyphens.
+	if !movieNumberRE.MatchString(id) {
 		info, err := p.GetMovieInfoByURL(p.detailURL(id))
 		if err == nil && info != nil {
 			return info, nil
