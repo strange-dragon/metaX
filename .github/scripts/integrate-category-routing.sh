@@ -30,14 +30,14 @@ source = source.replace(
     1,
 )
 source = source.replace(
-    '\t"github.com/metatube-community/metatube-sdk-go/model"\n',
-    '\t"github.com/metatube-community/metatube-sdk-go/model"\n'
-    '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
+    '\t"github.com/metatube-community/metatube-sdk-go/errors"\n',
+    '\tsdkerrors "github.com/metatube-community/metatube-sdk-go/errors"\n',
     1,
 )
 source = source.replace(
-    '\t"github.com/metatube-community/metatube-sdk-go/errors"\n',
-    '\tsdkerrors "github.com/metatube-community/metatube-sdk-go/errors"\n',
+    '\t"github.com/metatube-community/metatube-sdk-go/model"\n',
+    '\t"github.com/metatube-community/metatube-sdk-go/model"\n'
+    '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
     1,
 )
 source = source.replace(
@@ -54,16 +54,12 @@ source = source.replace(
     '\treturn func(c *gin.Context) {',
     1,
 )
-source = source.replace(
-    '''\t\tcase movieSearchType:
-\t\t\tif isValidURL {
-\t\t\t\tresults, err = app.GetMovieInfoByURL(query.Q, true /* always lazy */)
-\t\t\t} else if searchAll {
-\t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
-\t\t\t} else {
-\t\t\t\tresults, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
-\t\t\t}''',
-    '''\t\tcase movieSearchType:
+
+start = source.find('\t\tcase movieSearchType:')
+end = source.find('\t\tdefault:', start)
+if start < 0 or end < 0:
+    raise SystemExit("could not locate movie search switch block")
+source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\tif isValidURL {
 \t\t\t\tresults, err = app.GetMovieInfoByURL(query.Q, true /* always lazy */)
 \t\t\t} else if query.Provider != "" {
@@ -84,26 +80,29 @@ source = source.replace(
 \t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
 \t\t\t} else {
 \t\t\t\tresults, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
-\t\t\t}''',
-    1,
-)
+\t\t\t}
+''' + source[end:]
+
 source = source.replace(
-    '''\t\tif err != nil {
+    'abortWithError(c, errors.FromCode(http.StatusNotFound))',
+    'abortWithError(c, sdkerrors.FromCode(http.StatusNotFound))',
+)
+needle = '''\t\tif err != nil {
 \t\t\tabortWithError(c, err)
 \t\t\treturn
-\t\t}''',
-    '''\t\tif err != nil {
+\t\t}'''
+replacement = '''\t\tif err != nil {
 \t\t\tif stderrors.Is(err, routing.ErrUnknownCategory) {
 \t\t\t\tabortWithStatusMessage(c, http.StatusBadRequest, err)
 \t\t\t\treturn
 \t\t\t}
 \t\t\tabortWithError(c, err)
 \t\t\treturn
-\t\t}''',
-    1,
-)
-source = source.replace('abortWithError(c, errors.FromCode(http.StatusNotFound))',
-                        'abortWithError(c, sdkerrors.FromCode(http.StatusNotFound))')
+\t\t}'''
+index = source.rfind(needle)
+if index < 0:
+    raise SystemExit("could not locate search error handler")
+source = source[:index] + replacement + source[index + len(needle):]
 
 required = [
     'stderrors "errors"',
@@ -111,6 +110,7 @@ required = [
     'Category string `form:"category"`',
     'func getSearchWithConfig(',
     'app.SearchMovieProviders(query.Q, providers, query.Fallback)',
+    'stderrors.Is(err, routing.ErrUnknownCategory)',
 ]
 missing = [item for item in required if item not in source]
 if missing:
