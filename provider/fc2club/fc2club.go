@@ -39,7 +39,7 @@ var (
 	ErrMovieNotFound = errors.New("fc2club: movie not found")
 	fc2PrefixRE      = regexp.MustCompile(`(?i)^FC2(?:[-_]?PPV)?[-_]?`)
 	digitsOnlyRE     = regexp.MustCompile(`^\d+$`)
-	numberInTextRE   = regexp.MustCompile(`(?i)FC2[-_](\d+)`)
+	numberInTextRE   = regexp.MustCompile(`(?i)FC2[-_ ]?(?:PPV[-_ ]?)?(\d+)`)
 	releaseDateRE    = regexp.MustCompile(`(\d{4})[-/](\d{2})[-/](\d{2})`)
 )
 
