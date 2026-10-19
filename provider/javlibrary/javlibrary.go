@@ -19,9 +19,11 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	fhttp "github.com/bogdanfinn/fhttp"
+	fhttpcookiejar "github.com/bogdanfinn/fhttp/cookiejar"
 	tlsclient "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
 	"github.com/lib/pq"
+	"golang.org/x/net/publicsuffix"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
 
@@ -52,6 +54,7 @@ var (
 
 type JavLibrary struct {
 	baseURL    *url.URL
+	cookieJar  fhttp.CookieJar
 	clientMu   sync.RWMutex
 	client     *http.Client
 	timeout    time.Duration
@@ -62,7 +65,7 @@ type JavLibrary struct {
 
 func New() *JavLibrary {
 	u, _ := url.Parse(defaultURL)
-	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority}
+	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority, cookieJar: newFingerprintCookieJar()}
 	p.rebuildClientLocked()
 	return p
 }
@@ -81,6 +84,14 @@ func newForTest(base string, client *http.Client) *JavLibrary {
 		p.rebuildClientLocked()
 	}
 	return p
+}
+
+func newFingerprintCookieJar() fhttp.CookieJar {
+	jar, err := fhttpcookiejar.New(&fhttpcookiejar.Options{PublicSuffixList: publicsuffix.List})
+	if err != nil {
+		return nil
+	}
+	return jar
 }
 
 func (p *JavLibrary) Name() string { return Name }
@@ -221,8 +232,8 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 }
 
 // fingerprintProfile pairs a TLS ClientHello profile with a matching browser User-Agent.
-// The standard net/http request is tried first; browser profiles are used only after a
-// 403/406 response, so ordinary requests keep the lightweight standard transport.
+// Browser profiles are tried in order. A 403/406 triggers a one-second pause and the
+// next profile, while a shared cookie jar preserves upstream challenge cookies.
 type fingerprintProfile struct {
 	name      string
 	profile   profiles.ClientProfile
@@ -253,7 +264,10 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 
 	var lastError error
 	var failures []string
-	for _, fingerprint := range javLibraryFingerprintProfiles {
+	for i, fingerprint := range javLibraryFingerprintProfiles {
+		if i > 0 {
+			time.Sleep(time.Second)
+		}
 		options := []tlsclient.HttpClientOption{
 			tlsclient.WithTimeoutSeconds(max(1, int(timeout.Seconds()))),
 			tlsclient.WithClientProfile(fingerprint.profile),
@@ -261,6 +275,9 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 		}
 		if proxyURL != "" {
 			options = append(options, tlsclient.WithProxyUrl(proxyURL))
+		}
+		if p.cookieJar != nil {
+			options = append(options, tlsclient.WithCookieJar(p.cookieJar))
 		}
 		client, err := tlsclient.NewHttpClient(tlsclient.NewNoopLogger(), options...)
 		if err != nil {
@@ -276,7 +293,7 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 			continue
 		}
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotAcceptable {
-			failures = append(failures, fmt.Sprintf("%s=%s", fingerprint.name, resp.Status))
+			failures = append(failures, fingerprintFailureDetail(fingerprint.name, resp))
 			_ = resp.Body.Close()
 			continue
 		}
@@ -289,6 +306,18 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 		lastError = errors.New("all browser fingerprint attempts failed")
 	}
 	return nil, lastError
+}
+
+func fingerprintFailureDetail(name string, resp *http.Response) string {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 512))
+	bodyText := strings.Join(strings.Fields(string(body)), " ")
+	if len(bodyText) > 240 {
+		bodyText = bodyText[:240] + "…"
+	}
+	if err != nil {
+		bodyText = fmt.Sprintf("<body read failed: %v>", err)
+	}
+	return fmt.Sprintf("%s=%s server=%q content-type=%q body=%q", name, resp.Status, resp.Header.Get("Server"), resp.Header.Get("Content-Type"), bodyText)
 }
 
 func (p *JavLibrary) doFingerprintRequest(client tlsclient.HttpClient, original *http.Request, userAgent string) (*http.Response, error) {
