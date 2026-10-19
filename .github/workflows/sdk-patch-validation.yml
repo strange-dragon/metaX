@@ -1,4 +1,5 @@
 name: Validate and build MetaTube server with native providers
+# Retry marker: re-run SDK integration validation on the current tree.
 
 on:
   push:
