@@ -18,6 +18,9 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	fhttp "github.com/bogdanfinn/fhttp"
+	tlsclient "github.com/bogdanfinn/tls-client"
+	"github.com/bogdanfinn/tls-client/profiles"
 	"github.com/lib/pq"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
@@ -204,14 +207,150 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("javlibrary: GET %s: %w", raw, err)
 	}
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotAcceptable {
+		_ = resp.Body.Close()
+		resp, err = p.fetchWithFingerprintRotation(req)
+		if err != nil {
+			return nil, fmt.Errorf("javlibrary: GET %s after browser fingerprint retries: %w", raw, err)
+		}
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		resp.Body.Close()
-		if resp.StatusCode == 404 {
+		_ = resp.Body.Close()
+		if resp.StatusCode == http.StatusNotFound {
 			return nil, ErrMovieNotFound
 		}
 		return nil, fmt.Errorf("javlibrary: unexpected HTTP status %s", resp.Status)
 	}
 	return resp, nil
+}
+
+// fingerprintProfile pairs a TLS ClientHello profile with a matching browser User-Agent.
+// The standard net/http request is tried first; browser profiles are used only after a
+// 403/406 response, so ordinary requests keep the lightweight standard transport.
+type fingerprintProfile struct {
+	profile   profiles.ClientProfile
+	userAgent string
+}
+
+var javLibraryFingerprintProfiles = []fingerprintProfile{
+	{profile: profiles.Chrome_131, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+	{profile: profiles.Chrome_136, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"},
+	{profile: profiles.Firefox_135, userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0"},
+}
+
+func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http.Response, error) {
+	p.clientMu.RLock()
+	timeout, proxyURL := p.timeout, p.proxyURL
+	p.clientMu.RUnlock()
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	if proxyURL == "" {
+		if envProxy, err := http.ProxyFromEnvironment(original); err == nil && envProxy != nil {
+			proxyURL = envProxy.String()
+		}
+	}
+
+	var lastResponse *http.Response
+	var lastError error
+	for _, fingerprint := range javLibraryFingerprintProfiles {
+		options := []tlsclient.HttpClientOption{
+			tlsclient.WithTimeoutSeconds(max(1, int(timeout.Seconds()))),
+			tlsclient.WithClientProfile(fingerprint.profile),
+			tlsclient.WithNotFollowRedirects(),
+		}
+		if proxyURL != "" {
+			options = append(options, tlsclient.WithProxyUrl(proxyURL))
+		}
+		client, err := tlsclient.NewHttpClient(tlsclient.NewNoopLogger(), options...)
+		if err != nil {
+			lastError = err
+			continue
+		}
+		resp, err := p.doFingerprintRequest(client, original, fingerprint.userAgent)
+		client.CloseIdleConnections()
+		if err != nil {
+			lastError = err
+			continue
+		}
+		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotAcceptable {
+			if lastResponse != nil {
+				_ = lastResponse.Body.Close()
+			}
+			lastResponse = resp
+			continue
+		}
+		if lastResponse != nil {
+			_ = lastResponse.Body.Close()
+		}
+		return resp, nil
+	}
+	if lastResponse != nil {
+		return lastResponse, nil
+	}
+	if lastError == nil {
+		lastError = errors.New("all browser fingerprint attempts failed")
+	}
+	return nil, lastError
+}
+
+func (p *JavLibrary) doFingerprintRequest(client tlsclient.HttpClient, original *http.Request, userAgent string) (*http.Response, error) {
+	current := *original.URL
+	previous := ""
+	for redirects := 0; ; redirects++ {
+		req, err := fhttp.NewRequestWithContext(original.Context(), original.Method, current.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		for key, values := range original.Header {
+			req.Header[key] = append([]string(nil), values...)
+		}
+		req.Header.Set("User-Agent", userAgent)
+		if previous != "" {
+			req.Header.Set("Referer", previous)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		isRedirect := resp.StatusCode == http.StatusMovedPermanently ||
+			resp.StatusCode == http.StatusFound ||
+			resp.StatusCode == http.StatusSeeOther ||
+			resp.StatusCode == http.StatusTemporaryRedirect ||
+			resp.StatusCode == http.StatusPermanentRedirect
+		location := resp.Header.Get("Location")
+		if !isRedirect || location == "" {
+			return toStandardResponse(resp, original), nil
+		}
+		if redirects >= 10 {
+			_ = resp.Body.Close()
+			return nil, errors.New("stopped after 10 redirects")
+		}
+		reference, err := url.Parse(location)
+		if err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("parse redirect location: %w", err)
+		}
+		next := current.ResolveReference(reference)
+		if !p.validOrigin(next) {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("refusing cross-origin redirect to %q", next)
+		}
+		_ = resp.Body.Close()
+		previous = current.String()
+		current = *next
+	}
+}
+
+func toStandardResponse(resp *fhttp.Response, request *http.Request) *http.Response {
+	header := make(http.Header, len(resp.Header))
+	for key, values := range resp.Header {
+		header[key] = append([]string(nil), values...)
+	}
+	return &http.Response{
+		Status: resp.Status, StatusCode: resp.StatusCode, Header: header, Body: resp.Body,
+		ContentLength: resp.ContentLength, Request: request,
+	}
 }
 func (p *JavLibrary) getHTML(raw string) (*goquery.Document, error) {
 	resp, err := p.Fetch(raw)

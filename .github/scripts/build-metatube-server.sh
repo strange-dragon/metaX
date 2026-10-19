@@ -53,6 +53,11 @@ for patch in "${patches[@]}"; do
   git -C "$sdk_root" apply "$patch_path"
 done
 
+# Pin the TLS-fingerprint client used by the JavLibrary provider in this disposable SDK workspace.
+cd "$sdk_root"
+go get github.com/bogdanfinn/tls-client@v1.14.0
+cd "$workspace_root"
+
 bash "$workspace_root/.github/scripts/validate-provider-integration.sh" "$sdk_root"
 
 cd "$sdk_root"

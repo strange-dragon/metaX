@@ -4,6 +4,8 @@ go 1.26.0
 
 require (
 	github.com/PuerkitoBio/goquery v1.13.0
+	github.com/bogdanfinn/fhttp v0.6.8
+	github.com/bogdanfinn/tls-client v1.14.0
 	github.com/lib/pq v1.12.3
 	github.com/metatube-community/metatube-sdk-go v0.0.0-20261011210842-c62584675c59
 	github.com/stretchr/testify v1.12.1
