@@ -96,7 +96,7 @@ func TestNotFoundPageAndRegistration(t *testing.T) {
 	require.True(t, found, "Jav321 should register with MetaTube's Provider factory")
 }
 
-func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
+func TestFetchFollowsRedirectOutsideConfiguredOrigin(t *testing.T) {
 	targetRequested := false
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		targetRequested = true
@@ -111,12 +111,11 @@ func TestFetchRejectsRedirectOutsideConfiguredOrigin(t *testing.T) {
 
 	p := newForTest(source.URL, nil)
 	resp, err := p.Fetch(source.URL + "/start")
-	if resp != nil {
-		_ = resp.Body.Close()
-	}
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "refusing redirect")
-	require.False(t, targetRequested, "redirect destination must not be requested")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.True(t, targetRequested, "Jav321 scraping should follow redirects like Amane")
 }
 
 func TestParseMovieIDFromURLRejectsUnexpectedOriginDetails(t *testing.T) {
