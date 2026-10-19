@@ -98,6 +98,11 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 		if registeredName, ok := canonical[name]; ok {
 			return []string{registeredName}, nil
 		}
+		for _, alias := range providerAliases[name] {
+			if registeredName, ok := canonical[normalize(alias)]; ok {
+				return []string{registeredName}, nil
+			}
+		}
 		return nil, fmt.Errorf("%w: %s", ErrProviderUnavailable, explicitProvider)
 	}
 
