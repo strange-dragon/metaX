@@ -59,6 +59,7 @@ go get github.com/bogdanfinn/tls-client@v1.14.0
 cd "$workspace_root"
 
 bash "$workspace_root/.github/scripts/validate-provider-integration.sh" "$sdk_root"
+bash "$workspace_root/.github/scripts/integrate-category-routing.sh" "$sdk_root"
 
 cd "$sdk_root"
 echo "Running native provider registration and API discovery tests"
