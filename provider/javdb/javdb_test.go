@@ -51,6 +51,8 @@ const detailFixture = `<!doctype html>
 func TestNormalizeAndParseMovieID(t *testing.T) {
 	p := New()
 	require.Equal(t, "SSIS-033", p.NormalizeMovieKeyword("　ssis-033 "))
+	require.Equal(t, "101926_01", p.NormalizeMovieID("101926_01"))
+	require.Equal(t, "101926-01", p.NormalizeMovieID("101926-01"))
 	id, err := p.ParseMovieIDFromURL("https://javdb.com/v/AbCdE123?locale=zh")
 	require.NoError(t, err)
 	require.Equal(t, "AbCdE123", id)
