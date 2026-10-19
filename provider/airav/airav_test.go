@@ -211,3 +211,56 @@ func TestDetailRedirectRejectsNoncanonicalRouteWithSameID(t *testing.T) {
 	require.ErrorIs(t, err, ErrMovieNotFound)
 	require.Nil(t, info)
 }
+
+
+func TestSearchMovieFC2CanonicalVariantFallback(t *testing.T) {
+	var queries []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search_result", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("kw")
+		queries = append(queries, query)
+		if query == "FC2-PPV-12345" {
+			_, _ = fmt.Fprint(w, "<html><body>No result for canonical query</body></html>")
+			return
+		}
+		if query == "FC2-12345" {
+			_, _ = fmt.Fprint(w, `<html><body><div class="oneVideo">
+				<a href="/video/fc2-target"><img src="/images/fc2.jpg"></a>
+				<h5>FC2-12345 Exact title</h5>
+			</div></body></html>`)
+			return
+		}
+		t.Errorf("unexpected search query %q", query)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	results, err := p.SearchMovie("FC2-12345")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "FC2-12345", results[0].Number)
+	require.Equal(t, []string{"FC2-PPV-12345", "FC2-12345"}, queries)
+}
+
+func TestSearchMovieFC2NumberVariantsMatchSameArticle(t *testing.T) {
+	for _, query := range []string{"FC2-12345", "FC2PPV12345", "FC2_PPV_12345"} {
+		t.Run(query, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/search_result", func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = fmt.Fprint(w, `<html><body><div class="oneVideo">
+					<a href="/video/fc2-target"><img src="/images/fc2.jpg"></a>
+					<h5>FC2-PPV-12345 Exact title</h5>
+				</div></body></html>`)
+			})
+			server := httptest.NewServer(mux)
+			defer server.Close()
+
+			p := newForTest(server.URL, server.Client())
+			results, err := p.SearchMovie(query)
+			require.NoError(t, err)
+			require.Len(t, results, 1)
+			require.Equal(t, server.URL+"/video/fc2-target", results[0].Homepage)
+		})
+	}
+}
