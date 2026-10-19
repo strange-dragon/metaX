@@ -150,7 +150,7 @@ func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
 	if resp != nil {
 		_ = resp.Body.Close()
 	}
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrUnsafeRedirect)
 	require.Zero(t, externalRequests)
 }
 
