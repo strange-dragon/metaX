@@ -103,4 +103,3 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 	}
 	return results, nil
 }
-
