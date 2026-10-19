@@ -82,7 +82,7 @@ func TestSearchActorReturnsMissFor404AndUnmatchedName(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, results)
 
-	results, err = p.SearchActor("Unrelated Name")
+	results, err = p.SearchActor("Other Name")
 	require.NoError(t, err)
 	require.Empty(t, results)
 }
