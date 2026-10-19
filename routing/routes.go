@@ -18,6 +18,7 @@ const (
 	CategoryChineseSubtitles Category = "chinese_subtitles"
 	CategoryAmateur          Category = "amateur"
 	CategoryWestern          Category = "western"
+	CategoryHentai            Category = "hentai"
 	CategoryAnimation        Category = "animation"
 )
 
@@ -42,11 +43,13 @@ func DefaultConfig() Config {
 	return Config{Routes: map[Category][]string{
 		CategoryCensored:         {"DMM", "JavDB", "JavBus", "Official"},
 		CategoryUncensored:       {"JavDB", "JavBus", "AVSOX", "Freejavbt"},
-		CategoryFC2:              {"JavDB", "FC2PPVDB", "FC2", "Freejavbt"},
+		CategoryFC2:              {"JavDB", "FC2PPVDB", "FC2", "Freejavbt", "Airav"},
 		CategoryChineseSubtitles: {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:          {"MGStage", "DMM", "JavDB", "JavBus"},
 		CategoryWestern:          {"ThePornDB", "JavDB", "Freejavbt"},
-		CategoryAnimation:        {"Getchu", "DMM", "JavDB"},
+		CategoryHentai:           {"Getchu", "DMM", "JavDB"},
+		// CategoryAnimation remains an alias for callers using the earlier API label.
+		CategoryAnimation:       {"Getchu", "DMM", "JavDB"},
 	}}
 }
 
