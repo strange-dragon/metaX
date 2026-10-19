@@ -35,15 +35,14 @@ type Config struct {
 	Routes map[Category][]string
 }
 
-// DefaultConfig mirrors the route order audited from Amane. Some entries are
-// intentionally retained even when a given MetaTube build does not register
-// them yet; Resolve skips unavailable providers without changing the order of
-// the providers that are available.
+// DefaultConfig merges the uncensored and FC2 routes into one uncensored category.
+// FC2 remains accepted as a legacy category alias in Resolve. Some providers
+// may not be registered by a given MetaTube build; Resolve skips those entries
+// without changing the configured order of the available providers.
 func DefaultConfig() Config {
 	return Config{Routes: map[Category][]string{
 		CategoryCensored:         {"DMM", "JavDB", "JavBus", "Official"},
-		CategoryUncensored:       {"JavDB", "JavBus", "AVSOX", "Freejavbt"},
-		CategoryFC2:              {"JavDB", "FC2PPVDB", "FC2", "Freejavbt", "Airav"},
+		CategoryUncensored:       {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
 		CategoryChineseSubtitles: {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:          {"MGStage", "DMM", "JavDB", "JavBus"},
 		CategoryWestern:          {"ThePornDB", "JavDB", "Freejavbt"},
@@ -98,6 +97,12 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 			return []string{registeredName}, nil
 		}
 		return nil, fmt.Errorf("%w: %s", ErrProviderUnavailable, explicitProvider)
+	}
+
+	// FC2 is no longer a separate content category. Keep accepting the old
+	// label so existing callers receive the combined uncensored provider set.
+	if category == CategoryFC2 {
+		category = CategoryUncensored
 	}
 
 	providers, ok := c.Routes[category]

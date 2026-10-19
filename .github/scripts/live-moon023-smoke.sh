@@ -28,7 +28,6 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/provider/airav"
 	"github.com/metatube-community/metatube-sdk-go/provider/avsox"
 	"github.com/metatube-community/metatube-sdk-go/provider/fc2club"
-	"github.com/metatube-community/metatube-sdk-go/provider/freejavbt"
 	"github.com/metatube-community/metatube-sdk-go/provider/giga"
 	"github.com/metatube-community/metatube-sdk-go/provider/iqqtv"
 	"github.com/metatube-community/metatube-sdk-go/provider/jav321"
@@ -52,7 +51,7 @@ func normalizedNumber(s string) string {
 
 func TestLiveMoon023Scrape(t *testing.T) {
 	providers := []moon023Provider{
-		airav.New(), avsox.New(), fc2club.New(), freejavbt.New(), giga.New(),
+		airav.New(), avsox.New(), fc2club.New(), giga.New(),
 		iqqtv.New(), jav321.New(), javdb.New(), javlibrary.New(), xcity.New(),
 	}
 	matched := 0
@@ -122,6 +121,6 @@ func TestLiveMoon023Scrape(t *testing.T) {
 }
 EOF
 
-echo "Running real upstream scrape for MOON-023 against 10 native movie providers..."
+echo "Running real upstream scrape for MOON-023 against 9 native movie providers..."
 cd "$sdk_root"
 go test ./route -run '^TestLiveMoon023Scrape$' -v -count=1 -timeout=8m

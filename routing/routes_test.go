@@ -10,8 +10,7 @@ func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 	config := DefaultConfig()
 	want := map[Category][]string{
 		CategoryCensored:         {"DMM", "JavDB", "JavBus", "Official"},
-		CategoryUncensored:       {"JavDB", "JavBus", "AVSOX", "Freejavbt"},
-		CategoryFC2:              {"JavDB", "FC2PPVDB", "FC2", "Freejavbt", "Airav"},
+		CategoryUncensored:       {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
 		CategoryChineseSubtitles: {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:          {"MGStage", "DMM", "JavDB", "JavBus"},
 		CategoryWestern:          {"ThePornDB", "JavDB", "Freejavbt"},
@@ -30,15 +29,27 @@ func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 
 func TestDefaultRoutesResolveInConfiguredOrderAndSkipUnavailableProviders(t *testing.T) {
 	config := DefaultConfig()
-	registered := []string{"javdb", "JavBus", "AVSOX", "Freejavbt"}
+	registered := []string{"javdb", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 
 	got, err := config.Resolve(CategoryUncensored, "", registered)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	want := []string{"javdb", "JavBus", "AVSOX", "Freejavbt"}
+	want := []string{"javdb", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Resolve() = %#v, want %#v", got, want)
+	}
+}
+
+func TestFC2LegacyCategoryResolvesToCombinedUncensoredProviders(t *testing.T) {
+	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	got, err := DefaultConfig().Resolve(CategoryFC2, "", registered)
+	if err != nil {
+		t.Fatalf("Resolve(FC2) error = %v", err)
+	}
+	want := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Resolve(FC2) = %#v, want combined uncensored providers %#v", got, want)
 	}
 }
 
