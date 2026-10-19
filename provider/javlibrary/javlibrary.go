@@ -203,16 +203,12 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.7")
 	req.Header.Set("Referer", p.baseURL.String()+"/")
-	resp, err := p.httpClient().Do(req)
+	// JavLibrary rejects generic Go TLS fingerprints. Use a browser-profiled
+	// client for the first request, then rotate profiles only when the origin
+	// returns 403/406, matching Amane's request strategy.
+	resp, err := p.fetchWithFingerprintRotation(req)
 	if err != nil {
-		return nil, fmt.Errorf("javlibrary: GET %s: %w", raw, err)
-	}
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotAcceptable {
-		_ = resp.Body.Close()
-		resp, err = p.fetchWithFingerprintRotation(req)
-		if err != nil {
-			return nil, fmt.Errorf("javlibrary: GET %s after browser fingerprint retries: %w", raw, err)
-		}
+		return nil, fmt.Errorf("javlibrary: GET %s with browser fingerprints: %w", raw, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = resp.Body.Close()
@@ -236,10 +232,10 @@ type fingerprintProfile struct {
 // Use Amane's supported browser generations where available; Chrome 133 is the
 // closest exposed TLS profile to Amane's Chrome 136 entry in tls-client v1.14.0.
 var javLibraryFingerprintProfiles = []fingerprintProfile{
-	{name: "Chrome 124", profile: profiles.Chrome_124, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
 	{name: "Chrome 131", profile: profiles.Chrome_131, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
 	{name: "Chrome 133", profile: profiles.Chrome_133, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"},
-	{name: "Firefox 133", profile: profiles.Firefox_133, userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:133.0) Gecko/20100101 Firefox/133.0"},
+	{name: "Chrome 144", profile: profiles.Chrome_144, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"},
+	{name: "Firefox 135", profile: profiles.Firefox_135, userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0"},
 }
 
 func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http.Response, error) {

@@ -142,7 +142,7 @@ func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 	var requests int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if strings.Contains(r.UserAgent(), "Chrome/131.0.0.0") {
+		if strings.Contains(r.UserAgent(), "Chrome/133.0.0.0") {
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, "fingerprint accepted")
 			return
@@ -158,5 +158,5 @@ func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, "fingerprint accepted", string(body))
-	require.Equal(t, 3, requests, "should try standard net/http, then rotate from Chrome 124 to Chrome 131")
+	require.Equal(t, 2, requests, "should start with Chrome 131 and rotate to Chrome 133 after a 403")
 }
