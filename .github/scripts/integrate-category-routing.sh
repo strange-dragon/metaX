@@ -45,11 +45,6 @@ source = source.replace(
     '\tProvider string `form:"provider"`\n\tCategory string `form:"category"`\n\tFallback bool   `form:"fallback"`',
     1,
 )
-source = source.replace(
-    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
-    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\n\tconfig := routing.DefaultConfig()',
-    1,
-)
 
 
 start = source.find('\t\tcase movieSearchType:')
@@ -63,6 +58,7 @@ source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\t\t// An explicit provider remains a manual override, even if a category is supplied.
 \t\t\t\tresults, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
 \t\t\t} else if query.Category != "" {
+\t\t\t\tconfig := routing.DefaultConfig()
 \t\t\t\tregistered := make([]string, 0, len(app.GetMovieProviders()))
 \t\t\t\tfor name := range app.GetMovieProviders() {
 \t\t\t\t\tregistered = append(registered, name)
