@@ -72,7 +72,7 @@ func New() *JavLibrary {
 
 func newForTest(base string, client *http.Client) *JavLibrary {
 	u, _ := url.Parse(base)
-	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority}
+	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority, cookieJar: newFingerprintCookieJar()}
 	if client != nil {
 		c := *client
 		c.CheckRedirect = p.checkRedirect
