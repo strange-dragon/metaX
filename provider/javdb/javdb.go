@@ -1277,10 +1277,21 @@ func westernDateParts(value string) (westernParts, bool) {
 	if err != nil || parsed.Format("2006-01-02") != dateText {
 		return westernParts{}, false
 	}
-	studio := foldNumber(match[dayNumberRE.SubexpIndex("studio")])
+	studio := foldStudio(match[dayNumberRE.SubexpIndex("studio")])
 	// A four-digit year can match its two-digit counterpart, while the rest
 	// of the date and the normalized studio must remain equal.
 	return westernParts{studio: studio, date: dateText}, true
+}
+
+func foldStudio(value string) string {
+	value = strings.ToLower(norm.NFKC.String(value))
+	var b strings.Builder
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func alternateWesternNumber(value string) string {
