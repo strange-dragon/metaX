@@ -41,9 +41,9 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 	}
 
 	type response struct {
-		results  []*model.MovieSearchResult
-		err      error
-		elapsed  time.Duration
+		results []*model.MovieSearchResult
+		err     error
+		elapsed time.Duration
 	}
 	responses := make([]response, len(providers))
 	var wg sync.WaitGroup
