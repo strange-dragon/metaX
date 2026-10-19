@@ -376,7 +376,31 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if index < 0 {
 		return nil, ErrMovieNotFound
 	}
-	return p.GetMovieInfoByURL(results[index].Homepage)
+	info, detailErr := p.GetMovieInfoByURL(results[index].Homepage)
+	if detailErr == nil {
+		return info, nil
+	}
+	if !errors.Is(detailErr, ErrMovieNotFound) {
+		return nil, detailErr
+	}
+
+	// JavDB sometimes serves a valid search card while its detail page omits
+	// the copy-control number marker. Preserve the exact matched card as a
+	// partial result instead of discarding usable title and artwork metadata.
+	result := results[index]
+	cover := strings.TrimSpace(result.ThumbURL)
+	if cover == "" {
+		return nil, detailErr
+	}
+	return &model.MovieInfo{
+		ID:       result.ID,
+		Number:   result.Number,
+		Title:    result.Title,
+		Provider: p.Name(),
+		Homepage: result.Homepage,
+		ThumbURL: cover,
+		CoverURL: cover,
+	}, nil
 }
 
 func (p *JavDB) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
