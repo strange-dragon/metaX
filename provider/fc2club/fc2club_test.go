@@ -27,6 +27,8 @@ const detailFixture = `<!doctype html><html><body>
 func TestNormalizeAndParseMovieID(t *testing.T) {
 	p := New()
 	require.Equal(t, "FC2-123456", p.NormalizeMovieID("FC2-PPV-123456"))
+	require.Equal(t, "FC2-3954834", p.NormalizeMovieID("fc2ppv3954834"))
+	require.Equal(t, "FC2-3954834", p.NormalizeMovieID("ＦＣ２－ＰＰＶ－３９５４８３４"))
 	require.Equal(t, "FC2-123456", p.NormalizeMovieKeyword("123456"))
 	id, err := p.ParseMovieIDFromURL("https://fc2club.top/html/FC2-123456.html")
 	require.NoError(t, err)
