@@ -19,6 +19,7 @@ on:
       - "provider/javlibrary/**"
       - "provider/xcity/**"
       - ".github/scripts/validate-provider-integration.sh"
+      - ".github/scripts/integrate-category-routing.sh"
       - ".github/overlays/**"
       - "routing/**"
       - ".github/scripts/build-metatube-server.sh"
