@@ -33,10 +33,10 @@ type routeTestMovieProvider struct {
 	fail bool
 }
 
-func (p *routeTestMovieProvider) Name() string                 { return p.name }
-func (*routeTestMovieProvider) Priority() float64              { return 1 }
-func (*routeTestMovieProvider) SetPriority(float64)            {}
-func (*routeTestMovieProvider) Language() language.Tag         { return language.English }
+func (p *routeTestMovieProvider) Name() string         { return p.name }
+func (*routeTestMovieProvider) Priority() float64      { return 1 }
+func (*routeTestMovieProvider) SetPriority(float64)    {}
+func (*routeTestMovieProvider) Language() language.Tag { return language.English }
 func (p *routeTestMovieProvider) URL() *url.URL {
 	u, _ := url.Parse("https://" + p.name + ".invalid")
 	return u
@@ -44,7 +44,9 @@ func (p *routeTestMovieProvider) URL() *url.URL {
 func (*routeTestMovieProvider) NormalizeMovieID(id string) string { return id }
 func (*routeTestMovieProvider) ParseMovieIDFromURL(raw string) (string, error) {
 	u, err := url.Parse(raw)
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 	return u.Path, nil
 }
 func (p *routeTestMovieProvider) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
@@ -52,14 +54,18 @@ func (p *routeTestMovieProvider) GetMovieInfoByID(id string) (*model.MovieInfo, 
 }
 func (p *routeTestMovieProvider) GetMovieInfoByURL(raw string) (*model.MovieInfo, error) {
 	id, err := p.ParseMovieIDFromURL(raw)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	return p.GetMovieInfoByID(id)
 }
 func (p *routeTestMovieProvider) NormalizeMovieKeyword(keyword string) string { return keyword }
 func (p *routeTestMovieProvider) SearchMovie(string) ([]*model.MovieSearchResult, error) {
 	routeSearchStarted <- p.name
 	<-routeSearchRelease
-	if p.fail { return nil, errors.New("simulated provider failure") }
+	if p.fail {
+		return nil, errors.New("simulated provider failure")
+	}
 	return []*model.MovieSearchResult{routeTestMovieInfo(p.name, "healthy-123").ToSearchResult()}, nil
 }
 
