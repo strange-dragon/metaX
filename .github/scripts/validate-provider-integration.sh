@@ -298,7 +298,7 @@ new = '''} else if searchAll {
 					for name := range registered {
 						names = append(names, name)
 					}
-					selected, resolveErr := routing.DefaultConfig().Resolve(routing.Category(query.Category), "", names)
+					selected, resolveErr := routingConfig.Resolve(routing.Category(query.Category), "", names)
 					if resolveErr != nil {
 						abortWithStatusMessage(c, http.StatusBadRequest, resolveErr)
 						return
