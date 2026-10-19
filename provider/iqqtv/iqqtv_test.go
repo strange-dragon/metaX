@@ -133,6 +133,30 @@ func TestDetailRejectsRedirectToDifferentWork(t *testing.T) {
 	require.ErrorIs(t, err, ErrMovieNotFound)
 }
 
+func TestParseMovieIDFromURLAllowsOnlyDocumentedRotatingHosts(t *testing.T) {
+	p := New()
+
+	for _, rawURL := range []string{
+		"https://iqqk4.quest/cn/detail/abc123",
+		"https://iqqq3.quest/cn/detail/abc123",
+	} {
+		id, err := p.ParseMovieIDFromURL(rawURL)
+		require.NoError(t, err, rawURL)
+		require.Equal(t, "cn/detail/abc123", id)
+	}
+
+	for _, rawURL := range []string{
+		"https://unrelated.quest/cn/detail/abc123",
+		"https://iqqq3.quest.evil.invalid/cn/detail/abc123",
+		"https://iqqq3.quest:444/cn/detail/abc123",
+		"http://iqqq3.quest/cn/detail/abc123",
+		"https://user@iqqq3.quest/cn/detail/abc123",
+	} {
+		_, err := p.ParseMovieIDFromURL(rawURL)
+		require.Error(t, err, rawURL)
+	}
+}
+
 func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
 	var externalRequests int
 	external := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
