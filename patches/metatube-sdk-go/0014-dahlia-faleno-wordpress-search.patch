@@ -23,7 +23,7 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
  	"encoding/json"
 +	"errors"
  	"fmt"
-@@ -25,3 +26,5 @@
+@@ -28,3 +29,5 @@
  	DefaultPriority float64
  	DefaultName     string
  }
