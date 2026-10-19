@@ -47,7 +47,7 @@ source = source.replace(
 )
 source = source.replace(
     'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
-    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\\n\\tconfig := routing.DefaultConfig()',
+    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\n\tconfig := routing.DefaultConfig()',
     1,
 )
 
