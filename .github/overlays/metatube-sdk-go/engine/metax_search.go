@@ -40,6 +40,13 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		return nil, mt.ErrProviderNotFound
 	}
 
+	// Keep the configured Amane route order available for deterministic
+	// tie-breaking after concurrent searches finish.
+	providerOrder := make(map[string]int, len(providers))
+	for i, provider := range providers {
+		providerOrder[provider.Name()] = i
+	}
+
 	type response struct {
 		results []*model.MovieSearchResult
 		err     error
@@ -104,6 +111,11 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		leftScore := comparer.Compare(keyword, left.Number) * leftProvider.Priority()
 		rightScore := comparer.Compare(keyword, right.Number) * rightProvider.Priority()
 		if leftScore == rightScore {
+			leftOrder, leftOK := providerOrder[leftProvider.Name()]
+			rightOrder, rightOK := providerOrder[rightProvider.Name()]
+			if leftOK && rightOK && leftOrder != rightOrder {
+				return leftOrder < rightOrder
+			}
 			return leftProvider.Priority() > rightProvider.Priority()
 		}
 		return leftScore > rightScore
