@@ -293,3 +293,13 @@ func TestSearchMovieFC2FallsBackAfterCanonicalRequestError(t *testing.T) {
 	require.Equal(t, "FC2-12345", results[0].Number)
 	require.Equal(t, []string{"FC2-PPV-12345", "FC2-12345"}, queries)
 }
+func TestFC2ArticleIDNormalizationRejectsMalformedAndNearNumbers(t *testing.T) {
+	require.Equal(t, "12345", fc2ArticleID("FC2-PPV-12345"))
+	require.Equal(t, "12345", fc2ArticleID("FC2_ PPV _12345"))
+	require.Equal(t, "12345", fc2ArticleID("FC2PPV12345"))
+	require.Empty(t, fc2ArticleID("ABC-12345"))
+	require.Empty(t, fc2ArticleID("FC2-12345-extra"))
+	require.Empty(t, fc2ArticleID("FC2-12345x"))
+	require.True(t, sameNumber("FC2-PPV-12345", "FC2-12345"))
+	require.False(t, sameNumber("FC2-PPV-123456", "FC2-12345"))
+}
