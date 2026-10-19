@@ -224,7 +224,6 @@ func (p *Jav321) rebuildClientLocked() {
 	p.client = &http.Client{
 		Transport: transport,
 		Timeout:   timeout,
-
 	}
 }
 
