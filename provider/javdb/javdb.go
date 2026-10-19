@@ -355,7 +355,10 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if u, err := url.Parse(id); err == nil && u.IsAbs() {
 		return p.GetMovieInfoByURL(id)
 	}
-	if !movieNumberRE.MatchString(id) {
+	// IDs containing common work-number separators (for example 101926_01)
+	// are search terms, not opaque detail slugs. Trying /v/{number} first can
+	// turn a valid search fallback into an early HTTP 404.
+	if !movieNumberRE.MatchString(id) && !strings.ContainsAny(id, "._-") {
 		info, err := p.GetMovieInfoByURL(p.detailURL(id))
 		if err == nil && info != nil {
 			return info, nil
