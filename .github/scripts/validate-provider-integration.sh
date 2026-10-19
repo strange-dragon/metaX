@@ -10,7 +10,7 @@ fi
 
 workspace_root="$(cd "$(dirname "$0")/../.." && pwd)"
 sdk_root="$(cd "$1" && pwd)"
-providers=(airav avsox fc2club freejavbt giga iqqtv jav321 javdb javlibrary minnano xcity)
+providers=(avbaseactor airav avsox fc2club freejavbt giga iqqtv jav321 javdb javlibrary minnano xcity)
 test -f "$sdk_root/engine/register.go"
 
 for provider in "${providers[@]}"; do
@@ -33,7 +33,7 @@ text = path.read_text()
 marker = "import (\n"
 if marker not in text:
     raise SystemExit("engine/register.go import block not found")
-for provider in ("airav", "avsox", "fc2club", "freejavbt", "giga", "iqqtv", "jav321", "javdb", "javlibrary", "minnano", "xcity"):
+for provider in ("avbaseactor", "airav", "avsox", "fc2club", "freejavbt", "giga", "iqqtv", "jav321", "javdb", "javlibrary", "minnano", "xcity"):
     line = f'\t_ "github.com/metatube-community/metatube-sdk-go/provider/{provider}"'
     if line not in text:
         text = text.replace(marker, marker + line + "\n", 1)
@@ -53,7 +53,7 @@ func TestMetaXNativeProvidersAreRegistered(t *testing.T) {
 			t.Errorf("movie provider %s was not discovered by the SDK engine", name)
 		}
 	}
-	for _, name := range []string{"JavDBActor", "MinnanoActor"} {
+	for _, name := range []string{"AVBaseActor", "JavDBActor", "MinnanoActor"} {
 		if !e.IsActorProvider(name) {
 			t.Errorf("actor provider %s was not discovered by the SDK engine", name)
 		}
@@ -97,7 +97,7 @@ func TestMetaXProvidersEndpointListsIntegratedProviders(t *testing.T) {
 			t.Errorf("GET /v1/providers did not expose movie provider %q", name)
 		}
 	}
-	for _, name := range []string{"JavDBActor", "MinnanoActor"} {
+	for _, name := range []string{"AVBaseActor", "JavDBActor", "MinnanoActor"} {
 		if _, ok := response.Data.ActorProviders[name]; !ok {
 			t.Errorf("GET /v1/providers did not expose actor provider %q", name)
 		}
@@ -108,7 +108,7 @@ EOF
 gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test.go" "$sdk_root/route/metax_integration_test.go"
 
 echo "Eleven-package native movie/actor integration overlay applied. Validate from: $sdk_root"
-echo "Focused tests: go test ./engine ./route ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1"
+echo "Focused tests: go test ./engine ./route ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1"
 echo "Full regression: go test \$(go list ./... | grep -Ev \"github.com/metatube-community/metatube-sdk-go/translate\")"
 echo "Server build: go build -o /tmp/metatube-server ./cmd/server"
 
