@@ -103,9 +103,9 @@ func TestLegacyFC2CategoryResolvesToMergedUncensoredRoute(t *testing.T) {
 	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	got, err := DefaultConfig().Resolve(CategoryFC2, "", registered)
 	if err != nil {
-		t.Fatalf("Resolve(FC2) error = %v", err)
+		t.Fatalf("Resolve(FC2 legacy alias) error = %v", err)
 	}
-	want := []string{"JavDB", "FC2PPVDB", "FC2", "Freejavbt"}
+	want := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Resolve(FC2 legacy alias) = %#v, want merged uncensored providers %#v", got, want)
 	}
