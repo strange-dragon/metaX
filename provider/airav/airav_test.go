@@ -264,7 +264,6 @@ func TestSearchMovieFC2NumberVariantsMatchSameArticle(t *testing.T) {
 	}
 }
 
-
 func TestSearchMovieFC2FallsBackAfterCanonicalRequestError(t *testing.T) {
 	var queries []string
 	mux := http.NewServeMux()
