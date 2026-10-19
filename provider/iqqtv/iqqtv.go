@@ -39,6 +39,7 @@ const (
 
 var (
 	ErrMovieNotFound = errors.New("iqqtv: movie not found")
+	ErrUnsafeRedirect = errors.New("iqqtv: unsafe redirect")
 	excludedWords    = []string{"克破", "无码破解", "無碼破解", "无码流出", "無碼流出"}
 	validPathPartRE  = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 	catalogNumberRE  = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\d+[A-Za-z0-9_-]*$`)
@@ -182,7 +183,7 @@ func (p *IQQTV) checkRedirect(req *http.Request, via []*http.Request) error {
 		return fmt.Errorf("iqqtv: stopped after 10 redirects")
 	}
 	if !p.validOrigin(req.URL) {
-		return fmt.Errorf("iqqtv: refusing redirect to unexpected origin %q", req.URL)
+		return fmt.Errorf("%w: refusing redirect to unexpected origin %q", ErrUnsafeRedirect, req.URL)
 	}
 	return nil
 }
