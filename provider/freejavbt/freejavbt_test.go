@@ -118,12 +118,22 @@ func TestParseMovieIDFromURLRejectsUnsafeOriginsAndPaths(t *testing.T) {
 }
 
 func TestDetailRedirectHandling(t *testing.T) {
+	var externalRequests int
+	external := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		externalRequests++
+		_, _ = fmt.Fprint(w, detailFixture)
+	}))
+	defer external.Close()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ABC-123/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/ABC-999/", http.StatusFound)
 	})
 	mux.HandleFunc("/ABC-999/", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, strings.ReplaceAll(detailFixture, "ABC-123", "ABC-999"))
+	})
+	mux.HandleFunc("/external", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, external.URL+"/ABC-123/", http.StatusFound)
 	})
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -134,10 +144,11 @@ func TestDetailRedirectHandling(t *testing.T) {
 	require.ErrorIs(t, err, ErrMovieNotFound, "a redirect to another work should not be treated as the requested movie")
 
 	resp, err := p.Fetch(server.URL + "/external")
-	if resp != nil {
-		_ = resp.Body.Close()
-	}
-	require.Error(t, err, "unhandled path should return a status error rather than redirect rejection")
+	require.NoError(t, err, "HTTP redirects should be followed like Amane")
+	require.NotNil(t, resp)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, 1, externalRequests)
 }
 
 func TestRegistrationAndConfiguration(t *testing.T) {
