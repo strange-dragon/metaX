@@ -46,12 +46,11 @@ source = source.replace(
     1,
 )
 source = source.replace(
-    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\n\treturn func(c *gin.Context) {',
-    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\n'
-    '\tconfig := routing.DefaultConfig()\n'
-    '\treturn func(c *gin.Context) {',
+    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
+    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\\n\\tconfig := routing.DefaultConfig()',
     1,
 )
+
 
 start = source.find('\t\tcase movieSearchType:')
 end = source.find('\t\tdefault:', start)
@@ -106,7 +105,7 @@ required = [
     'stderrors "errors"',
     '"github.com/metatube-community/metatube-sdk-go/routing"',
     'Category string `form:"category"`',
-    'config := routing.DefaultConfig()',
+    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
     'app.SearchMovieProviders(query.Q, providers, query.Fallback)',
     'stderrors.Is(err, routing.ErrUnknownCategory)',
 ]
