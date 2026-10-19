@@ -263,3 +263,34 @@ func TestSearchMovieFC2NumberVariantsMatchSameArticle(t *testing.T) {
 		})
 	}
 }
+
+
+func TestSearchMovieFC2FallsBackAfterCanonicalRequestError(t *testing.T) {
+	var queries []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search_result", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query().Get("kw")
+		queries = append(queries, query)
+		if query == "FC2-PPV-12345" {
+			http.Error(w, "temporary upstream failure", http.StatusBadGateway)
+			return
+		}
+		if query == "FC2-12345" {
+			_, _ = fmt.Fprint(w, `<html><body><div class="oneVideo">
+				<a href="/video/fc2-target"><img src="/images/fc2.jpg"></a>
+				<h5>FC2-12345 Exact title</h5>
+			</div></body></html>`)
+			return
+		}
+		t.Errorf("unexpected search query %q", query)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	results, err := p.SearchMovie("FC2-12345")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "FC2-12345", results[0].Number)
+	require.Equal(t, []string{"FC2-PPV-12345", "FC2-12345"}, queries)
+}
