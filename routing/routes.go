@@ -12,13 +12,13 @@ import (
 type Category string
 
 const (
-	CategoryCensored          Category = "censored"
-	CategoryUncensored        Category = "uncensored"
-	CategoryFC2               Category = "fc2"
-	CategoryChineseSubtitles  Category = "chinese_subtitles"
-	CategoryAmateur           Category = "amateur"
-	CategoryWestern           Category = "western"
-	CategoryAnimation         Category = "animation"
+	CategoryCensored         Category = "censored"
+	CategoryUncensored       Category = "uncensored"
+	CategoryFC2              Category = "fc2"
+	CategoryChineseSubtitles Category = "chinese_subtitles"
+	CategoryAmateur          Category = "amateur"
+	CategoryWestern          Category = "western"
+	CategoryAnimation        Category = "animation"
 )
 
 var (
