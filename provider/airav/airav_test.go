@@ -212,7 +212,6 @@ func TestDetailRedirectRejectsNoncanonicalRouteWithSameID(t *testing.T) {
 	require.Nil(t, info)
 }
 
-
 func TestSearchMovieFC2CanonicalVariantFallback(t *testing.T) {
 	var queries []string
 	mux := http.NewServeMux()
