@@ -39,3 +39,13 @@ bash .github/scripts/build-metatube-server.sh ./metatube-sdk-go ./dist/metatube-
 ```
 
 The script refuses a dirty SDK checkout or a different commit. The generated binary is intended to include ten movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `XCity`) and two actor providers (`JavDBActor`, `MinnanoActor`), plus the maintained SDK patches. The expanded eleven-package integration passed in [GitHub Actions run 39139794806](https://github.com/strange-dragon/metaX/actions/runs/39139794806), including provider registration, `/v1/providers` API discovery, focused tests, the full pinned SDK regression suite, and server compilation. Live scraping and a running Jellyfin deployment remain unverified. The workflow uploads the built binary as a seven-day artifact after all checks pass.
+
+
+## Backend orchestration work
+
+The backend orchestration layer is being implemented separately from the Jellyfin plugin.
+
+- A standalone `routing` package now defines ordered category routes for censored, uncensored, FC2, Chinese-subtitle, amateur, western, and animation content. It preserves explicit provider selection as an override and skips providers not registered in the current SDK build.
+- This routing package is currently a tested building block, not yet wired into MetaTube's HTTP search handler. Until that integration is complete, the SDK's existing no-provider search path still searches all registered providers.
+- Next backend milestones: wire category selection into the SDK search route without breaking existing callers; implement ordered execution and fallback semantics; add stable result/detail resolution and field-level metadata merge; then unify network resilience and verify live sources.
+- Jellyfin plugin changes are explicitly out of scope for this backend phase.
