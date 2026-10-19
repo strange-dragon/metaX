@@ -1,0 +1,35 @@
+name: Live FC2 and uncensored scraper smoke test
+
+on:
+  push:
+    branches: ["feat/amane-provider-migration"]
+    paths:
+      - ".github/workflows/live-fc2-uncensored-smoke.yml"
+      - ".github/scripts/live-fc2-uncensored-smoke.sh"
+      - ".github/scripts/build-metatube-server.sh"
+      - "provider/**/*.go"
+      - "routing/**/*.go"
+
+permissions:
+  contents: read
+
+jobs:
+  live-fc2-uncensored:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out metaX
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+          cache: true
+      - name: Check out pinned MetaTube SDK
+        run: |
+          git clone https://github.com/metatube-community/metatube-sdk-go.git "$RUNNER_TEMP/metatube-sdk-go"
+          git -C "$RUNNER_TEMP/metatube-sdk-go" checkout c62584675c593816cc07e7b5b977d14c7eb505a3
+      - name: Build integrated MetaTube server and run deterministic regression tests
+        run: bash .github/scripts/build-metatube-server.sh "$RUNNER_TEMP/metatube-sdk-go" "$RUNNER_TEMP/metatube-server"
+      - name: Scrape FC2 and uncensored numbers from live upstream websites
+        run: bash .github/scripts/live-fc2-uncensored-smoke.sh "$RUNNER_TEMP/metatube-sdk-go"

@@ -9,47 +9,72 @@ import (
 func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 	config := DefaultConfig()
 	want := map[Category][]string{
-		CategoryCensored:         {"DMM", "JavDB", "JavBus", "Official"},
-		CategoryUncensored:       {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
-		CategoryChineseSubtitles: {"IQQTV", "JavDB", "Airav", "Freejavbt"},
-		CategoryAmateur:          {"MGStage", "DMM", "JavDB", "JavBus"},
-		CategoryWestern:          {"ThePornDB", "JavDB", "Freejavbt"},
-		CategoryHentai:           {"Getchu", "DMM", "JavDB"},
-		CategoryAnimation:        {"Getchu", "DMM", "JavDB"},
+		CategoryCensored:   {"DMM", "JavDB", "JavBus", "Official"},
+		CategoryUncensored: {"JavDB", "JavBus", "AVSOX", "Freejavbt"},
+		CategoryFC2:        {"JavDB", "FC2PPVDB", "FC2", "Freejavbt", "Airav"},
+		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
+		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},
+		CategoryWestern:    {"ThePornDB", "JavDB", "Freejavbt"},
+		CategoryHentai:     {"Getchu", "DMM", "JavDB"},
 	}
 	for category, expected := range want {
 		if got := config.Routes[category]; !reflect.DeepEqual(got, expected) {
 			t.Errorf("route %q = %#v, want %#v", category, got, expected)
 		}
 	}
+	if _, exists := config.Routes[CategoryChineseSubtitles]; exists {
+		t.Error("legacy chinese_subtitles alias must not duplicate Amane's canonical route")
+	}
+	if _, exists := config.Routes[CategoryAnimation]; exists {
+		t.Error("legacy animation alias must not duplicate Amane's canonical hentai route")
+	}
 	if err := config.Validate(); err != nil {
 		t.Fatalf("default route config is invalid: %v", err)
 	}
 }
 
-func TestDefaultRoutesResolveInConfiguredOrderAndSkipUnavailableProviders(t *testing.T) {
-	config := DefaultConfig()
-	registered := []string{"javdb", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
-
-	got, err := config.Resolve(CategoryUncensored, "", registered)
+func TestUncensoredRouteDoesNotIncludeFC2OnlyProviders(t *testing.T) {
+	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	got, err := DefaultConfig().Resolve(CategoryUncensored, "", registered)
 	if err != nil {
-		t.Fatalf("Resolve() error = %v", err)
+		t.Fatalf("Resolve(uncensored) error = %v", err)
 	}
-	want := []string{"javdb", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	want := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Resolve() = %#v, want %#v", got, want)
+		t.Fatalf("Resolve(uncensored) = %#v, want %#v", got, want)
 	}
 }
 
-func TestFC2LegacyCategoryResolvesToCombinedUncensoredProviders(t *testing.T) {
+func TestFC2RouteMatchesAmaneOrder(t *testing.T) {
 	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	got, err := DefaultConfig().Resolve(CategoryFC2, "", registered)
 	if err != nil {
 		t.Fatalf("Resolve(FC2) error = %v", err)
 	}
-	want := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	want := []string{"JavDB", "FC2PPVDB", "FC2", "Freejavbt", "Airav"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Resolve(FC2) = %#v, want combined uncensored providers %#v", got, want)
+		t.Fatalf("Resolve(FC2) = %#v, want Amane FC2 providers %#v", got, want)
+	}
+}
+
+func TestLegacyCategoryAliasesResolveToAmaneCategories(t *testing.T) {
+	config := DefaultConfig()
+	registered := []string{"Getchu", "DMM", "JavDB", "IQQTV", "JavBus", "Airav", "Freejavbt"}
+
+	got, err := config.Resolve(CategoryAnimation, "", registered)
+	if err != nil {
+		t.Fatalf("Resolve(animation alias) error = %v", err)
+	}
+	if want := []string{"Getchu", "DMM", "JavDB"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Resolve(animation alias) = %#v, want %#v", got, want)
+	}
+
+	got, err = config.Resolve(CategoryChineseSubtitles, "", registered)
+	if err != nil {
+		t.Fatalf("Resolve(chinese_subtitles alias) error = %v", err)
+	}
+	if want := []string{"IQQTV", "JavDB", "Airav", "Freejavbt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Resolve(chinese_subtitles alias) = %#v, want %#v", got, want)
 	}
 }
 
