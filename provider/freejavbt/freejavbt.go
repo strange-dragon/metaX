@@ -78,7 +78,6 @@ func newForTest(base string, client *http.Client) *Freejavbt {
 		return p
 	}
 	c := *client
-	c.CheckRedirect = p.checkRedirect
 	if c.Timeout <= 0 {
 		c.Timeout = defaultTimeout
 	}
