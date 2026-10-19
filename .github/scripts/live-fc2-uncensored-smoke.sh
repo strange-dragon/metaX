@@ -144,6 +144,12 @@ func TestLiveFC2AndUncensoredRoutes(t *testing.T) {
 						if (detailErr != nil || info == nil) && hit.Homepage != "" {
 							info, detailErr = p.GetMovieInfoByURL(hit.Homepage)
 						}
+						// Some providers expose the exact search card but return a detail
+						// page without a parseable number marker. Retry by the requested
+						// work number so provider-specific exact-card fallbacks can run.
+						if (detailErr != nil || info == nil) && tc.number != "" {
+							info, detailErr = p.GetMovieInfoByID(tc.number)
+						}
 						if detailErr != nil {
 							t.Logf("DETAIL_ERROR category=%s number=%s provider=%s err=%v", tc.name, tc.number, p.Name(), detailErr)
 							return
