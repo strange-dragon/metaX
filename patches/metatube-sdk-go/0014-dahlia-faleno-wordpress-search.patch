@@ -18,40 +18,11 @@ c62584675c593816cc07e7b5b977d14c7eb505a3.
 diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 --- a/provider/dahlia/core/core.go
 +++ b/provider/dahlia/core/core.go
-@@ -3,16 +3,17 @@
--import (
--	"encoding/json"
--	"fmt"
--	"net/http"
--	"net/url"
--	"path"
--	"strings"
--	"time"
--
--	"github.com/gocolly/colly/v2"
--	"golang.org/x/text/language"
--
--	"github.com/metatube-community/metatube-sdk-go/common/parser"
--	"github.com/metatube-community/metatube-sdk-go/model"
--	"github.com/metatube-community/metatube-sdk-go/provider/internal/scraper"
--)
-+import (
-+	"encoding/json"
+@@ -3,3 +3,4 @@
+ import (
+ 	"encoding/json"
 +	"errors"
-+	"fmt"
-+	"net/http"
-+	"net/url"
-+	"path"
-+	"strings"
-+	"time"
-+
-+	"github.com/gocolly/colly/v2"
-+	"golang.org/x/text/language"
-+
-+	"github.com/metatube-community/metatube-sdk-go/common/parser"
-+	"github.com/metatube-community/metatube-sdk-go/model"
-+	"github.com/metatube-community/metatube-sdk-go/provider/internal/scraper"
-+)
+ 	"fmt"
 @@ -25,3 +26,5 @@
  	DefaultPriority float64
  	DefaultName     string
@@ -67,7 +38,11 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 -	return nil, fmt.Errorf("work slug %q not found", id)
 +	return nil, fmt.Errorf("%w: work slug %q not found", ErrWordPressWorkNotFound, id)
  }
-@@ -175,28 +176,78 @@
+@@ -348,32 +351,82 @@
+ func (core *Core) NormalizeMovieKeyword(keyword string) string {
+ 	return strings.ToLower(strings.ReplaceAll(keyword, "-", ""))
+ }
+ 
 -func (core *Core) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
 -	c := core.ClonedCollector()
 -	c.ParseHTTPErrorResponse = true
