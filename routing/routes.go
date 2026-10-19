@@ -47,8 +47,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{Routes: map[Category][]string{
 		CategoryCensored:   {"DMM", "JavDB", "JavBus", "Official"},
-		CategoryUncensored: {"JavDB", "JavBus", "AVSOX", "Freejavbt"},
-		CategoryFC2:        {"JavDB", "FC2PPVDB", "FC2", "Freejavbt"},
+		CategoryUncensored: {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
 		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},
 		CategoryWestern:    {"ThePornDB", "JavDB", "Freejavbt"},
@@ -108,6 +107,8 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 	}
 
 	switch category {
+	case CategoryFC2:
+		category = CategoryUncensored
 	case CategoryChineseSubtitles:
 		category = CategoryChinese
 	case CategoryAnimation:
