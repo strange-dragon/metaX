@@ -18,27 +18,16 @@ c62584675c593816cc07e7b5b977d14c7eb505a3.
 diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 --- a/provider/dahlia/core/core.go
 +++ b/provider/dahlia/core/core.go
-@@ -3,3 +3,4 @@
- import (
- 	"encoding/json"
-+	"errors"
- 	"fmt"
-@@ -29,3 +30,5 @@
- 	DefaultPriority float64
- 	DefaultName     string
- }
-+
-+var ErrWordPressWorkNotFound = errors.New("dahlia/faleno: WordPress work not found")
-@@ -271,7 +274,7 @@
+@@ -271,7 +271,7 @@
  	for i := range works {
  		if strings.EqualFold(strings.TrimSpace(works[i].Slug), id) {
  			return &works[i], nil
  		}
  	}
 -	return nil, fmt.Errorf("work slug %q not found", id)
-+	return nil, fmt.Errorf("%w: work slug %q not found", ErrWordPressWorkNotFound, id)
++	return nil, ErrWordPressWorkNotFound
  }
-@@ -349,32 +352,82 @@
+@@ -349,32 +349,84 @@
  func (core *Core) NormalizeMovieKeyword(keyword string) string {
  	return strings.ToLower(strings.ReplaceAll(keyword, "-", ""))
  }
@@ -71,6 +60,8 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 -	err = c.Visit(fmt.Sprintf(core.SearchURL, url.QueryEscape(keyword)))
 -	return
 -}
++var ErrWordPressWorkNotFound = fmt.Errorf("work slug not found")
++
 +func slugifyWordPressNumber(number string) string {
 +	var slug strings.Builder
 +	for _, r := range strings.ToLower(strings.TrimSpace(number)) {
@@ -120,7 +111,7 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 +		return nil, nil
 +	}
 +	work, err := core.fetchWordPressWork(slug)
-+	if errors.Is(err, ErrWordPressWorkNotFound) {
++	if err == ErrWordPressWorkNotFound {
 +		return nil, nil
 +	}
 +	if err != nil {
