@@ -29,6 +29,12 @@ var (
 	ErrProviderUnavailable = errors.New("explicit provider is not registered")
 )
 
+// providerAliases bridges Amane source names to equivalent registered MetaTube
+// providers without changing Amane's canonical route configuration.
+var providerAliases = map[string][]string{
+	"dmm": {"FANZA"},
+}
+
 // Config maps each Amane content category to providers in preferred execution order.
 // Provider names are matched case-insensitively, but returned in their
 // registered canonical spelling.
@@ -110,9 +116,21 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 	}
 
 	result := make([]string, 0, len(providers))
+	seen := make(map[string]struct{}, len(providers))
 	for _, provider := range providers {
-		if registeredName, exists := canonical[normalize(provider)]; exists {
+		candidates := append([]string{provider}, providerAliases[normalize(provider)]...)
+		for _, candidate := range candidates {
+			registeredName, exists := canonical[normalize(candidate)]
+			if !exists {
+				continue
+			}
+			key := normalize(registeredName)
+			if _, duplicate := seen[key]; duplicate {
+				break
+			}
+			seen[key] = struct{}{}
 			result = append(result, registeredName)
+			break
 		}
 	}
 	if len(result) == 0 {
