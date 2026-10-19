@@ -138,7 +138,6 @@ func TestRegistrationAndSettings(t *testing.T) {
 	require.Equal(t, 3*time.Second, p.httpClient().Timeout)
 }
 
-
 func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 	var requests int
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
