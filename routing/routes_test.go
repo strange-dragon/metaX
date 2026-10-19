@@ -32,6 +32,18 @@ func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 	}
 }
 
+func TestDMMRouteResolvesToRegisteredFANZAProvider(t *testing.T) {
+	registered := []string{"FANZA", "JavDB", "JavBus"}
+	got, err := DefaultConfig().Resolve(CategoryCensored, "", registered)
+	if err != nil {
+		t.Fatalf("Resolve(censored) error = %v", err)
+	}
+	want := []string{"FANZA", "JavDB", "JavBus"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Resolve(censored) = %#v, want Amane DMM mapped to MetaTube FANZA: %#v", got, want)
+	}
+}
+
 func TestUncensoredRouteIncludesFC2ProvidersInOrder(t *testing.T) {
 	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	got, err := DefaultConfig().Resolve(CategoryUncensored, "", registered)
