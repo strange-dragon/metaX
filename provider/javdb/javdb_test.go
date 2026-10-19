@@ -61,6 +61,13 @@ func TestNormalizeAndParseMovieID(t *testing.T) {
 }
 
 func TestNumberMatchAndVariants(t *testing.T) {
+	// Amane's fold_number ignores hyphens/spaces but must preserve underscores.
+	require.Equal(t, 2, numberMatch("FC2-PPV-3954834", "fc2-3954834"))
+	require.Equal(t, 2, numberMatch("FC2PPV3954834", "FC2_3954834"))
+	require.Equal(t, 0, numberMatch("101926_01", "101926-01"))
+	require.Equal(t, 2, numberMatch("101926_01", "101926_01"))
+	require.Equal(t, []string{"FC2-PPV-3954834", "FC2-3954834"}, searchTerms("FC2-PPV-3954834"))
+	require.Equal(t, []string{"FC2-3954834", "FC2-PPV-3954834"}, searchTerms("FC2-3954834"))
 	require.Equal(t, 2, numberMatch("SSIS-033", "ssis033"))
 	require.Equal(t, 1, numberMatch("JAC-079", "390JAC-079"))
 	require.Equal(t, 0, numberMatch("ABF-35", "ABF-375"))
