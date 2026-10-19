@@ -454,3 +454,14 @@ A focused follow-up to the Airav source comparison found a behavior gap in the n
 - **Identity safety.** FC2 variants compare equal only when both parse as FC2 article numbers with the same numeric article ID. Near-number matches remain rejected; non-FC2 matching behavior is unchanged.
 - **Tests.** Added deterministic local HTTP tests for canonical-first ordering, empty-result fallback to the original query, and matching `FC2-{id}`, compact `FC2PPV{id}`, and underscore-separated variants against a canonical Airav result.
 - **Limits.** No live Airav requests were made. Current website behavior, current selectors, and runtime metadata coverage remain unverified; this closes the source-derived FC2 query-variant gap only.
+
+
+## AVBase actor profile provider (2026-10-19)
+
+Compared Amane `src/amane/crawlers/actor/sites/avbase.py` with the pinned SDK actor interface and the existing metaX actor providers.
+
+- **Lookup contract.** AVBase has no usable actor search endpoint; `/talents?q=` returns 404. The native `AVBaseActor` provider resolves names directly through `/talents/{name}`, treats HTTP 404 or missing embedded talent data as a miss, and accepts same-origin redirects to canonical talent names.
+- **Metadata mapping.** The provider reads the Next.js `props.pageProps.talent` payload and maps canonical name, aliases, birthday, height, available bust/waist/hip measurements, cup size, and profile image into existing `model.ActorInfo` fields. It does not mis-map Amane's gender or prefecture fields because the pinned SDK model has no semantically equivalent fields.
+- **Identity and request handling.** Actor IDs use the canonical talent path segment; URL parsing requires HTTPS on the configured AVBase origin and exactly one `/talents/{name}` segment. Requests enforce same-origin redirects, bounded response reads, timeout, and proxy configuration.
+- **Deterministic coverage.** Local HTTP tests cover alias redirects, canonical identity, field mapping, missing data, 404 misses, malformed URLs, cross-origin redirect blocking, registration, and request configuration.
+- **Limits.** No live AVBase requests were made. Current Next.js payload shape, redirects, selectors, and the live profile's actual metadata completeness remain unverified. Actor gender and birthplace remain unavailable in the pinned SDK's `ActorInfo` model.
