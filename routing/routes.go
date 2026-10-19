@@ -18,7 +18,7 @@ const (
 	CategoryChineseSubtitles Category = "chinese_subtitles"
 	CategoryAmateur          Category = "amateur"
 	CategoryWestern          Category = "western"
-	CategoryHentai            Category = "hentai"
+	CategoryHentai           Category = "hentai"
 	CategoryAnimation        Category = "animation"
 )
 
@@ -49,7 +49,7 @@ func DefaultConfig() Config {
 		CategoryWestern:          {"ThePornDB", "JavDB", "Freejavbt"},
 		CategoryHentai:           {"Getchu", "DMM", "JavDB"},
 		// CategoryAnimation remains an alias for callers using the earlier API label.
-		CategoryAnimation:       {"Getchu", "DMM", "JavDB"},
+		CategoryAnimation: {"Getchu", "DMM", "JavDB"},
 	}}
 }
 

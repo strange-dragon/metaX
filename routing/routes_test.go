@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-
 func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 	config := DefaultConfig()
 	want := map[Category][]string{
