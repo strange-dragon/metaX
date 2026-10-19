@@ -272,3 +272,12 @@ The SDK integration overlay now includes route-level contract tests backed by in
 Validation passed on commit [940d62e](https://github.com/strange-dragon/metaX/commit/940d62ef95fd23d953187826490affa96b6201c0): [integrated server build and API tests](https://github.com/strange-dragon/metaX/actions/runs/39140651962), [metaX Go tests](https://github.com/strange-dragon/metaX/actions/runs/39140651888), and [format check](https://github.com/strange-dragon/metaX/actions/runs/39140651869). The build workflow produced artifact `metatube-server-940d62ef95fd23d953187826490affa96b6201c0`, available until 2026-10-25.
 
 These route tests validate the SDK/plugin wire contract with controlled providers. They do not establish that each live provider website currently returns parseable pages; live scraping and an actual Jellyfin instance remain separate validation steps.
+
+
+## Progress snapshot (2026-10-19, AVBase actor provider)
+
+- Added native `provider/avbaseactor` implementing MetaTube's `ActorProvider` and `ActorSearcher` interfaces. It resolves names through AVBase's `/talents/{name}` route rather than relying on the unusable search endpoint.
+- The implementation maps only fields with a clear equivalent in the pinned SDK model: name, aliases, birthday, height, available measurements, cup size, image, canonical homepage, and route-based identity. Gender and prefecture are intentionally not forced into unrelated model fields.
+- Deterministic local HTTP tests cover alias-to-canonical redirects, metadata mapping, 404/missing-data behavior, malformed URL rejection, cross-origin redirect blocking, provider registration, proxy, and timeout configuration.
+- Updated the SDK integration overlay, `/v1/providers` discovery contract, integrated server build/test lists, and CI path filters to include `AVBaseActor`. The native provider inventory is now twelve package directories, including ten movie-provider packages and three actor-provider capabilities (JavDB, Minnano, and AVBase; JavDB's movie and actor implementations share one directory).
+- Validation is pending for the current branch head. No live AVBase requests or Jellyfin end-to-end requests have been made; do not mark this source as live-verified until those checks are separately performed.
