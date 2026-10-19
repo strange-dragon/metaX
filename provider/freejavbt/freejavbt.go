@@ -6,6 +6,7 @@
 package freejavbt
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -159,16 +160,6 @@ func effectivePort(u *url.URL) string {
 	}
 }
 
-func (p *Freejavbt) checkRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= 10 {
-		return fmt.Errorf("freejavbt: stopped after 10 redirects")
-	}
-	if !p.validOrigin(req.URL) {
-		return fmt.Errorf("freejavbt: refusing redirect to unexpected origin %q", req.URL)
-	}
-	return nil
-}
-
 func (p *Freejavbt) SetRequestTimeout(timeout time.Duration) {
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
@@ -207,6 +198,9 @@ func (p *Freejavbt) rebuildClientLocked() {
 		transport = &http.Transport{Proxy: http.ProxyFromEnvironment}
 	}
 	transport.Proxy = http.ProxyFromEnvironment
+	// Match Amane's shared scraper client, which disables certificate verification
+	// and follows ordinary HTTP redirects to avoid unnecessary scraping failures.
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402
 	if p.proxyURL != "" {
 		if proxyURL, err := url.Parse(p.proxyURL); err == nil {
 			transport.Proxy = http.ProxyURL(proxyURL)
@@ -216,7 +210,7 @@ func (p *Freejavbt) rebuildClientLocked() {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: p.checkRedirect}
+	p.client = &http.Client{Transport: transport, Timeout: timeout}
 }
 
 func (p *Freejavbt) httpClient() *http.Client {
