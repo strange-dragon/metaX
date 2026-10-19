@@ -228,14 +228,18 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 // The standard net/http request is tried first; browser profiles are used only after a
 // 403/406 response, so ordinary requests keep the lightweight standard transport.
 type fingerprintProfile struct {
+	name      string
 	profile   profiles.ClientProfile
 	userAgent string
 }
 
+// Keep the same Chrome generations as Amane where the Go TLS client exposes them.
+// Chrome 133 is used as the closest supported profile to Amane's Chrome 136 entry.
 var javLibraryFingerprintProfiles = []fingerprintProfile{
-	{profile: profiles.Chrome_131, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
-	{profile: profiles.Chrome_133, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"},
-	{profile: profiles.Firefox_135, userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0"},
+	{name: "Chrome 123", profile: profiles.Chrome_123, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"},
+	{name: "Chrome 124", profile: profiles.Chrome_124, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"},
+	{name: "Chrome 131", profile: profiles.Chrome_131, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
+	{name: "Chrome 133", profile: profiles.Chrome_133, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"},
 }
 
 func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http.Response, error) {
@@ -251,8 +255,8 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 		}
 	}
 
-	var lastResponse *http.Response
 	var lastError error
+	var failures []string
 	for _, fingerprint := range javLibraryFingerprintProfiles {
 		options := []tlsclient.HttpClientOption{
 			tlsclient.WithTimeoutSeconds(max(1, int(timeout.Seconds()))),
@@ -265,28 +269,25 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 		client, err := tlsclient.NewHttpClient(tlsclient.NewNoopLogger(), options...)
 		if err != nil {
 			lastError = err
+			failures = append(failures, fingerprint.name+": "+err.Error())
 			continue
 		}
 		resp, err := p.doFingerprintRequest(client, original, fingerprint.userAgent)
 		client.CloseIdleConnections()
 		if err != nil {
 			lastError = err
+			failures = append(failures, fingerprint.name+": "+err.Error())
 			continue
 		}
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotAcceptable {
-			if lastResponse != nil {
-				_ = lastResponse.Body.Close()
-			}
-			lastResponse = resp
+			failures = append(failures, fmt.Sprintf("%s=%s", fingerprint.name, resp.Status))
+			_ = resp.Body.Close()
 			continue
-		}
-		if lastResponse != nil {
-			_ = lastResponse.Body.Close()
 		}
 		return resp, nil
 	}
-	if lastResponse != nil {
-		return lastResponse, nil
+	if len(failures) > 0 {
+		return nil, fmt.Errorf("browser fingerprint attempts exhausted: %s", strings.Join(failures, "; "))
 	}
 	if lastError == nil {
 		lastError = errors.New("all browser fingerprint attempts failed")

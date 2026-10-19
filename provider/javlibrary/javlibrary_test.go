@@ -158,5 +158,5 @@ func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, "fingerprint accepted", string(body))
-	require.Equal(t, 2, requests, "should try standard net/http once and rotate to Chrome 131")
+	require.Equal(t, 4, requests, "should try standard net/http, then rotate through Chrome 123/124 before Chrome 131 succeeds")
 }
