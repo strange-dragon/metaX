@@ -137,9 +137,16 @@ func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
 }
 
 func TestRegistrationAndConfiguration(t *testing.T) {
-	factory, ok := mt.RangeActorFactory[Name]
-	require.True(t, ok, "AVBase actor provider should register with MetaTube")
-	require.Equal(t, Name, factory().Name())
+	found := false
+	mt.RangeActorFactory(func(name string, factory mt.ActorFactory) bool {
+		if name == Name {
+			found = true
+			require.Equal(t, Name, factory().Name())
+			return false
+		}
+		return true
+	})
+	require.True(t, found, "AVBase actor provider should register with MetaTube")
 
 	p := New()
 	require.Error(t, p.SetProxy("invalid"))
