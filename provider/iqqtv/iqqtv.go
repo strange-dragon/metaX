@@ -38,11 +38,11 @@ const (
 )
 
 var (
-	ErrMovieNotFound = errors.New("iqqtv: movie not found")
+	ErrMovieNotFound  = errors.New("iqqtv: movie not found")
 	ErrUnsafeRedirect = errors.New("iqqtv: unsafe redirect")
-	excludedWords    = []string{"克破", "无码破解", "無碼破解", "无码流出", "無碼流出"}
-	validPathPartRE  = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
-	catalogNumberRE  = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\d+[A-Za-z0-9_-]*$`)
+	excludedWords     = []string{"克破", "无码破解", "無碼破解", "无码流出", "無碼流出"}
+	validPathPartRE   = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	catalogNumberRE   = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\d+[A-Za-z0-9_-]*$`)
 )
 
 var (
