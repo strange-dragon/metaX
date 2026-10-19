@@ -40,7 +40,92 @@ const (
 
 var (
 	ErrMovieNotFound = errors.New("javdb: movie not found")
-	movieNumberRE    = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
+	movieNumberRE    = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*// Copyright 2026 metaX contributors.
+//
+/*
+Feature-level comparison reference: https://github.com/sqzw-x/amane.
+This is a native Go implementation for the MetaTube Provider API; no Amane
+source file or test fixture is vendored. See ../../NOTICE.md for attribution.
+*/
+package javdb
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"path"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/lib/pq"
+	"golang.org/x/text/language"
+	"golang.org/x/text/unicode/norm"
+
+	"github.com/metatube-community/metatube-sdk-go/common/parser"
+	"github.com/metatube-community/metatube-sdk-go/model"
+	mt "github.com/metatube-community/metatube-sdk-go/provider"
+)
+
+const (
+	Name           = "JavDB"
+	Priority       = 1000 - 10
+	defaultURL     = "https://javdb.com"
+	defaultTimeout = 20 * time.Second
+	maxPageBytes   = 8 << 20
+)
+
+var (
+	ErrMovieNotFound = errors.New("javdb: movie not found")
+	)
+	numericUnderscoreNumberRE = regexp.MustCompile(`^[0-9]{3,}(?:_[0-9]+)+// Copyright 2026 metaX contributors.
+//
+/*
+Feature-level comparison reference: https://github.com/sqzw-x/amane.
+This is a native Go implementation for the MetaTube Provider API; no Amane
+source file or test fixture is vendored. See ../../NOTICE.md for attribution.
+*/
+package javdb
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"path"
+	"regexp"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/lib/pq"
+	"golang.org/x/text/language"
+	"golang.org/x/text/unicode/norm"
+
+	"github.com/metatube-community/metatube-sdk-go/common/parser"
+	"github.com/metatube-community/metatube-sdk-go/model"
+	mt "github.com/metatube-community/metatube-sdk-go/provider"
+)
+
+const (
+	Name           = "JavDB"
+	Priority       = 1000 - 10
+	defaultURL     = "https://javdb.com"
+	defaultTimeout = 20 * time.Second
+	maxPageBytes   = 8 << 20
+)
+
+var (
+	ErrMovieNotFound = errors.New("javdb: movie not found")
+	)
 	leadingDigitsRE  = regexp.MustCompile(`(?i)^\d+`)
 	dayNumberRE      = regexp.MustCompile(`(?i)^(?P<studio>.+?)(?P<sep0>[._-])(?P<year>\d{4}|\d{2})(?P<sep1>[._-])(?P<month>\d{2})(?P<sep2>[._-])(?P<day>\d{2})$`)
 	scoreRE          = regexp.MustCompile(`\d+(?:\.\d+)?`)
@@ -357,7 +442,7 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	}
 	// Recognized work numbers are search terms. Other values are treated as
 	// opaque detail slugs, including slugs that happen to contain hyphens.
-	if !movieNumberRE.MatchString(id) {
+	if !movieNumberRE.MatchString(id) && !numericUnderscoreNumberRE.MatchString(id) {
 		info, err := p.GetMovieInfoByURL(p.detailURL(id))
 		if err == nil && info != nil {
 			return info, nil
