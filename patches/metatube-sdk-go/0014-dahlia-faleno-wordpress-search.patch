@@ -29,7 +29,7 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
  }
 +
 +var ErrWordPressWorkNotFound = errors.New("dahlia/faleno: WordPress work not found")
-@@ -291,7 +294,7 @@
+@@ -271,7 +274,7 @@
  	for i := range works {
  		if strings.EqualFold(strings.TrimSpace(works[i].Slug), id) {
  			return &works[i], nil
@@ -38,7 +38,7 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
 -	return nil, fmt.Errorf("work slug %q not found", id)
 +	return nil, fmt.Errorf("%w: work slug %q not found", ErrWordPressWorkNotFound, id)
  }
-@@ -348,32 +351,82 @@
+@@ -349,32 +352,82 @@
  func (core *Core) NormalizeMovieKeyword(keyword string) string {
  	return strings.ToLower(strings.ReplaceAll(keyword, "-", ""))
  }
