@@ -58,7 +58,6 @@ diff --git a/provider/dahlia/core/core.go b/provider/dahlia/core/core.go
  }
 +
 +var ErrWordPressWorkNotFound = errors.New("dahlia/faleno: WordPress work not found")
-
 @@ -291,7 +294,7 @@
  	for i := range works {
  		if strings.EqualFold(strings.TrimSpace(works[i].Slug), id) {
