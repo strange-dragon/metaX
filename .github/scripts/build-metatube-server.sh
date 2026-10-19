@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Build a reproducible MetaTube server with the maintained metaX SDK patches
-# and all eleven native provider packages currently covered by engine/API integration tests.
+# and all twelve native provider packages currently covered by engine/API integration tests.
 if [[ $# -ne 2 ]]; then
   echo "usage: $0 /path/to/clean-metatube-sdk-go-checkout /path/to/output-binary" >&2
   exit 2
@@ -56,10 +56,10 @@ bash "$workspace_root/.github/scripts/validate-provider-integration.sh" "$sdk_ro
 
 cd "$sdk_root"
 echo "Running native provider registration and API discovery tests"
-go test ./engine ./route ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1
+go test ./engine ./route ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1
 
 echo "Checking formatting of patched SDK files"
-format_files="provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/dahlia/core/core_url_validation_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go provider/fc2ppvdb/fc2ppvdb.go provider/fc2ppvdb/fc2ppvdb_migration_test.go provider/mgstage/mgstage.go provider/mgstage/mgstage_test.go provider/theporndb/video.go provider/theporndb/actor.go provider/theporndb/validation_test.go provider/fanza/fanza.go provider/fanza/fanza_migration_test.go provider/kin8tengoku/kin8tengoku.go provider/kin8tengoku/kin8tengoku_migration_test.go provider/dahlia/core/core_wordpress_metadata_test.go"
+format_files="provider/avbaseactor/actor.go provider/avbaseactor/actor_test.go provider/javbus/javbus.go provider/javbus/javbus_test.go provider/avbase/avbase.go provider/avbase/avbase_test.go provider/dahlia/core/core.go provider/dahlia/core/core_test.go provider/dahlia/core/core_url_validation_test.go provider/fc2/fc2.go provider/fc2/fc2_test.go provider/getchu/getchu.go provider/getchu/getchu_migration_test.go provider/fc2ppvdb/fc2ppvdb.go provider/fc2ppvdb/fc2ppvdb_migration_test.go provider/mgstage/mgstage.go provider/mgstage/mgstage_test.go provider/theporndb/video.go provider/theporndb/actor.go provider/theporndb/validation_test.go provider/fanza/fanza.go provider/fanza/fanza_migration_test.go provider/kin8tengoku/kin8tengoku.go provider/kin8tengoku/kin8tengoku_migration_test.go provider/dahlia/core/core_wordpress_metadata_test.go"
 if [[ -n "$(gofmt -l $format_files)" ]]; then
   gofmt -d $format_files
   echo "gofmt check failed" >&2
