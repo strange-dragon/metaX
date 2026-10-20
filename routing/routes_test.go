@@ -188,6 +188,8 @@ func TestInferCategoryRecognizesAmaneNumberFamilies(t *testing.T) {
 		{keyword: "MKY-ABC-123", want: CategoryChinese},
 		{keyword: "200GANA-123", want: CategoryAmateur},
 		{keyword: "HEYZO-1234", want: CategoryUncensored},
+		{keyword: "JAV-123", want: CategoryUncensored},
+		{keyword: "JAVDB-123", want: CategoryCensored},
 		{keyword: "Vixen.24.01.02", want: CategoryWestern},
 		{keyword: "Getchu-12345", want: CategoryHentai},
 	}
