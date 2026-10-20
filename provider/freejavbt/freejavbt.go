@@ -49,6 +49,7 @@ var (
 	_ mt.Fetcher              = (*Freejavbt)(nil)
 	_ mt.ProxySetter          = (*Freejavbt)(nil)
 	_ mt.RequestTimeoutSetter = (*Freejavbt)(nil)
+	_ mt.ConfigSetter         = (*Freejavbt)(nil)
 )
 
 type Freejavbt struct {
@@ -58,6 +59,7 @@ type Freejavbt struct {
 	client   *http.Client
 	timeout  time.Duration
 	proxyURL string
+	cookies  string
 
 	priorityMu sync.RWMutex
 	priority   float64
@@ -159,6 +161,38 @@ func effectivePort(u *url.URL) string {
 	}
 }
 
+// SetConfig applies provider configuration. Freejavbt currently serves a login
+// page to anonymous requests, so deployments may supply an authenticated
+// Cookie header through MT_MOVIE_PROVIDER_FREEJAVBT__COOKIES (or __COOKIE).
+func (p *Freejavbt) SetConfig(config mt.Config) error {
+	if config == nil {
+		return nil
+	}
+	var (
+		raw string
+		err error
+	)
+	switch {
+	case config.Has("cookies"):
+		raw, err = config.GetString("cookies")
+	case config.Has("cookie"):
+		raw, err = config.GetString("cookie")
+	default:
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("freejavbt: read cookies config: %w", err)
+	}
+	raw = strings.TrimSpace(raw)
+	if strings.ContainsAny(raw, "\r\n") {
+		return fmt.Errorf("freejavbt: cookies must not contain CR or LF")
+	}
+	p.clientMu.Lock()
+	p.cookies = raw
+	p.clientMu.Unlock()
+	return nil
+}
+
 func (p *Freejavbt) SetRequestTimeout(timeout time.Duration) {
 	p.clientMu.Lock()
 	defer p.clientMu.Unlock()
@@ -234,6 +268,12 @@ func (p *Freejavbt) Fetch(rawURL string) (*http.Response, error) {
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "ja-JP,ja;q=0.9,en;q=0.7")
 	req.Header.Set("Referer", p.baseURL.String()+"/")
+	p.clientMu.RLock()
+	cookies := p.cookies
+	p.clientMu.RUnlock()
+	if cookies != "" {
+		req.Header.Set("Cookie", cookies)
+	}
 
 	resp, err := p.httpClient().Do(req)
 	if err != nil {

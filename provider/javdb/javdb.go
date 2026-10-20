@@ -54,6 +54,7 @@ var (
 	_ mt.Fetcher              = (*JavDB)(nil)
 	_ mt.ProxySetter          = (*JavDB)(nil)
 	_ mt.RequestTimeoutSetter = (*JavDB)(nil)
+	_ mt.ConfigSetter         = (*JavDB)(nil)
 )
 
 // JavDB implements MetaTube's native movie Provider contract.
@@ -64,6 +65,7 @@ type JavDB struct {
 	client   *http.Client
 	timeout  time.Duration
 	proxyURL string
+	cookies  string
 
 	priorityMu sync.RWMutex
 	priority   float64
@@ -183,6 +185,38 @@ func (p *JavDB) allowedHost(host string) bool {
 	}
 	// JavDB's canonical host and its common www alias are equivalent.
 	return base == "javdb.com" && host == "www.javdb.com"
+}
+
+// SetConfig applies provider configuration. JavDB's anonymous FC2 detail pages
+// can redirect to a login page, so deployments may supply an authenticated
+// Cookie header through MT_MOVIE_PROVIDER_JAVDB__COOKIES (or __COOKIE).
+func (p *JavDB) SetConfig(config mt.Config) error {
+	if config == nil {
+		return nil
+	}
+	var (
+		raw string
+		err error
+	)
+	switch {
+	case config.Has("cookies"):
+		raw, err = config.GetString("cookies")
+	case config.Has("cookie"):
+		raw, err = config.GetString("cookie")
+	default:
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("javdb: read cookies config: %w", err)
+	}
+	raw = strings.TrimSpace(raw)
+	if strings.ContainsAny(raw, "\r\n") {
+		return errors.New("javdb: cookies must not contain CR or LF")
+	}
+	p.clientMu.Lock()
+	p.cookies = raw
+	p.clientMu.Unlock()
+	return nil
 }
 
 // SetRequestTimeout replaces the HTTP client with the requested timeout while
@@ -307,6 +341,12 @@ func (p *JavDB) setHeaders(req *http.Request) {
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.7")
 	req.Header.Set("Referer", p.baseURL.String()+"/")
+	p.clientMu.RLock()
+	cookies := p.cookies
+	p.clientMu.RUnlock()
+	if cookies != "" {
+		req.Header.Set("Cookie", cookies)
+	}
 }
 
 func (p *JavDB) getHTML(rawURL string) (*goquery.Document, error) {
