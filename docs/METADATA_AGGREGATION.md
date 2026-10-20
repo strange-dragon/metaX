@@ -23,7 +23,7 @@ Use `?aggregate=false` to request the stock detail response without the added `c
 
 1. The selected provider's detail must succeed before the endpoint can return a result.
 2. Cross-provider lookup is enabled only when the catalog number can be classified confidently. Unknown formats return the selected provider's record and an explanatory `baseline_only` source entry instead of guessing a category.
-3. Supplemental details are eligible only when their normalized catalog number matches the selected record. Normalization is conservative: case, spaces, hyphens, and underscores are ignored; different digit sequences do not match.
+3. Supplemental details are eligible only when their normalized catalog number matches the selected record. Normalization is conservative: case, spaces, and hyphens are ignored; underscores remain significant, matching Amane's catalog-number rules; different digit sequences do not match.
 4. Scalar descriptive fields use the first non-empty value in configured route order. Empty supplemental values never erase populated values.
 5. Actor, genre, and preview-image lists are stably deduplicated in route order. Image URL fields use the first non-empty value per field.
 6. Runtime and release date use the first available value in route order. Scores are not averaged across providers; the selected provider's score is retained when present, with a supplemental score used only if the selected score is empty.
