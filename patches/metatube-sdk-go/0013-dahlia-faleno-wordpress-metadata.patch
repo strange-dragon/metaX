@@ -167,7 +167,7 @@ new file mode 100644
 index 0000000..0000000
 --- /dev/null
 +++ b/provider/dahlia/core/core_wordpress_metadata_test.go
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,127 @@
 +package core
 +
 +import (
@@ -176,6 +176,8 @@ index 0000000..0000000
 +	"net/http/httptest"
 +	"strings"
 +	"testing"
++
++	"github.com/metatube-community/metatube-sdk-go/model"
 +)
 +
 +func TestWordPressMetadataMapping(t *testing.T) {
