@@ -37,8 +37,15 @@ type AggregatedMovieInfo struct {
 // resolves an Amane-derived route from its catalog number, and concurrently
 // fetches matching details from eligible providers. Provider + ID remains the
 // public identity; supplemental records are merged only when catalog numbers
-// match exactly after conservative punctuation normalization.
+// identify the same title (see routing.SameNumber).
 func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, lazy bool) (*AggregatedMovieInfo, error) {
+	return e.GetAggregatedMovieInfoByProviderIDWithConfig(pid, lazy, routing.DefaultConfig())
+}
+
+// GetAggregatedMovieInfoByProviderIDWithConfig is the explicit-route variant of
+// GetAggregatedMovieInfoByProviderID. It lets embedders and tests supply their
+// own route table without changing global state.
+func (e *Engine) GetAggregatedMovieInfoByProviderIDWithConfig(pid providerid.ProviderID, lazy bool, config routing.Config) (*AggregatedMovieInfo, error) {
 	baseline, err := e.GetMovieInfoByProviderID(pid, lazy)
 	if err != nil {
 		return nil, err
@@ -77,11 +84,11 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 	for name := range e.GetMovieProviders() {
 		registered = append(registered, name)
 	}
-	providers, routeErr := routing.DefaultConfig().Resolve(category, "", registered)
+	providers, routeErr := config.Resolve(category, "", registered)
 	if routeErr != nil {
 		return &AggregatedMovieInfo{
 			MovieInfo: baseline,
-			Category:  string(category),
+			Category:  string(category.Canonical()),
 			Sources: []MovieSourceRecord{{
 				Provider: baseline.Provider, ID: baseline.ID,
 				Status: "baseline_only", Error: routeErr.Error(), Metadata: baseline,
@@ -126,7 +133,7 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 			var candidate *model.MovieSearchResult
 			for _, result := range candidates {
 				if result != nil && strings.EqualFold(result.Provider, name) &&
-					normalizeAggregationNumber(result.Number) == normalizeAggregationNumber(baseline.Number) {
+					routing.SameNumber(result.Number, baseline.Number) {
 					candidate = result
 					break
 				}
@@ -145,7 +152,7 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 				}
 				return
 			}
-			if normalizeAggregationNumber(info.Number) != normalizeAggregationNumber(baseline.Number) {
+			if !routing.SameNumber(info.Number, baseline.Number) {
 				records[i] = MovieSourceRecord{
 					Provider: name, ID: info.ID, Status: "identity_mismatch",
 					Error:    fmt.Sprintf("returned catalog number %q does not match selected number %q", info.Number, baseline.Number),
@@ -164,14 +171,9 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 	merged := mergeMovieInfoInRouteOrder(baseline, infos)
 	return &AggregatedMovieInfo{
 		MovieInfo: merged,
-		Category:  string(category),
+		Category:  string(category.Canonical()),
 		Sources:   records,
 	}, nil
-}
-
-func normalizeAggregationNumber(value string) string {
-	value = strings.ToUpper(strings.TrimSpace(value))
-	return strings.NewReplacer(" ", "", "-", "").Replace(value)
 }
 
 // mergeMovieInfoInRouteOrder uses the first non-empty value in route order for

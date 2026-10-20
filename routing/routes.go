@@ -23,6 +23,22 @@ const (
 	CategoryAnimation        Category = "animation" // Legacy alias for Amane's "hentai".
 )
 
+// Canonical folds legacy or narrower labels onto the category actually used by
+// the route table. FC2 is intentionally merged into uncensored: both families
+// share one provider chain and the public response reports a single category.
+func (c Category) Canonical() Category {
+	switch c {
+	case CategoryFC2:
+		return CategoryUncensored
+	case CategoryChineseSubtitles:
+		return CategoryChinese
+	case CategoryAnimation:
+		return CategoryHentai
+	default:
+		return c
+	}
+}
+
 var (
 	ErrUnknownCategory     = errors.New("unknown content category")
 	ErrNoAvailableProvider = errors.New("no registered provider for category")
@@ -106,14 +122,7 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 		return nil, fmt.Errorf("%w: %s", ErrProviderUnavailable, explicitProvider)
 	}
 
-	switch category {
-	case CategoryFC2:
-		category = CategoryUncensored
-	case CategoryChineseSubtitles:
-		category = CategoryChinese
-	case CategoryAnimation:
-		category = CategoryHentai
-	}
+	category = category.Canonical()
 
 	providers, ok := c.Routes[category]
 	if !ok {

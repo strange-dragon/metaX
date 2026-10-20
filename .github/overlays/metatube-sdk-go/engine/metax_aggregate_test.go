@@ -6,6 +6,7 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/metatube-community/metatube-sdk-go/model"
+	"github.com/metatube-community/metatube-sdk-go/routing"
 )
 
 func TestMergeMovieInfoFillsMissingFieldsAndKeepsRouteOrder(t *testing.T) {
@@ -52,15 +53,28 @@ func TestMergeMovieInfoFillsMissingFieldsAndKeepsRouteOrder(t *testing.T) {
 	}
 }
 
-func TestNormalizeAggregationNumberOnlyNormalizesSeparatorsAndCase(t *testing.T) {
-	if normalizeAggregationNumber(" FC2-PPV3954834 ") != normalizeAggregationNumber("fc2 ppv 3954834") {
+func TestNormalizeAggregationNumberFollowsAmaneFoldRules(t *testing.T) {
+	// Case, spaces and hyphens are insignificant.
+	if !routing.SameNumber(" FC2-PPV3954834 ", "fc2 ppv 3954834") {
 		t.Fatal("expected case, spaces, and hyphens to be normalized")
 	}
-	if normalizeAggregationNumber("FC2-PPV3954834") == normalizeAggregationNumber("FC2-PPV3954835") {
+	if routing.SameNumber("FC2-PPV3954834", "FC2-PPV3954835") {
 		t.Fatal("different catalog numbers must not match")
 	}
-	if normalizeAggregationNumber("101926_01") == normalizeAggregationNumber("10192601") {
+	// Amane keeps underscores significant: 010115_001 and 010115-001 are two
+	// different titles.
+	if routing.SameNumber("101926_01", "10192601") || routing.SameNumber("101926_01", "101926-01") {
 		t.Fatal("underscores are significant in catalog numbers and must not be removed")
+	}
+	// The FC2 family is canonicalized because providers spell the same product
+	// differently and metaX merges FC2 into the uncensored route.
+	for _, equivalent := range []string{"FC2-3954834", "FC2PPV3954834", "FC2-PPV-3954834", "FC2_PPV_3954834", "fc2 ppv 3954834"} {
+		if !routing.SameNumber(equivalent, "FC2-PPV-3954834") {
+			t.Fatalf("%q should match FC2-PPV-3954834", equivalent)
+		}
+	}
+	if routing.SameNumber("3954834", "FC2-PPV-3954834") {
+		t.Fatal("a bare numeric provider ID must not match an FC2 catalog number")
 	}
 }
 
@@ -70,7 +84,7 @@ func TestAggregatedMovieInfoKeepsMovieFieldsTopLevelAndIncludesSources(t *testin
 			ID: "movie-1", Provider: "Selected", Number: "FC2-PPV3954834",
 			Title: "Selected title", Homepage: "https://selected.example/movie/1",
 		},
-		Category: "fc2",
+		Category: "uncensored",
 		Sources: []MovieSourceRecord{{
 			Provider: "Selected", ID: "movie-1", Status: "success",
 			Metadata: &model.MovieInfo{ID: "movie-1", Provider: "Selected", Number: "FC2-PPV3954834"},
@@ -90,7 +104,7 @@ func TestAggregatedMovieInfoKeepsMovieFieldsTopLevelAndIncludesSources(t *testin
 	if _, nested := body["MovieInfo"]; nested {
 		t.Fatalf("MovieInfo was unexpectedly nested: %s", encoded)
 	}
-	if body["category"] != "fc2" {
+	if body["category"] != "uncensored" {
 		t.Fatalf("category missing from aggregate response: %s", encoded)
 	}
 	sources, ok := body["sources"].([]any)
