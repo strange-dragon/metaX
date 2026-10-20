@@ -60,7 +60,7 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		go func() {
 			defer wg.Done()
 			started := time.Now()
-			results, err := e.searchMovie(keyword, provider, false)
+			results, err := e.searchMovie(keyword, provider, fallback)
 			responses[i] = response{
 				results: results,
 				err:     err,
@@ -78,13 +78,6 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		} else {
 			e.logger.Printf("Search keyword %s: %s(%s): %d result(s)", keyword, provider.Name(), response.elapsed, len(response.results))
 			results = append(results, response.results...)
-		}
-		if fallback {
-			// Keep database fallback inside the selected category; querying the
-			// whole database here could leak matches from unrelated categories.
-			if cached, err := e.searchMovieFromDB(keyword, provider, false); err == nil {
-				results = append(results, cached...)
-			}
 		}
 	}
 
