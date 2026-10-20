@@ -59,6 +59,9 @@ func TestNormalizeAggregationNumberOnlyNormalizesSeparatorsAndCase(t *testing.T)
 	if normalizeAggregationNumber("FC2-PPV3954834") == normalizeAggregationNumber("FC2-PPV3954835") {
 		t.Fatal("different catalog numbers must not match")
 	}
+	if normalizeAggregationNumber("101926_01") == normalizeAggregationNumber("10192601") {
+		t.Fatal("underscores are significant in catalog numbers and must not be removed")
+	}
 }
 
 func TestAggregatedMovieInfoKeepsMovieFieldsTopLevelAndIncludesSources(t *testing.T) {
