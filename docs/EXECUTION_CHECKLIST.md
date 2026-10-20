@@ -336,3 +336,11 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] CI on commit `6280829` passed Go tests in [run 39415020867](https://github.com/strange-dragon/metaX/actions/runs/39415020867), SDK focused/full-regression/build in [39415020810](https://github.com/strange-dragon/metaX/actions/runs/39415020810), formatting in [39415020918](https://github.com/strange-dragon/metaX/actions/runs/39415020918), and live FC2/uncensored in [39415020842](https://github.com/strange-dragon/metaX/actions/runs/39415020842).
 - [ ] The Jellyfin plugin still needs its own additive change to store the provider dictionary and send the header; that work is outside this backend-only phase.
 - [ ] Full pinned SDK regression remains environment-blocked locally for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch; CI runs the full suite.
+
+### Task: route-alias keys for request-scoped cookies (2026-10-20)
+
+- [x] Added `routing.ResolveProviderAliases` and expanded `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene` before applying the request cookie dictionary.
+- [x] Identical alias/canonical values are accepted; conflicting values return HTTP 400. Empty values are omitted; names remain case-insensitive.
+- [x] Added routing unit tests and internal route tests for alias expansion, conflict rejection, and empty-value handling.
+- [x] Documented the alias behavior in `docs/PROVIDER_ACCESS.md` and marked task 1.5 complete in `docs/BACKEND_TASKS.md`.
+- [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the clean integrated SDK passes; `go build ./cmd/server` succeeds; changed files are gofmt-clean.

@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/metatube-community/metatube-sdk-go/engine"
+	"github.com/metatube-community/metatube-sdk-go/routing"
 )
 
 const (
@@ -54,6 +55,7 @@ func requestProviderCookies(c *gin.Context) (map[string]string, error) {
 	if err := ensureProviderCookiesEOF(decoder); err != nil {
 		return nil, errors.New("provider cookie header must contain one JSON object")
 	}
+	expanded := make(map[string]string, len(cookies))
 	for name, value := range cookies {
 		if strings.TrimSpace(name) == "" {
 			return nil, errors.New("provider cookie names must not be empty")
@@ -61,8 +63,22 @@ func requestProviderCookies(c *gin.Context) (map[string]string, error) {
 		if strings.ContainsAny(value, "\r\n") {
 			return nil, fmt.Errorf("provider %s cookies must not contain CR or LF", name)
 		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		for _, candidate := range routing.ResolveProviderAliases(name) {
+			key := strings.ToLower(strings.TrimSpace(candidate))
+			if key == "" {
+				continue
+			}
+			if existing, exists := expanded[key]; exists && existing != value {
+				return nil, fmt.Errorf("conflicting cookies for provider %s", candidate)
+			}
+			expanded[key] = value
+		}
 	}
-	return cookies, nil
+	return expanded, nil
 }
 
 func ensureProviderCookiesEOF(decoder *json.Decoder) error {

@@ -37,6 +37,7 @@ cp "$overlay/route/metax_search_merge_test.go" "$sdk_root/route/metax_search_mer
 cp "$overlay/route/metax_aggregate_endpoint_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go"
 cp "$overlay/route/metax_request_cookies.go" "$sdk_root/route/metax_request_cookies.go"
 cp "$overlay/route/metax_request_cookies_test.go" "$sdk_root/route/metax_request_cookies_test.go"
+cp "$overlay/route/metax_request_cookies_alias_test.go" "$sdk_root/route/metax_request_cookies_alias_test.go"
 
 python3 - "$sdk_root/route/search.go" <<'PY'
 from pathlib import Path
@@ -627,7 +628,7 @@ gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/
   "$sdk_root/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_db_test.go" \
   "$sdk_root/engine/metax_fanout_test.go" "$sdk_root/engine/metax_request_cookies_test.go" \
   "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/search.go" "$sdk_root/route/review.go" \
-  "$sdk_root/route/metax_request_cookies.go" "$sdk_root/route/metax_request_cookies_test.go" \
+  "$sdk_root/route/metax_request_cookies.go" "$sdk_root/route/metax_request_cookies_test.go" "$sdk_root/route/metax_request_cookies_alias_test.go" \
   "$sdk_root/route/metax_category_api_test.go" \
   "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" \
   "$sdk_root/route/metax_search_merge_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go" \

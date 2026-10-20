@@ -104,6 +104,10 @@ Implementation rules:
 
 - Provider names are matched case-insensitively. Empty names and empty values
   are ignored. Unknown provider names are ignored for forward compatibility.
+- The documented route aliases are expanded before lookup: `DMM` → `FANZA`,
+  `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. If the
+  same request supplies conflicting cookies for an alias and its canonical
+  name, the request is rejected with HTTP 400.
 - A known provider must implement `provider.ConfigSetter`; otherwise the
   request is rejected with HTTP 400. JavDB, Freejavbt, and scraper providers
   covered by patch `0015` satisfy this.

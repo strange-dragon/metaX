@@ -280,6 +280,27 @@ func TestProviderCoverageResolvesAliasesAndReportsIntentionalGaps(t *testing.T) 
 	}
 }
 
+func TestResolveProviderAliases(t *testing.T) {
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{name: "JavDB", want: []string{"JavDB"}},
+		{name: "DMM", want: []string{"DMM", "FANZA"}},
+		{name: " dmm ", want: []string{"dmm", "FANZA"}},
+		{name: "MGStage", want: []string{"MGStage", "MGS"}},
+		{name: "ThePornDB", want: []string{"ThePornDB", "ThePornDBMovie", "ThePornDBScene"}},
+		{name: "", want: nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := ResolveProviderAliases(test.name); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("ResolveProviderAliases(%q) = %#v, want %#v", test.name, got, test.want)
+			}
+		})
+	}
+}
+
 func TestValidateRegisteredProvidersRejectsEmptyCategory(t *testing.T) {
 	config := Config{Routes: map[Category][]string{
 		CategoryWestern: {"ThePornDB"},

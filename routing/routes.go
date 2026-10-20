@@ -80,6 +80,29 @@ var providerAliases = map[string][]string{
 	"theporndb": {"ThePornDBMovie", "ThePornDBScene"},
 }
 
+// ResolveProviderAliases returns the supplied provider name followed by any
+// registered route aliases. It does not verify that a provider is installed;
+// callers should still match the result against the engine's provider list.
+// The returned names are intended for case-insensitive lookups.
+func ResolveProviderAliases(name string) []string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	key := normalize(name)
+	result := []string{name}
+	seen := map[string]struct{}{key: {}}
+	for _, alias := range providerAliases[key] {
+		aliasKey := normalize(alias)
+		if _, duplicate := seen[aliasKey]; duplicate {
+			continue
+		}
+		seen[aliasKey] = struct{}{}
+		result = append(result, alias)
+	}
+	return result
+}
+
 // Config maps each Amane content category to providers in preferred execution order.
 // Provider names are matched case-insensitively, but returned in their
 // registered canonical spelling.
