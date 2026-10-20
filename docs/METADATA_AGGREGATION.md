@@ -79,7 +79,7 @@ Images requested with `provider=MetaX` are resolved to the route-first real prov
 Aggregated detail responses and `MetaX/<number>` image identity resolution are cached in-process and coalesced with `singleflight`:
 
 - `METAX_AGGREGATE_CACHE_TTL` controls the TTL (default `10m`; `0`, `off`, or `disabled` turns caching off).
-- `METAX_AGGREGATE_CACHE_MAX` controls the maximum number of entries per cache (default `256`).
+- `METAX_AGGREGATE_CACHE_MAX` controls the maximum number of entries per cache (default `256`).\n- `METAX_AGGREGATE_FANOUT` bounds concurrent provider calls from category search and detail source fan-out (default `16`; `0`, `off`, `disabled`, or `none` disables the bound). The server's `--request-timeout` (default `1m`) remains the per-provider HTTP deadline; the limiter only bounds concurrency and never abandons a running provider call.
 
 Only successful results are cached; failures are returned to the caller and retried on the next request. Cache keys include the route-table fingerprint, category, lazy flag, and provider/number identity. FC2 and uncensored share a cache key because they resolve to the same route. Returned values are cloned so the `MetaX` identity rewrite cannot corrupt the cached entry. The cache is per-process and is cleared on restart; it is not shared across server instances.
 

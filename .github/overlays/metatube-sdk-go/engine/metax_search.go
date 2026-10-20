@@ -59,6 +59,8 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		i, provider := i, provider
 		go func() {
 			defer wg.Done()
+			release := aggregateFanoutLimiter.acquire()
+			defer release()
 			started := time.Now()
 			results, err := e.searchMovie(keyword, provider, fallback)
 			responses[i] = response{

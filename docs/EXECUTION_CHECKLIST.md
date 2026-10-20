@@ -259,3 +259,14 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; focused new tests pass; server build succeeds.
 - [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
 - Next: bound aggregation fan-out and expose a per-request provider deadline.
+
+### Task: bounded provider fan-out (2026-10-20)
+
+- [x] Added a process-wide `METAX_AGGREGATE_FANOUT` limiter shared by category search and aggregated-detail source fan-out (default `16`, disabled with `0`/`off`/`disabled`/`none`).
+- [x] The limiter wraps only remote provider calls; baseline cache hits and the already-fetched baseline detail do not consume a slot.
+- [x] Provider HTTP calls remain bounded by the stock `--request-timeout`; the limiter does not abandon running goroutines or create timeout/partial-result states.
+- [x] Added tests for env parsing, search fan-out concurrency, and detail source fan-out concurrency with six providers and a limit of two.
+- [x] Updated the build format gate to cover the routing config and fan-out files.
+- [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; focused fan-out tests pass; server build succeeds.
+- [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
+- Backend core tasks are complete. Remaining work is provider coverage or the separate Jellyfin plugin project.

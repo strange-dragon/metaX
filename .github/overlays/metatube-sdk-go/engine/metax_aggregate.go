@@ -172,6 +172,8 @@ func (e *Engine) getAggregatedMovieInfo(pid providerid.ProviderID, lazy bool, co
 				return
 			}
 
+			release := aggregateFanoutLimiter.acquire()
+			defer release()
 			candidates, searchErr := e.SearchMovie(baseline.Number, name, false)
 			if searchErr != nil {
 				records[i] = MovieSourceRecord{Provider: name, Status: "error", Error: searchErr.Error()}
