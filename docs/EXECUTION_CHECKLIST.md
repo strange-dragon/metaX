@@ -125,3 +125,10 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Added deterministic local HTTP tests for exact slug success, missing slug, mismatched slug, and redirect to another work; existing metadata extraction is preserved.
 - [x] Patch application, formatting, and focused JavBus/AVBase/DAHLIA-FALENO tests passed in [CI run 38883877346](https://github.com/strange-dragon/metaX/actions/runs/38883877346).
 - [ ] Full SDK regression, live-site behavior, and end-to-end integration remain unverified.
+
+## Category routing fan-out and fallback follow-up (2026-10-20)
+
+- [x] Fixed the SDK integration script so category resolution uses the injected `routing.Config` rather than shadowing it with `routing.DefaultConfig()`; this addresses the empty provider fan-out seen in the latest SDK integration test.
+- [x] Kept category search as concurrent provider fan-out while aggregating results in configured route order; an individual provider error does not discard successful results from other providers.
+- [x] Delegated per-provider cache fallback to the SDK's existing `searchMovie(keyword, provider, fallback)` path, preserving provider-specific keyword normalization and the SDK's live-result/cache merge semantics; removed the duplicate category-level database fallback query.
+- [ ] Full SDK integration/build tests intentionally not run in this task per user direction. Source-level checks only; no workflow was manually dispatched.
