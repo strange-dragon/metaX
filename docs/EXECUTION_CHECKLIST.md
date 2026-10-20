@@ -221,3 +221,15 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; `go build -o /tmp/metatube-server-metax ./cmd/server` succeeds.
 - [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
 - Next: DB-first catalog-number resolution before live provider search.
+
+### Task: DB-first catalog-number resolution (2026-10-20)
+
+- [x] Added `routing.NumberLookupKeys` to generate the normalized SQL candidates, including common FC2 separator spellings.
+- [x] Added `movie_metadata` lookup restricted to the resolved route providers, with route-order selection and a `SameNumber` re-check.
+- [x] `lazy=true` aggregation now resolves `number -> provider/id` from the database before any live search; query errors and misses fall back to the existing live route.
+- [x] Image identity resolution (`ResolveAggregatedProviderID`) now uses the same database-first lookup, avoiding a search per image request.
+- [x] `lazy=false` intentionally bypasses the database-first path so refreshes still see provider changes.
+- [x] Added deterministic tests for DB hits, FC2 spelling variants, out-of-route rows, route-order preference, lazy gating, and live fallback.
+- [x] Verification: `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; focused DB/cache tests pass; `go test ./... -count=1` in metaX passes; server build succeeds.
+- [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
+- Next: make the route table configurable and validated at startup.

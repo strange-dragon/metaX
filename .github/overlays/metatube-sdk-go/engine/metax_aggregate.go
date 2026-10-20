@@ -235,6 +235,17 @@ func (e *Engine) getAggregatedMovieInfoByNumber(number string, category routing.
 		return nil, err
 	}
 
+	// lazy=true means the caller prefers cached metadata. Resolve the number
+	// from the local catalog first and only search providers when the cache
+	// does not contain a usable record.
+	if lazy {
+		if pid, ok := e.lookupProviderIDByNumber(number, providers); ok {
+			if aggregated, aggErr := e.getAggregatedMovieInfo(pid, true, config, candidateCategory); aggErr == nil {
+				return aggregated, nil
+			}
+		}
+	}
+
 	for _, name := range providers {
 		results, err := e.SearchMovie(number, name, false)
 		if err != nil {
@@ -276,6 +287,15 @@ func (e *Engine) resolveAggregatedProviderID(number string, category routing.Cat
 	if err != nil {
 		return providerid.ProviderID{}, err
 	}
+
+	// Image requests only need a real provider identity. Reuse the local
+	// catalog when possible so primary/thumb/backdrop fetches do not each
+	// trigger a provider search. A stale record merely yields a failed image
+	// until the next lazy detail refresh updates it.
+	if pid, ok := e.lookupProviderIDByNumber(number, providers); ok {
+		return pid, nil
+	}
+
 	for _, name := range providers {
 		results, err := e.SearchMovie(number, name, false)
 		if err != nil {

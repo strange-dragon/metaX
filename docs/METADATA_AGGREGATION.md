@@ -69,6 +69,15 @@ Aggregated detail responses and `MetaX/<number>` image identity resolution are c
 
 Only successful results are cached; failures are returned to the caller and retried on the next request. Cache keys include the route-table fingerprint, category, lazy flag, and provider/number identity. FC2 and uncensored share a cache key because they resolve to the same route. Returned values are cloned so the `MetaX` identity rewrite cannot corrupt the cached entry. The cache is per-process and is cleared on restart; it is not shared across server instances.
 
+## DB-first catalog-number resolution
+
+`MetaX/<number>` detail requests with `lazy=true` and image identity resolution consult the local `movie_metadata` table before searching providers:
+
+- The lookup is restricted to providers in the resolved category route, keeps configured route order when several providers have the same number, and applies `routing.SameNumber` in Go after a bounded SQL pre-filter.
+- The SQL pre-filter mirrors number folding (case-insensitive, hyphens and spaces removed, underscores preserved) and includes the common FC2 spellings (`FC2-...`, `FC2PPV...`, `FC2_PPV_...`).
+- A miss, query error, or incomplete row falls back to the live route search. A stale record at worst yields a stale lazy detail or a broken image until the next non-lazy refresh; it never blocks live fallback for a different request.
+- `lazy=false` deliberately skips the DB-first path so a refresh still observes provider changes immediately.
+
 ## Merge rules
 
 1. For a real-provider aggregate request, the selected provider's detail must succeed before the endpoint can return a result. For `MetaX`, the first route candidate whose detail succeeds becomes the baseline identity; if no provider matches the catalog number, the endpoint returns not found.

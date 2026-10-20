@@ -61,3 +61,37 @@ func TestCategoryCanonicalMergesFC2IntoUncensored(t *testing.T) {
 		}
 	}
 }
+
+func TestNumberLookupKeysCoverStoredFC2Spellings(t *testing.T) {
+	keys := NumberLookupKeys("FC2-3954834")
+	want := []string{
+		"fc2ppv3954834",
+		"fc23954834",
+		"fc2_3954834",
+		"fc2ppv_3954834",
+		"fc2_ppv3954834",
+		"fc2_ppv_3954834",
+	}
+	for _, expected := range want {
+		found := false
+		for _, key := range keys {
+			if key == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("NumberLookupKeys(%q) = %v, missing %q", "FC2-3954834", keys, expected)
+		}
+	}
+}
+
+func TestNumberLookupKeysKeepNonFC2NumbersExact(t *testing.T) {
+	keys := NumberLookupKeys(" ABP-123 ")
+	if len(keys) != 1 || keys[0] != "abp123" {
+		t.Fatalf("NumberLookupKeys(ABP-123) = %v, want [abp123]", keys)
+	}
+	if keys := NumberLookupKeys("   "); keys != nil {
+		t.Fatalf("NumberLookupKeys(empty) = %v, want nil", keys)
+	}
+}
