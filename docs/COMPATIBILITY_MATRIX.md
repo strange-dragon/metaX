@@ -327,8 +327,8 @@ Compared Amane's JavDB actor crawler with the pinned SDK actor interfaces and Th
 | GFriends | No actor-profile interface equivalent | This source is an image index backed by a repository `Filetree.json`, not a biography/profile crawler. Do not model an image-only hit as a complete actor profile; revisit when metaX has an explicit actor-image enrichment path. |
 | JavDB | Native `provider/javdb/JavDBActor` added | Exact name/alias matching, actor slug validation, profile metadata and avatar mapping are covered by deterministic tests; live-site behavior remains unverified. |
 | Minnano | Native `provider/minnano/MinnanoActor` added | Exact-name search, numeric profile IDs, age-gate cookie and profile fields are covered by deterministic tests; SDK actor registration and API discovery passed in [run 39139794806](https://github.com/strange-dragon/metaX/actions/runs/39139794806); live-site behavior remains unverified. |
+| Wikipedia | Native `provider/wikipediaactor/WikipediaActor` added | Exact label/alias identity, AV occupation/description filtering, Wikidata birthday/image fields, Wikipedia biography extraction, and deterministic mocked API tests; live-site behavior remains unverified. |
 | ThePornDB | SDK already provides `ThePornDBActor` | Retain existing API-backed actor provider; audit its URL parsing and access-token requirements separately from scene/movie URL hardening. |
-| Wikipedia / Wikidata | No direct SDK actor provider | Defer rather than build a shallow scraper: correct behavior requires multilingual Wikidata candidate search, AV-specific occupation/description filtering, exact identity checks, entity data validation and language-prioritized article extraction. Add only with deterministic API-response tests. |
 
 
 ## Focused comparison: Minnano actor search and profile (2026-10-16)
@@ -439,7 +439,7 @@ Audited the six registered Amane actor crawlers at commit `a2d45880e83df7047d461
 
 ### Actor migration decision
 
-The native actor packages currently present in metaX cover JavDB and Minnano. That does not yet reproduce the complete actor-source set: AVBase profile support, GFriends image enrichment, and Wikipedia/Wikidata biography enrichment are distinct candidate work items. ThePornDB should be extended only if comparison identifies a concrete SDK gap. Before implementation, verify how the MetaTube engine consumes `ActorProvider` results and whether it can merge profile, image, and biography sources without discarding populated fields.
+The native actor packages currently present in metaX cover JavDB, Minnano, AVBase, and Wikipedia/Wikidata. That does not yet reproduce the complete actor-source set: GFriends image enrichment and the ThePornDB comparison remain distinct work items. ThePornDB should be extended only if comparison identifies a concrete SDK gap. Before implementation, verify how the MetaTube engine consumes `ActorProvider` results and whether it can merge profile, image, and biography sources without discarding populated fields.
 
 ### Verification limits
 
@@ -496,7 +496,7 @@ Environment: local macOS, Go 1.27.3, pinned SDK `c62584675c593816cc07e7b5b977d14
 | FC2 search/detail | `FC2-PPV-3954834` search returned a merged candidate; `MetaX/FC2-3954834` detail merged the FC2 source with summary, genres, cover, and release date | JavDB detail redirected to login, JavBus rejected the FC2 keyword, AVSOX/Airav were not found |
 | Amateur route | `200GANA-123` search returned HTTP 200 with `MetaX` first; JavDB results followed | Explicit MGS search returned HTTP 403; MGS is registered, but live access is blocked |
 | Hentai route | `GETCHU-12345` search returned HTTP 200 with `MetaX` first, then Getchu | Exact `GETCHU-<digits>` fallback works; fuzzy catalog search remains deferred |
-| Actor search | `三上悠亜` returned three results, Gfriends first | Gfriends is live; no Wikipedia/Wikidata biography source is implemented |
+| Actor search | `三上悠亜` returned three results, Gfriends first | Gfriends is live; `WikipediaActor` now adds biography enrichment with deterministic tests, but its live-site path has not been rechecked |
 | Error/config behavior | Unknown category returned HTTP 400; `METAX_ROUTES_FINGERPRINT=deadbeef` aborted startup with `fingerprint mismatch` | Startup coverage/fingerprint checks are active |
 
 Provider-specific limits observed on the same date:

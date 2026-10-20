@@ -74,12 +74,24 @@ are point-in-time network evidence, not parser tests.
 | Kin8 | HTTP 404 for the sample | Same miss semantics | The sample may be invalid or removed; verify with a known current catalog entry before changing the provider. |
 | Official / Prestige / R18Dev | Not implemented or intentionally deferred | Official router / Prestige API / offline PostgreSQL | Still deferred for the reasons in the compatibility matrix. |
 | Getchu fuzzy search | Exact `GETCHU-<digits>` fallback works; fuzzy catalog search deferred | Amane uses the first search result | Do not copy the weaker first-result behavior; add an exact identity check first. |
-| Wikipedia/Wikidata actor biography | Not implemented | Wikidata entity filtering + Wikipedia extraction | Remaining Task 6 item; requires deterministic API fixtures and identity rules. |
+| Wikipedia/Wikidata actor biography | Implemented as `WikipediaActor` | Wikidata entity filtering + Wikipedia extraction | Exact label/alias identity, AV occupation/description filtering, and deterministic API fixtures are covered locally; live-site verification remains pending. |
+
+## Jellyfin plugin configuration
+
+The intended user-facing location for expiring site cookies is the Jellyfin
+plugin configuration, so a cookie can be refreshed without rebuilding the
+container or editing server environment variables. The pinned upstream plugin
+(`f7c1f336`) currently exposes only the server URL/token and has no provider
+cookie fields or pass-through protocol. Moving cookie values there therefore
+requires a separate, additive plugin change (configuration fields plus a
+request header or authenticated configuration endpoint) before the server-side
+environment variables below can be treated as fallback-only.
 
 ## Security notes
 
 - Never commit cookies, tokens, or proxy credentials. Pass them through the
-  deployment environment or a secret manager.
+  Jellyfin plugin configuration once that path exists, or through the
+  deployment environment/secret manager as the current fallback.
 - Logs should record that a cookie/proxy was configured, not the secret value.
 - Cookies expire; a failed scrape after a previously successful run should be
   re-checked with a fresh value before treating it as a parser regression.

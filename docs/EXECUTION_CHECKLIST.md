@@ -311,3 +311,16 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Probed FC2PPVDB, MGS, FALENO work paths, and Freejavbt with Chrome 131/133 and Firefox 135 TLS profiles. FC2PPVDB remained Cloudflare 1005, MGS remained CloudFront 403, FALENO work/search remained XSERVER 403, and Freejavbt remained a login page/503; these require a different egress IP or account cookies.
 - [x] Documented the configuration and failure matrix in `docs/PROVIDER_ACCESS.md` and linked it from the README and compatibility matrix.
 - [x] CI on commit `b417e0f` passed the SDK patch/full-regression/build job in [run 39400027824](https://github.com/strange-dragon/metaX/actions/runs/39400027824), Go tests in [39400027781](https://github.com/strange-dragon/metaX/actions/runs/39400027781), formatting in [39400027799](https://github.com/strange-dragon/metaX/actions/runs/39400027799), and the existing live FC2/MOON smoke workflows. This validates the cookie-configuration patch; it does not claim a blocked source now works from this network.
+
+### Task: Wikipedia/Wikidata actor provider (2026-10-20)
+
+- [x] Added `provider/wikipediaactor` with `ActorProvider`, `ActorSearcher`, proxy, and request-timeout support.
+- [x] Search uses `wbsearchentities` for ja/zh/en, filters descriptions and P106 occupations to AV entities, and requires an exact NFKC/case-folded label or alias match before returning a candidate.
+- [x] Detail maps the preferred label, label aliases, P569 birthday, P18 Commons image, Wikidata homepage, and Wikipedia biography into existing `ActorInfo` fields. Section extraction follows Amane's intro plus biography whitelist and excludes work/filmography sections.
+- [x] Wikipedia page lookup follows the configured zh/ja/en order, including the Chinese `zh-cn` variant path; Wikidata remains the stable identity source and homepage.
+- [x] Added deterministic mocked API tests for exact alias matching, non-AV rejection, different-name rejection, field mapping, summary section filtering, birthday fallback, malformed JSON, URL/origin validation, proxy/timeout configuration, and factory registration.
+- [x] Registered `WikipediaActor` in the engine overlay and added the package to the provider-overlay, focused-test, format-gate, and workflow path lists.
+- [x] Local verification: `go test ./... -count=1` passes; the clean pinned-SDK overlay focused suite (including `provider/wikipediaactor`) passes; `go build ./cmd/server` succeeds; `/v1/providers` lists `WikipediaActor` with `https://www.wikidata.org`.
+- [ ] Full pinned SDK regression remains environment-blocked for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch.
+- [ ] CI run for this commit has not been recorded yet.
+- Note: the pinned Jellyfin plugin has no provider-cookie configuration or pass-through protocol. Server-side environment cookies remain the current fallback until an additive plugin change is made.

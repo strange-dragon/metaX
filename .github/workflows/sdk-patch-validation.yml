@@ -17,6 +17,7 @@ on:
       - "provider/iqqtv/**"
       - "provider/javdb/**"
       - "provider/minnano/**"
+      - "provider/wikipediaactor/**"
       - "provider/javlibrary/**"
       - "provider/xcity/**"
       - ".github/scripts/validate-provider-integration.sh"

@@ -12,7 +12,7 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 
 ## Current status
 
-- The `feat/amane-provider-migration` branch currently contains 12 native Go Provider packages: AVBaseActor, Airav, AVSOX, FC2Club, FreeJAVBT, GIGA, IQQTV, Jav321, JavDB (movie and actor), JavLibrary, Minnano (actor), and XCity.
+- The `feat/amane-provider-migration` branch currently contains 13 native Go Provider packages: AVBaseActor, Airav, AVSOX, FC2Club, FreeJAVBT, GIGA, IQQTV, Jav321, JavDB (movie and actor), JavLibrary, Minnano (actor), WikipediaActor, and XCity.
 - The branch maintains 13 unique SDK patches for existing-provider correctness and URL/ID validation. The permanent SDK patch workflow applies the patch set and runs focused deterministic tests plus the full upstream SDK regression suite.
 - A reproducible build entry point applies all 13 maintained SDK patches, overlays native providers, verifies engine registration and `/v1/providers` discovery, runs the pinned SDK regression suite, and builds the server binary. The four-provider version passed in [run 39139447663](https://github.com/strange-dragon/metaX/actions/runs/39139447663); the earlier eleven-package build passed in [run 39139794806](https://github.com/strange-dragon/metaX/actions/runs/39139794806). The expanded twelve-package build, including `AVBaseActor`, passed in [run 39207291492](https://github.com/strange-dragon/metaX/actions/runs/39207291492), producing artifact `metatube-server-dc8b7d5815c98cad2acaa945c2afb0c0e405115f` (available until 2026-10-26).
 - These are migration-workspace packages, not yet a claim of end-to-end runtime integration: the existing MetaTube engine must import the Provider packages (or merge them into the SDK) for `init()` registration to take effect. Live-site verification and Jellyfin/MetaTube integration remain pending.
@@ -33,7 +33,7 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 
 ## Reproducible integrated server build
 
-The branch includes a reproducible build script that applies 13 maintained SDK patches, integrates twelve native provider packages, applies the category-search overlay, runs engine/API contract tests and upstream regression tests, then builds a MetaTube server binary. It requires a clean checkout of the pinned SDK revision.
+The branch includes a reproducible build script that applies 13 maintained SDK patches, integrates thirteen native provider packages, applies the category-search overlay, runs engine/API contract tests and upstream regression tests, then builds a MetaTube server binary. It requires a clean checkout of the pinned SDK revision.
 
 ```bash
 git clone https://github.com/metatube-community/metatube-sdk-go.git ./metatube-sdk-go
@@ -41,7 +41,7 @@ git -C ./metatube-sdk-go checkout c62584675c593816cc07e7b5b977d14c7eb505a3
 bash .github/scripts/build-metatube-server.sh ./metatube-sdk-go ./dist/metatube-server
 ```
 
-The script refuses a dirty SDK checkout or a different commit. The generated binary includes ten movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `XCity`) and three actor providers (`AVBaseActor`, `JavDBActor`, `MinnanoActor`), plus the maintained SDK patches. The earlier eleven-package integration passed in [GitHub Actions run 39191776372](https://github.com/strange-dragon/metaX/actions/runs/39191776372). The current twelve-package integration, including `AVBaseActor`, passed in [run 39207291492](https://github.com/strange-dragon/metaX/actions/runs/39207291492), including provider registration, `/v1/providers` API discovery, focused tests, the full pinned SDK regression suite, and server compilation. Live API checks were added in `.github/scripts/live-metax-api-smoke.sh` and the `Live MetaX API smoke test` workflow; they cover censored/FC2 search, `MetaX` detail plus `sources[]`, images, unknown-category errors, and fingerprint-pin startup failure. A running Jellyfin deployment remains unverified. The workflow uploads the built binary as a seven-day artifact after all checks pass.
+The script refuses a dirty SDK checkout or a different commit. The generated binary includes ten movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `XCity`) and four actor providers (`AVBaseActor`, `JavDBActor`, `MinnanoActor`, `WikipediaActor`), plus the maintained SDK patches. The earlier eleven-package integration passed in [GitHub Actions run 39191776372](https://github.com/strange-dragon/metaX/actions/runs/39191776372). The earlier twelve-package integration, including `AVBaseActor`, passed in [run 39207291492](https://github.com/strange-dragon/metaX/actions/runs/39207291492), including provider registration, `/v1/providers` API discovery, focused tests, the full pinned SDK regression suite, and server compilation. Live API checks were added in `.github/scripts/live-metax-api-smoke.sh` and the `Live MetaX API smoke test` workflow; they cover censored/FC2 search, `MetaX` detail plus `sources[]`, images, unknown-category errors, and fingerprint-pin startup failure. A running Jellyfin deployment remains unverified. The workflow uploads the built binary as a seven-day artifact after all checks pass.
 
 
 ## Backend orchestration work

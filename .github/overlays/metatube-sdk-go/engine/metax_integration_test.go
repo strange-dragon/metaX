@@ -9,7 +9,7 @@ func TestMetaXNativeProvidersAreRegistered(t *testing.T) {
 			t.Errorf("movie provider %s was not discovered by the SDK engine", name)
 		}
 	}
-	for _, name := range []string{"AVBaseActor", "JavDBActor", "MinnanoActor"} {
+	for _, name := range []string{"AVBaseActor", "JavDBActor", "MinnanoActor", "WikipediaActor"} {
 		if !e.IsActorProvider(name) {
 			t.Errorf("actor provider %s was not discovered by the SDK engine", name)
 		}

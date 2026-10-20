@@ -15,7 +15,7 @@ fi
 
 workspace_root="$(cd "$(dirname "$0")/../.." && pwd)"
 sdk_root="$(cd "$1" && pwd)"
-providers=(avbaseactor airav avsox fc2club freejavbt giga iqqtv jav321 javdb javlibrary minnano xcity)
+providers=(avbaseactor airav avsox fc2club freejavbt giga iqqtv jav321 javdb javlibrary minnano wikipediaactor xcity)
 test -f "$sdk_root/engine/register.go"
 
 for provider in "${providers[@]}"; do
@@ -38,7 +38,7 @@ text = path.read_text()
 marker = "import (\n"
 if marker not in text:
     raise SystemExit("engine/register.go import block not found")
-for provider in ("avbaseactor", "airav", "avsox", "fc2club", "freejavbt", "giga", "iqqtv", "jav321", "javdb", "javlibrary", "minnano", "xcity"):
+for provider in ("avbaseactor", "airav", "avsox", "fc2club", "freejavbt", "giga", "iqqtv", "jav321", "javdb", "javlibrary", "minnano", "wikipediaactor", "xcity"):
     line = f'\t_ "github.com/metatube-community/metatube-sdk-go/provider/{provider}"'
     if line not in text:
         text = text.replace(marker, marker + line + "\n", 1)
@@ -57,6 +57,6 @@ gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test
   "$sdk_root/route/metax_test_helpers_test.go"
 
 echo "Native movie/actor provider overlay applied. Validate from: $sdk_root"
-echo "Focused tests: go test ./engine ./route ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1"
+echo "Focused tests: go test ./engine ./route ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/wikipediaactor ./provider/xcity -count=1"
 echo "Full regression: go test \$(go list ./... | grep -Ev \"github.com/metatube-community/metatube-sdk-go/translate\")"
 echo "Server build: go build -o /tmp/metatube-server ./cmd/server"
