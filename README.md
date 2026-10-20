@@ -26,6 +26,7 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 - [Migration plan](docs/MIGRATION_PLAN.md)
 - [Compatibility matrix](docs/COMPATIBILITY_MATRIX.md)
 - [Initial implementation comparison](docs/INITIAL_FINDINGS.md)
+- [Implementation-level Amane ↔ MetaTube audit](docs/IMPLEMENTATION_AUDIT.md)
 - [Licensing and attribution policy](docs/LICENSING.md)
 
 ## Reproducible integrated server build
