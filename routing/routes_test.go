@@ -172,7 +172,7 @@ func TestConfigValidateRejectsDuplicates(t *testing.T) {
 	}
 }
 
-func TestInferCategoryRecognizesUnambiguousNumberFormats(t *testing.T) {
+func TestInferCategoryRecognizesAmaneNumberFamilies(t *testing.T) {
 	tests := []struct {
 		keyword string
 		want    Category
@@ -180,9 +180,16 @@ func TestInferCategoryRecognizesUnambiguousNumberFormats(t *testing.T) {
 		{keyword: "fc2-ppv3954834", want: CategoryFC2},
 		{keyword: "FC2PPV3954834", want: CategoryFC2},
 		{keyword: "fc2-ppv-3954834", want: CategoryFC2},
-		{keyword: "101926_01", want: CategoryFC2},
+		{keyword: "101926_01", want: CategoryUncensored},
 		{keyword: "KIN8-1234", want: CategoryWestern},
 		{keyword: "kin8tengoku_42", want: CategoryWestern},
+		{keyword: "ABC-123", want: CategoryCensored},
+		{keyword: "MD-1234", want: CategoryChinese},
+		{keyword: "MKY-ABC-123", want: CategoryChinese},
+		{keyword: "200GANA-123", want: CategoryAmateur},
+		{keyword: "HEYZO-1234", want: CategoryUncensored},
+		{keyword: "Vixen.24.01.02", want: CategoryWestern},
+		{keyword: "Getchu-12345", want: CategoryHentai},
 	}
 	for _, tc := range tests {
 		t.Run(tc.keyword, func(t *testing.T) {
@@ -196,7 +203,7 @@ func TestInferCategoryRecognizesUnambiguousNumberFormats(t *testing.T) {
 
 func TestInferCategoryLeavesAmbiguousNumbersUnclassified(t *testing.T) {
 	for _, keyword := range []string{
-		"", "ABC-123", "ABF-123", "200GANA-123", "https://example.invalid/movie/123",
+		"", "unclassified", "123456789", "https://example.invalid/movie/123",
 	} {
 		if got, ok := InferCategory(keyword); ok {
 			t.Errorf("InferCategory(%q) = (%q, true), want unclassified", keyword, got)
