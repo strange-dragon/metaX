@@ -166,3 +166,13 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Main finding: current metaX/SDK has concurrent candidate search, ordered route fan-out, provider+ID deduplication, provider-priority ranking, per-provider error tolerance, and SDK cache fallback. It does **not** yet implement Amane-style field-by-field detail metadata aggregation across providers.
 - [x] Next recommended task: design safe detail metadata enrichment with identity validation, fill-empty semantics, field/list/image merge rules, and deterministic tests. Do not merge search candidates solely by title.
 - [ ] No tests, formatter, integrated build, live-site requests, or Jellyfin runtime were executed for this source audit.
+
+
+### Task 7 — Detail metadata aggregation and independent source records
+
+- [x] Added `.github/overlays/metatube-sdk-go/engine/metax_aggregate.go`: route-based concurrent detail lookups, conservative catalog-number identity validation, first-non-empty scalar fields, stable list unions, per-source status/errors, and retained independent structured `MovieInfo` records.
+- [x] Preserved the selected provider + ID as the public detail identity and added an `aggregate=false` opt-out in the integration script's planned route patch; the default response is additive and keeps existing top-level detail fields.
+- [x] Added deterministic merge/normalization tests under `.github/overlays/metatube-sdk-go/engine/metax_aggregate_test.go` and wired the overlay test into the integration script.
+- [x] Documented response shape, merge rules, and the distinction between normalized provider metadata and raw HTTP/site payloads in `docs/METADATA_AGGREGATION.md`.
+- [ ] **Not verified yet:** the integration script has not been executed against the pinned SDK checkout; Go tests, gofmt, full server build, endpoint-level JSON tests, and live-site checks have not run. No GitHub Actions workflow was dispatched.
+- [ ] Next: apply locally to the pinned SDK, correct any compile/integration errors, add endpoint contract coverage for `sources` and `aggregate=false`, then validate broader category inference separately.
