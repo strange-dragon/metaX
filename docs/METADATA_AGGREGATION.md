@@ -78,6 +78,17 @@ Only successful results are cached; failures are returned to the caller and retr
 - A miss, query error, or incomplete row falls back to the live route search. A stale record at worst yields a stale lazy detail or a broken image until the next non-lazy refresh; it never blocks live fallback for a different request.
 - `lazy=false` deliberately skips the DB-first path so a refresh still observes provider changes immediately.
 
+## Route configuration
+
+The server route table is configurable at startup:
+
+- `METAX_ROUTES` contains inline JSON and takes precedence over `METAX_ROUTES_FILE`, which points at a JSON file. With neither set, `routing.DefaultConfig()` is used.
+- Both `{"routes":{"censored":["DMM","JavDB"]}}` and the bare `{"censored":["DMM","JavDB"]}` shape are accepted.
+- Category keys must be canonical: `censored`, `uncensored`, `chinese`, `amateur`, `western`, or `hentai`. Legacy aliases (`fc2`, `chinese_subtitles`, `animation`) are rejected in configuration so they cannot silently shadow the canonical route; query values still canonicalize through `Category.Canonical()`.
+- Unknown categories, empty routes, empty or duplicate provider names, malformed JSON, and extra top-level fields abort server startup with a nonzero exit.
+- Provider availability is resolved against the providers registered in the running binary. A route whose providers are all unavailable still returns HTTP 400 (`ErrNoAvailableProvider`), and unregistered entries are skipped.
+- The stock search/detail wrappers read `routing.ActiveConfig()`; explicit `...WithConfig` engine methods remain available for tests and embedders. The cache key includes the route fingerprint, so changing the active table never reuses results from a previous table.
+
 ## Merge rules
 
 1. For a real-provider aggregate request, the selected provider's detail must succeed before the endpoint can return a result. For `MetaX`, the first route candidate whose detail succeeds becomes the baseline identity; if no provider matches the catalog number, the endpoint returns not found.

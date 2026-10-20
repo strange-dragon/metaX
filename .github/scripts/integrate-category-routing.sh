@@ -77,11 +77,17 @@ if "func getSearchWithConfig(" not in source:
     source = source.replace(
         'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
         'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\n'
-        '\treturn getSearchWithConfig(app, typ, routing.DefaultConfig())\n'
+        '\treturn getSearchWithConfig(app, typ, routing.ActiveConfig())\n'
         '}\n\n'
         'func getSearchWithConfig(app *engine.Engine, typ searchType, routingConfig routing.Config) gin.HandlerFunc {',
         1,
     )
+
+# Migrate checkouts integrated before route-table configuration existed.
+source = source.replace(
+    'return getSearchWithConfig(app, typ, routing.DefaultConfig())',
+    'return getSearchWithConfig(app, typ, routing.ActiveConfig())',
+)
 
 start = source.find('\t\tcase movieSearchType:')
 end = source.find('\t\tdefault:', start)
@@ -235,12 +241,18 @@ if 'func getInfoWithConfig(' not in source:
     source = source.replace(
         'func getInfo(app *engine.Engine, typ infoType) gin.HandlerFunc {\n\treturn func(c *gin.Context) {',
         'func getInfo(app *engine.Engine, typ infoType) gin.HandlerFunc {\n'
-        '\treturn getInfoWithConfig(app, typ, routing.DefaultConfig())\n'
+        '\treturn getInfoWithConfig(app, typ, routing.ActiveConfig())\n'
         '}\n\n'
         'func getInfoWithConfig(app *engine.Engine, typ infoType, routingConfig routing.Config) gin.HandlerFunc {\n'
         '\treturn func(c *gin.Context) {',
         1,
     )
+
+# Migrate checkouts integrated before route-table configuration existed.
+source = source.replace(
+    'return getInfoWithConfig(app, typ, routing.DefaultConfig())',
+    'return getInfoWithConfig(app, typ, routing.ActiveConfig())',
+)
 
 if 'Aggregate: true' in source:
     source = source.replace(
@@ -345,7 +357,7 @@ if 'engine.IsAggregatedProvider(uri.Provider)' not in source:
     replacement = '''\t\t// The merged search candidate carries the reserved provider name.
 \t\t// Resolve it to the route-first real provider before the stock image paths.
 \t\tif engine.IsAggregatedProvider(uri.Provider) {
-\t\t\tresolved, resolveErr := app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.DefaultConfig())
+\t\t\tresolved, resolveErr := app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.ActiveConfig())
 \t\t\tif resolveErr != nil {
 \t\t\t\tabortWithError(c, resolveErr)
 \t\t\t\treturn
@@ -359,15 +371,60 @@ if 'engine.IsAggregatedProvider(uri.Provider)' not in source:
         raise SystemExit("image provider dispatch marker not found; SDK route/image.go changed")
     source = source.replace(marker, replacement, 1)
 
+# Migrate checkouts integrated before route-table configuration existed.
+source = source.replace(
+    'app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.DefaultConfig())',
+    'app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.ActiveConfig())',
+)
+
 required = [
     '"github.com/metatube-community/metatube-sdk-go/routing"',
     'Category string  `form:"category"`',
     'engine.IsAggregatedProvider(uri.Provider)',
-    'app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.DefaultConfig())',
+    'app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.ActiveConfig())',
 ]
 missing = [item for item in required if item not in source]
 if missing:
     raise SystemExit("could not patch image endpoint; missing expected markers: " + repr(missing))
+path.write_text(source)
+PY
+
+python3 - "$sdk_root/cmd/cmd.go" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+
+if '"github.com/metatube-community/metatube-sdk-go/routing"' not in source:
+    source = source.replace(
+        '\t"github.com/metatube-community/metatube-sdk-go/route/auth"\n',
+        '\t"github.com/metatube-community/metatube-sdk-go/route/auth"\n'
+        '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
+        1,
+    )
+
+marker = 'func Router(names ...string) *gin.Engine {\n'
+if 'MetAX routing config' not in source:
+    if marker not in source:
+        raise SystemExit("cmd.Router declaration not found; SDK cmd/cmd.go changed")
+    source = source.replace(
+        marker,
+        marker +
+        '\t// MetAX routing config: load and validate the route table once at startup.\n'
+        '\tif err := routing.InitActiveConfigFromEnv(); err != nil {\n'
+        '\t\tlog.Fatal(err)\n'
+        '\t}\n',
+        1,
+    )
+
+required = [
+    '"github.com/metatube-community/metatube-sdk-go/routing"',
+    'routing.InitActiveConfigFromEnv()',
+]
+missing = [item for item in required if item not in source]
+if missing:
+    raise SystemExit("could not wire startup routing config; missing expected markers: " + repr(missing))
 path.write_text(source)
 PY
 
@@ -376,5 +433,6 @@ gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/
   "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go" \
   "$sdk_root/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_db_test.go" \
   "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" \
-  "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go"
+  "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go" \
+  "$sdk_root/cmd/cmd.go"
 echo "Integrated Amane category routes, FC2/uncensored merging, field-level movie aggregation, and source records."

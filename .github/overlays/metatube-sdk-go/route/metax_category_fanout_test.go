@@ -216,3 +216,71 @@ func TestMetaXFC2NumberAutoRoutesWithoutCategory(t *testing.T) {
 		t.Fatalf("automatic FC2 route did not preserve configured provider order: %+v", response.Data)
 	}
 }
+
+func TestMetaXCategorySearchUsesActiveRouteTable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	routeSearchStarted = make(chan string, 2)
+	routeSearchRelease = make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-routeSearchRelease:
+		default:
+			close(routeSearchRelease)
+		}
+		if err := routing.SetActiveConfig(routing.DefaultConfig()); err != nil {
+			t.Errorf("restore default routing config: %v", err)
+		}
+	})
+
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {routeHealthyProvider},
+	}}
+	if err := routing.SetActiveConfig(config); err != nil {
+		t.Fatalf("set active routing config: %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/v1/movies/search", getSearch(engine.New(nil), movieSearchType))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v1/movies/search?q=route-test&category=censored&fallback=false", nil)
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(recorder, request)
+		close(done)
+	}()
+
+	select {
+	case name := <-routeSearchStarted:
+		if name != routeHealthyProvider {
+			t.Errorf("active route searched %q, want %q", name, routeHealthyProvider)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("active route search did not start the configured provider")
+	}
+	close(routeSearchRelease)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("active route search did not return")
+	}
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response struct {
+		Data []*model.MovieSearchResult `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Data) != 2 {
+		t.Fatalf("results=%d want=2 (merged + one original): %s", len(response.Data), recorder.Body.String())
+	}
+	if response.Data[0].Provider != engine.AggregatedProviderName {
+		t.Fatalf("first provider=%q want=%q", response.Data[0].Provider, engine.AggregatedProviderName)
+	}
+	if response.Data[1].Provider != routeHealthyProvider {
+		t.Fatalf("original provider=%q want=%q", response.Data[1].Provider, routeHealthyProvider)
+	}
+}

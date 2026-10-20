@@ -52,7 +52,7 @@ type AggregatedMovieInfo struct {
 // public identity; supplemental records are merged only when catalog numbers
 // identify the same title (see routing.SameNumber).
 func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, lazy bool) (*AggregatedMovieInfo, error) {
-	return e.GetAggregatedMovieInfoByProviderIDWithConfig(pid, lazy, routing.DefaultConfig())
+	return e.GetAggregatedMovieInfoByProviderIDWithConfig(pid, lazy, routing.ActiveConfig())
 }
 
 // GetAggregatedMovieInfoByProviderIDWithConfig is the explicit-route variant of

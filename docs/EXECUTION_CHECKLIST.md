@@ -233,3 +233,16 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Verification: `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; focused DB/cache tests pass; `go test ./... -count=1` in metaX passes; server build succeeds.
 - [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
 - Next: make the route table configurable and validated at startup.
+
+### Task: startup route-table configuration (2026-10-20)
+
+- [x] Added `routing.LoadConfig`, `ParseConfig`, `LoadConfigFromEnv`, `InitActiveConfigFromEnv`, `SetActiveConfig`, and `ActiveConfig`.
+- [x] Supports inline `METAX_ROUTES` JSON or `METAX_ROUTES_FILE`; inline wins, and neither uses `DefaultConfig`.
+- [x] Accepts wrapped (`{"routes":{...}}`) and bare (`{"censored":[...]}`) JSON forms.
+- [x] Validation rejects unknown categories, legacy category aliases, empty routes, empty/duplicate providers, malformed JSON, and extra top-level fields.
+- [x] Wired `cmd.Router` to load and validate the table once at startup; invalid configuration exits nonzero before opening the database or listening.
+- [x] Stock search/detail wrappers and image resolution now read `routing.ActiveConfig()`; explicit `...WithConfig` entry points remain for tests.
+- [x] Added tests for parsing, validation, environment precedence, invalid-init rollback, defensive copying, and a route-level search using the active table.
+- [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; server build succeeds; an invalid `METAX_ROUTES` exits with code 1 and `unknown category "bogus"`.
+- [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
+- Next: tighten partial-failure and provider-error semantics with endpoint tests.

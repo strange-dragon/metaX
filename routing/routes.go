@@ -92,8 +92,11 @@ func DefaultConfig() Config {
 	}}
 }
 
-// Validate checks route configuration for empty categories, empty provider
-// names, and duplicate providers within one route.
+// Validate checks route configuration for unknown or legacy categories, empty
+// categories, empty provider names, and duplicate providers within one route.
+// Legacy aliases are rejected instead of silently shadowing their canonical
+// route; callers may still send them as query values because Resolve applies
+// Category.Canonical.
 func (c Config) Validate() error {
 	if len(c.Routes) == 0 {
 		return errors.New("routing config has no categories")
@@ -101,6 +104,15 @@ func (c Config) Validate() error {
 	for category, providers := range c.Routes {
 		if strings.TrimSpace(string(category)) == "" {
 			return errors.New("routing config contains an empty category")
+		}
+		if canonical := category.Canonical(); canonical != category {
+			return fmt.Errorf("category %q is a legacy alias; use %q", category, canonical)
+		}
+		switch category {
+		case CategoryCensored, CategoryUncensored, CategoryChinese,
+			CategoryAmateur, CategoryWestern, CategoryHentai:
+		default:
+			return fmt.Errorf("unknown category %q", category)
 		}
 		if len(providers) == 0 {
 			return fmt.Errorf("category %q has no providers", category)
