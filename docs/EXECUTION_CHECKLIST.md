@@ -154,3 +154,5 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Integrated inference into the pinned SDK overlay: explicit provider and explicit category still win; URLs still use the existing detail path; ambiguous identifiers preserve the original all-provider search; if a classified route has no installed providers, broad search is retained as a compatibility fallback.
 - [x] Added classifier regression cases and an SDK-level HTTP test proving an FC2 query without a category parameter fans out, tolerates one provider failure, and keeps successful results in route order.
 - [ ] Go tests, formatting, and integrated server build were not run. No GitHub Actions workflow was dispatched.
+
+- [x] Corrected the SDK integration script's generated Go statement and its static marker assertion so category-routing integration produces valid Go source.
