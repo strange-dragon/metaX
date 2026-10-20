@@ -301,4 +301,13 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Updated the Faleno matrix entry to reflect the existing exact REST metadata/search patches (`0013`, `0014`) and their deterministic tests; live Faleno remains blocked by HTTP 403.
 - [x] Fixed the trailing blank line in patch `0013` that failed the CI gofmt gate.
 - [x] CI validation passed on commit `61f345f`: SDK patch/full-regression/build [39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056), integrated live MetaX API smoke [39395605130](https://github.com/strange-dragon/metaX/actions/runs/39395605130), existing live FC2/uncensored smoke [39395605027](https://github.com/strange-dragon/metaX/actions/runs/39395605027), Go tests [39395605111](https://github.com/strange-dragon/metaX/actions/runs/39395605111), and formatting [39395604984](https://github.com/strange-dragon/metaX/actions/runs/39395604984). Local live results remain point-in-time evidence.
-- [ ] Still deferred: Official manufacturer router, Prestige, R18Dev offline PostgreSQL, fuzzy Getchu catalog search, JavDB login/cookie support, and Wikipedia/Wikidata actor biographies.
+- [ ] Still deferred: Official manufacturer router, Prestige, R18Dev offline PostgreSQL, fuzzy Getchu catalog search, and Wikipedia/Wikidata actor biographies.
+
+### Task: provider access configuration (2026-10-20)
+
+- [x] Compared the live failures with Amane's HTTP stack. Amane's general workarounds are per-site cookies and proxy; TLS impersonation, retries, and browser fallback do not bypass IP bans, regional redirects, or login-only pages.
+- [x] Added `COOKIES`/`COOKIE` configuration to native JavDB and Freejavbt, including CR/LF rejection and deterministic request-header tests.
+- [x] Added `0015-scraper-provider-cookies.patch` so scraper-based SDK providers (including FALENO, MGSTAGE, and FC2PPVDB) apply the same Cookie setting through `Scraper.SetConfig`.
+- [x] Probed FC2PPVDB, MGS, FALENO work paths, and Freejavbt with Chrome 131/133 and Firefox 135 TLS profiles. FC2PPVDB remained Cloudflare 1005, MGS remained CloudFront 403, FALENO work/search remained XSERVER 403, and Freejavbt remained a login page/503; these require a different egress IP or account cookies.
+- [x] Documented the configuration and failure matrix in `docs/PROVIDER_ACCESS.md` and linked it from the README and compatibility matrix.
+- [ ] Run the new SDK patch through the full CI patch/full-regression/build job and record the run ID. Do not claim a blocked source works from this network.

@@ -28,6 +28,7 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 - [Initial implementation comparison](docs/INITIAL_FINDINGS.md)
 - [Implementation-level Amane ↔ MetaTube audit](docs/IMPLEMENTATION_AUDIT.md)
 - [Metadata aggregation and source-record API](docs/METADATA_AGGREGATION.md)
+- [Provider access, cookies, and proxy configuration](docs/PROVIDER_ACCESS.md)
 - [Licensing and attribution policy](docs/LICENSING.md)
 
 ## Reproducible integrated server build

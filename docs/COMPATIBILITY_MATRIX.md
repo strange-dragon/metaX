@@ -501,9 +501,9 @@ Environment: local macOS, Go 1.27.3, pinned SDK `c62584675c593816cc07e7b5b977d14
 
 Provider-specific limits observed on the same date:
 
-- **JavDB:** search worked for censored and FC2 numbers; anonymous FC2 detail redirected to JavDB's login page. The provider does not currently carry a login/cookie configuration for that case.
-- **FANZA/DMM:** requests were redirected to a region/age-gate page. Search/detail in an allowed region remains unverified, and the FANZA TV/DMM TV category gap remains separate.
-- **Freejavbt:** returned HTTP 503. **FC2PPVDB:** returned HTTP 403. **FALENO:** returned HTTP 403 from its hosting provider. These are availability/anti-bot results, not parser proofs.
+- **JavDB:** search worked for censored and FC2 numbers; anonymous FC2 detail redirected to JavDB's login page. The native provider now accepts `MT_MOVIE_PROVIDER_JAVDB__COOKIES` for an authenticated header.
+- **FANZA/DMM:** requests were redirected to a region/age-gate page. Search/detail in an allowed region remains unverified, and the FANZA TV/DMM TV category gap remains separate. The digital GraphQL endpoint is reachable for some IDs, so the failure is regional HTML access rather than a proven parser defect.
+- **Freejavbt:** returned HTTP 503 with a login page; the native provider now accepts `MT_MOVIE_PROVIDER_FREEJAVBT__COOKIES`. **FC2PPVDB:** returned Cloudflare `error code: 1005` (IP-level block). **FALENO:** home page returned 200 but search/work paths returned 403 from XSERVER WAF. These are availability/anti-bot results, not parser proofs; TLS-fingerprint probes with Chrome 131/133 and Firefox 135 did not change the FC2PPVDB, MGS, or FALENO work-page results.
 - **Kin8:** sample `KIN8-1234` returned 404. Chinese `MD-1234` and Western `KIN8-1234` route searches also returned 404/empty; the samples may be invalid catalog entries.
 - **MGStage/MGS:** registered and present in the amateur route, but live requests returned 403.
 - **ThePornDB:** token-gated; disabled by default. Startup coverage logs it as unavailable in a default build.
@@ -511,3 +511,19 @@ Provider-specific limits observed on the same date:
 - **Prestige/R18Dev:** remain deferred for the reasons recorded above.
 
 The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged because `Official` and token-gated `ThePornDB` are intentional.
+
+## Provider access follow-up (2026-10-20)
+
+Amane's per-site `cookie` and `proxy` settings are the only general-purpose
+workarounds for the live failures above; its TLS impersonation, retry, and
+browser fallback do not bypass IP bans, regional redirects, or login-only
+pages. The Go runtime now exposes equivalent configuration:
+
+- Native JavDB and Freejavbt accept `COOKIES`/`COOKIE` through `SetConfig`.
+- SDK scraper providers receive the same settings through
+  `patches/metatube-sdk-go/0015-scraper-provider-cookies.patch`.
+- Existing per-provider `PROXY` and `TIMEOUT` settings remain unchanged.
+
+See [Provider access, cookies, and proxy configuration](PROVIDER_ACCESS.md) for
+the failure-by-failure matrix and environment examples. This is configuration
+parity, not evidence that a blocked source now succeeds from this network.
