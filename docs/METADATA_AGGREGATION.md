@@ -60,6 +60,15 @@ GET /v1/images/{primary|thumb|backdrop}/:provider/:id?category=:category&url=:ur
 
 Images requested with `provider=MetaX` are resolved to the route-first real provider before the stock image path runs. The plugin normally passes the image URL from the selected metadata; the `category` parameter is optional and is inferred from the catalog number when omitted.
 
+## Caching and request coalescing
+
+Aggregated detail responses and `MetaX/<number>` image identity resolution are cached in-process and coalesced with `singleflight`:
+
+- `METAX_AGGREGATE_CACHE_TTL` controls the TTL (default `10m`; `0`, `off`, or `disabled` turns caching off).
+- `METAX_AGGREGATE_CACHE_MAX` controls the maximum number of entries per cache (default `256`).
+
+Only successful results are cached; failures are returned to the caller and retried on the next request. Cache keys include the route-table fingerprint, category, lazy flag, and provider/number identity. FC2 and uncensored share a cache key because they resolve to the same route. Returned values are cloned so the `MetaX` identity rewrite cannot corrupt the cached entry. The cache is per-process and is cleared on restart; it is not shared across server instances.
+
 ## Merge rules
 
 1. For a real-provider aggregate request, the selected provider's detail must succeed before the endpoint can return a result. For `MetaX`, the first route candidate whose detail succeeds becomes the baseline identity; if no provider matches the catalog number, the endpoint returns not found.

@@ -210,3 +210,14 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Verified on a clean SDK checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `go test ./routing ./engine ./route` passes; 12 provider package test targets pass; `go build -o /tmp/metatube-server-metax ./cmd/server` succeeds.
 - [ ] Plugin follow-up: if provider filtering is enabled, allow `MetaX`; forward the configured `category` on detail requests. Without `category`, detail falls back to catalog-number inference.
 - [ ] Full SDK regression remains environment-blocked: `engine/dbengine` needs a Docker daemon and `imageutil` differs under Go 1.27; CI pins Go 1.26.x.
+
+### Task: aggregation cache and request coalescing (2026-10-20)
+
+- [x] Added a bounded in-process TTL cache with `singleflight` coalescing for aggregated detail responses, `MetaX/<number>` aggregation, and image identity resolution.
+- [x] Cache keys include the route-table fingerprint, category, lazy flag, and provider/number identity; FC2 and uncensored share a key because they resolve to the same route.
+- [x] Cached results are cloned before returning so the route's `MetaX` identity rewrite cannot corrupt later reads.
+- [x] Errors are not cached; only successful results survive for the TTL.
+- [x] Added deterministic tests for TTL expiry, oldest-entry eviction, concurrent-load coalescing, cache-key separation, clone isolation, cache-hit lookup avoidance, and resolve-cache lookup avoidance.
+- [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; `go build -o /tmp/metatube-server-metax ./cmd/server` succeeds.
+- [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
+- Next: DB-first catalog-number resolution before live provider search.

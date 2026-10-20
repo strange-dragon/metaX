@@ -212,3 +212,30 @@ func TestInferCategoryLeavesAmbiguousNumbersUnclassified(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigFingerprintIsDeterministicAndOrderSensitive(t *testing.T) {
+	first := Config{Routes: map[Category][]string{
+		CategoryCensored:   {"JavDB", "DMM"},
+		CategoryUncensored: {"JavDB", "FC2"},
+	}}
+	second := Config{Routes: map[Category][]string{
+		CategoryUncensored: {"JavDB", "FC2"},
+		CategoryCensored:   {"JavDB", "DMM"},
+	}}
+	if first.Fingerprint() != second.Fingerprint() {
+		t.Fatalf("map insertion order changed the fingerprint: %q != %q",
+			first.Fingerprint(), second.Fingerprint())
+	}
+
+	reordered := Config{Routes: map[Category][]string{
+		CategoryCensored:   {"DMM", "JavDB"},
+		CategoryUncensored: {"JavDB", "FC2"},
+	}}
+	if first.Fingerprint() == reordered.Fingerprint() {
+		t.Fatal("provider order must affect the fingerprint")
+	}
+
+	if first.Fingerprint() == DefaultConfig().Fingerprint() {
+		t.Fatal("different route tables must not share a fingerprint")
+	}
+}

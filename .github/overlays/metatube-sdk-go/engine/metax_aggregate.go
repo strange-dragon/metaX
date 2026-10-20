@@ -59,14 +59,22 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 // GetAggregatedMovieInfoByProviderID. It lets embedders and tests supply their
 // own route table without changing global state.
 func (e *Engine) GetAggregatedMovieInfoByProviderIDWithConfig(pid providerid.ProviderID, lazy bool, config routing.Config) (*AggregatedMovieInfo, error) {
-	return e.getAggregatedMovieInfo(pid, lazy, config, "")
+	return e.getCachedAggregatedMovieInfo(pid, lazy, config, "")
 }
 
 // GetAggregatedMovieInfoByProviderIDWithCategory is the explicit-category
 // variant. When category is non-empty it takes precedence over number/provider
 // inference, which is what the Jellyfin plugin sends for every scrape.
 func (e *Engine) GetAggregatedMovieInfoByProviderIDWithCategory(pid providerid.ProviderID, lazy bool, config routing.Config, category routing.Category) (*AggregatedMovieInfo, error) {
-	return e.getAggregatedMovieInfo(pid, lazy, config, category)
+	return e.getCachedAggregatedMovieInfo(pid, lazy, config, category)
+}
+
+func (e *Engine) getCachedAggregatedMovieInfo(pid providerid.ProviderID, lazy bool, config routing.Config, category routing.Category) (*AggregatedMovieInfo, error) {
+	key := aggregateMovieCacheKey(pid, lazy, category, config)
+	result, err := aggregateMovieCache.do(key, func() (*AggregatedMovieInfo, error) {
+		return e.getAggregatedMovieInfo(pid, lazy, config, category)
+	})
+	return cloneAggregatedMovieInfo(result), err
 }
 
 func (e *Engine) getAggregatedMovieInfo(pid providerid.ProviderID, lazy bool, config routing.Config, requested routing.Category) (*AggregatedMovieInfo, error) {
@@ -210,6 +218,14 @@ func (e *Engine) getAggregatedMovieInfo(pid providerid.ProviderID, lazy bool, co
 // route in order, uses the first provider whose detail succeeds as the public
 // identity, and returns the merged view plus every provider's original record.
 func (e *Engine) GetAggregatedMovieInfoByNumber(number string, category routing.Category, lazy bool, config routing.Config) (*AggregatedMovieInfo, error) {
+	key := aggregateNumberCacheKey(number, lazy, category, config)
+	result, err := aggregateMovieCache.do(key, func() (*AggregatedMovieInfo, error) {
+		return e.getAggregatedMovieInfoByNumber(number, category, lazy, config)
+	})
+	return cloneAggregatedMovieInfo(result), err
+}
+
+func (e *Engine) getAggregatedMovieInfoByNumber(number string, category routing.Category, lazy bool, config routing.Config) (*AggregatedMovieInfo, error) {
 	number = strings.TrimSpace(number)
 	if number == "" {
 		return nil, mt.ErrInvalidKeyword
@@ -245,6 +261,13 @@ func (e *Engine) GetAggregatedMovieInfoByNumber(number string, category routing.
 // catalog number without fetching or merging details. Image endpoints only
 // need a real provider identity, so this avoids a full aggregation fan-out.
 func (e *Engine) ResolveAggregatedProviderID(number string, category routing.Category, config routing.Config) (providerid.ProviderID, error) {
+	key := aggregateResolveCacheKey(number, category, config)
+	return aggregateResolveCache.do(key, func() (providerid.ProviderID, error) {
+		return e.resolveAggregatedProviderID(number, category, config)
+	})
+}
+
+func (e *Engine) resolveAggregatedProviderID(number string, category routing.Category, config routing.Config) (providerid.ProviderID, error) {
 	number = strings.TrimSpace(number)
 	if number == "" {
 		return providerid.ProviderID{}, mt.ErrInvalidKeyword

@@ -20,8 +20,10 @@ mkdir -p "$sdk_root/routing"
 cp "$workspace_root"/routing/*.go "$sdk_root/routing/"
 cp "$overlay/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
 cp "$overlay/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate.go"
+cp "$overlay/engine/metax_aggregate_cache.go" "$sdk_root/engine/metax_aggregate_cache.go"
 cp "$overlay/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_test.go"
 cp "$overlay/engine/metax_aggregate_fanout_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go"
+cp "$overlay/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_cache_test.go"
 cp "$overlay/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
 cp "$overlay/route/metax_test_helpers_test.go" "$sdk_root/route/metax_test_helpers_test.go"
 cp "$overlay/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
@@ -368,7 +370,8 @@ path.write_text(source)
 PY
 
 gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" \
-  "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go" \
+  "$sdk_root/engine/metax_aggregate_cache.go" "$sdk_root/engine/metax_aggregate_test.go" \
+  "$sdk_root/engine/metax_aggregate_fanout_test.go" "$sdk_root/engine/metax_aggregate_cache_test.go" \
   "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" \
   "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go"
 echo "Integrated Amane category routes, FC2/uncensored merging, field-level movie aggregation, and source records."

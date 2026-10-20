@@ -6,6 +6,7 @@ package routing
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -56,6 +57,26 @@ var providerAliases = map[string][]string{
 // registered canonical spelling.
 type Config struct {
 	Routes map[Category][]string
+}
+
+// Fingerprint returns a deterministic representation of the route table. It is
+// used by the aggregation cache so that requests evaluated under different
+// route configurations never share cached results.
+func (c Config) Fingerprint() string {
+	categories := make([]string, 0, len(c.Routes))
+	for category := range c.Routes {
+		categories = append(categories, string(category))
+	}
+	sort.Strings(categories)
+
+	var builder strings.Builder
+	for _, category := range categories {
+		builder.WriteString(category)
+		builder.WriteByte('=')
+		builder.WriteString(strings.Join(c.Routes[Category(category)], ","))
+		builder.WriteByte(';')
+	}
+	return builder.String()
 }
 
 // DefaultConfig mirrors Amane's ordered content routes where the SDK has an equivalent.
