@@ -58,4 +58,4 @@ The backend orchestration layer is being implemented separately from the Jellyfi
 
 ### Automatic category routing
 
-The existing Jellyfin plugin does not send an Amane content type. The backend now infers a route only for high-confidence identifiers (FC2 PPV and KIN8); ambiguous numbers keep the existing all-provider search instead of guessing. The FC2 and uncensored route remains intentionally combined. This first inference pass is deterministic and source-derived, not a claim that all categories can be inferred from every movie number.
+The existing Jellyfin plugin does not send an Amane content type. The backend infers categories from Amane-style catalog families: ordinary censored catalog numbers, known uncensored prefixes and six-digit sequence IDs, FC2, Chinese MD/MKY families, amateur families, KIN8/Western studio-date IDs, and Getchu IDs. For non-catalog identifiers, selected source names such as ThePornDB, Getchu, and FC2 marketplaces can provide a narrow fallback hint. Ambiguous identifiers stay on the safe baseline-only detail path instead of triggering speculative aggregation. The FC2 and uncensored route remains intentionally combined.
