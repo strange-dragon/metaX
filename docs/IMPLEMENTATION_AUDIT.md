@@ -157,5 +157,5 @@ The project owner has chosen to include Amane-style detail aggregation. The firs
 - [x] Read the pinned Amane crawler contract, metadata model, movie/actor registries, field-level aggregation engine, aggregation result model, and default route definitions.
 - [x] Read the pinned SDK provider interfaces, engine search/detail path, and movie model.
 - [x] Compared those behaviors with the current metaX routing/search overlay.
-- [x] Recorded the architecture gap, implementation boundaries, current limitations, and next task above.
+- [x] Recorded the architecture gap, implementation boundaries, aggregation contract, and verification boundary above.
 - [ ] Tests, formatting, integrated build, live sites, and Jellyfin runtime were not run as part of this audit.
