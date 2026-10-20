@@ -46,8 +46,8 @@ func TestMergeMovieInfoFillsMissingFieldsAndKeepsRouteOrder(t *testing.T) {
 	if len(got.Genres) != 3 || got.Genres[0] != "Drama" || got.Genres[1] != "Amateur" || got.Genres[2] != "Comedy" {
 		t.Fatalf("genres were not stably deduplicated: %#v", got.Genres)
 	}
-	if got.CoverURL != identity.CoverURL {
-		t.Fatalf("selected source cover should win field conflict: %q", got.CoverURL)
+	if got.CoverURL != first.CoverURL {
+		t.Fatalf("first route source should win field conflict: %q", got.CoverURL)
 	}
 }
 
