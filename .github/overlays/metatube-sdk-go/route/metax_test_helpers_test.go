@@ -23,11 +23,11 @@ type contractMovieProvider struct {
 	baseURL *url.URL
 }
 
-func (*contractMovieProvider) Name() string         { return contractMovieName }
-func (*contractMovieProvider) Priority() float64    { return 1 }
-func (*contractMovieProvider) SetPriority(float64)  {}
+func (*contractMovieProvider) Name() string           { return contractMovieName }
+func (*contractMovieProvider) Priority() float64      { return 1 }
+func (*contractMovieProvider) SetPriority(float64)    {}
 func (*contractMovieProvider) Language() language.Tag { return language.English }
-func (p *contractMovieProvider) URL() *url.URL      { return p.baseURL }
+func (p *contractMovieProvider) URL() *url.URL        { return p.baseURL }
 func (*contractMovieProvider) NormalizeMovieID(id string) string {
 	return strings.TrimSpace(id)
 }
@@ -48,7 +48,7 @@ func (p *contractMovieProvider) GetMovieInfoByID(id string) (*model.MovieInfo, e
 		Provider: contractMovieName,
 		Homepage: p.baseURL.String() + "/movie/" + id,
 		CoverURL: p.baseURL.String() + "/cover.jpg",
-		Summary: "Contract summary",
+		Summary:  "Contract summary",
 	}, nil
 }
 func (p *contractMovieProvider) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {

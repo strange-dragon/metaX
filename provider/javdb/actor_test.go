@@ -109,4 +109,3 @@ func TestJavDBActorUsesCanonicalProfileIdentity(t *testing.T) {
 	require.Equal(t, "Canonical456", info.ID)
 	require.Equal(t, server.URL+"/actors/Canonical456", info.Homepage)
 }
-

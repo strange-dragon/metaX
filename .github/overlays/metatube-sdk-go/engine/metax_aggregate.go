@@ -8,8 +8,8 @@ import (
 
 	"gorm.io/datatypes"
 
-	"github.com/metatube-community/metatube-sdk-go/engine/providerid"
 	"github.com/lib/pq"
+	"github.com/metatube-community/metatube-sdk-go/engine/providerid"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	"github.com/metatube-community/metatube-sdk-go/routing"
 )
@@ -66,8 +66,8 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 			Category:  "unknown",
 			Sources: []MovieSourceRecord{{
 				Provider: baseline.Provider, ID: baseline.ID,
-				Status: "baseline_only",
-				Error:  "category could not be inferred safely; cross-provider aggregation was skipped",
+				Status:   "baseline_only",
+				Error:    "category could not be inferred safely; cross-provider aggregation was skipped",
 				Metadata: baseline,
 			}},
 		}, nil
@@ -148,7 +148,7 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 			if normalizeAggregationNumber(info.Number) != normalizeAggregationNumber(baseline.Number) {
 				records[i] = MovieSourceRecord{
 					Provider: name, ID: info.ID, Status: "identity_mismatch",
-					Error: fmt.Sprintf("returned catalog number %q does not match selected number %q", info.Number, baseline.Number),
+					Error:    fmt.Sprintf("returned catalog number %q does not match selected number %q", info.Number, baseline.Number),
 					Metadata: info,
 				}
 				return
@@ -275,4 +275,3 @@ func appendUniqueStrings(dst []string, values ...string) []string {
 	}
 	return dst
 }
-
