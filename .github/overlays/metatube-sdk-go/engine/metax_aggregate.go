@@ -167,6 +167,7 @@ func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieI
 	result.Actors = nil
 	result.PreviewImages = nil
 	result.Genres = nil
+	result.Title = ""
 	result.Director = ""
 	result.Summary = ""
 	result.ThumbURL = ""
@@ -186,6 +187,7 @@ func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieI
 		if info == nil {
 			continue
 		}
+		firstNonEmpty(&result.Title, info.Title)
 		firstNonEmpty(&result.Director, info.Director)
 		firstNonEmpty(&result.Summary, info.Summary)
 		firstNonEmpty(&result.ThumbURL, info.ThumbURL)
@@ -216,12 +218,14 @@ func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieI
 			result.Score = info.Score
 		}
 	}
-	// Preserve the selected provider's public identity and its canonical title
-	// and number even when supplemental providers have different display values.
+	// Preserve the selected provider + ID identity and canonical catalog number.
+	// Display title remains field-aggregated in configured route order.
 	result.ID = identity.ID
 	result.Provider = identity.Provider
 	result.Number = identity.Number
-	result.Title = identity.Title
+	if result.Title == "" {
+		result.Title = identity.Title
+	}
 	result.Homepage = identity.Homepage
 	if result.CoverURL == "" {
 		result.CoverURL = identity.CoverURL
