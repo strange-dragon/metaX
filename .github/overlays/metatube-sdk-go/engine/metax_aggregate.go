@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 
@@ -11,8 +12,20 @@ import (
 	"github.com/lib/pq"
 	"github.com/metatube-community/metatube-sdk-go/engine/providerid"
 	"github.com/metatube-community/metatube-sdk-go/model"
+	mt "github.com/metatube-community/metatube-sdk-go/provider"
 	"github.com/metatube-community/metatube-sdk-go/routing"
 )
+
+// AggregatedProviderName is the reserved provider name used for the merged
+// search candidate and for detail requests that should be resolved from a
+// catalog number instead of a single provider ID.
+const AggregatedProviderName = "MetaX"
+
+// IsAggregatedProvider reports whether name refers to the reserved merged
+// provider rather than a registered provider package.
+func IsAggregatedProvider(name string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), AggregatedProviderName)
+}
 
 // MovieSourceRecord preserves one provider's independent, normalized SDK
 // metadata. It is not the upstream HTML/HTTP payload: MovieProvider currently
@@ -46,6 +59,17 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 // GetAggregatedMovieInfoByProviderID. It lets embedders and tests supply their
 // own route table without changing global state.
 func (e *Engine) GetAggregatedMovieInfoByProviderIDWithConfig(pid providerid.ProviderID, lazy bool, config routing.Config) (*AggregatedMovieInfo, error) {
+	return e.getAggregatedMovieInfo(pid, lazy, config, "")
+}
+
+// GetAggregatedMovieInfoByProviderIDWithCategory is the explicit-category
+// variant. When category is non-empty it takes precedence over number/provider
+// inference, which is what the Jellyfin plugin sends for every scrape.
+func (e *Engine) GetAggregatedMovieInfoByProviderIDWithCategory(pid providerid.ProviderID, lazy bool, config routing.Config, category routing.Category) (*AggregatedMovieInfo, error) {
+	return e.getAggregatedMovieInfo(pid, lazy, config, category)
+}
+
+func (e *Engine) getAggregatedMovieInfo(pid providerid.ProviderID, lazy bool, config routing.Config, requested routing.Category) (*AggregatedMovieInfo, error) {
 	baseline, err := e.GetMovieInfoByProviderID(pid, lazy)
 	if err != nil {
 		return nil, err
@@ -55,17 +79,22 @@ func (e *Engine) GetAggregatedMovieInfoByProviderIDWithConfig(pid providerid.Pro
 		category routing.Category
 		ok       bool
 	)
-	// These providers represent category-specific catalogues whose identifiers
-	// may be slugs or numeric product IDs rather than standard catalog numbers.
-	switch strings.ToLower(strings.TrimSpace(baseline.Provider)) {
-	case "theporndb":
-		category, ok = routing.CategoryWestern, true
-	case "getchu":
-		category, ok = routing.CategoryHentai, true
-	case "fc2", "fc2ppvdb":
-		category, ok = routing.CategoryFC2, true
-	default:
-		category, ok = routing.InferCategory(baseline.Number)
+	if requested != "" {
+		category, ok = requested.Canonical(), true
+	} else {
+		// These providers represent category-specific catalogues whose
+		// identifiers may be slugs or numeric product IDs rather than standard
+		// catalog numbers.
+		switch strings.ToLower(strings.TrimSpace(baseline.Provider)) {
+		case "theporndb":
+			category, ok = routing.CategoryWestern, true
+		case "getchu":
+			category, ok = routing.CategoryHentai, true
+		case "fc2", "fc2ppvdb":
+			category, ok = routing.CategoryFC2, true
+		default:
+			category, ok = routing.InferCategory(baseline.Number)
+		}
 	}
 	if !ok {
 		return &AggregatedMovieInfo{
@@ -174,6 +203,101 @@ func (e *Engine) GetAggregatedMovieInfoByProviderIDWithConfig(pid providerid.Pro
 		Category:  string(category.Canonical()),
 		Sources:   records,
 	}, nil
+}
+
+// GetAggregatedMovieInfoByNumber resolves the reserved aggregated provider
+// identity (AggregatedProviderName + catalog number). It searches the category
+// route in order, uses the first provider whose detail succeeds as the public
+// identity, and returns the merged view plus every provider's original record.
+func (e *Engine) GetAggregatedMovieInfoByNumber(number string, category routing.Category, lazy bool, config routing.Config) (*AggregatedMovieInfo, error) {
+	number = strings.TrimSpace(number)
+	if number == "" {
+		return nil, mt.ErrInvalidKeyword
+	}
+	candidateCategory, providers, err := e.aggregateRouteProviders(number, category, config)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, name := range providers {
+		results, err := e.SearchMovie(number, name, false)
+		if err != nil {
+			continue
+		}
+		for _, result := range results {
+			if result == nil || !strings.EqualFold(result.Provider, name) ||
+				!routing.SameNumber(result.Number, number) {
+				continue
+			}
+			aggregated, aggErr := e.getAggregatedMovieInfo(
+				providerid.ProviderID{Provider: result.Provider, ID: result.ID},
+				lazy, config, candidateCategory,
+			)
+			if aggErr == nil {
+				return aggregated, nil
+			}
+		}
+	}
+	return nil, mt.ErrInfoNotFound
+}
+
+// ResolveAggregatedProviderID finds the route-first provider candidate for a
+// catalog number without fetching or merging details. Image endpoints only
+// need a real provider identity, so this avoids a full aggregation fan-out.
+func (e *Engine) ResolveAggregatedProviderID(number string, category routing.Category, config routing.Config) (providerid.ProviderID, error) {
+	number = strings.TrimSpace(number)
+	if number == "" {
+		return providerid.ProviderID{}, mt.ErrInvalidKeyword
+	}
+	_, providers, err := e.aggregateRouteProviders(number, category, config)
+	if err != nil {
+		return providerid.ProviderID{}, err
+	}
+	for _, name := range providers {
+		results, err := e.SearchMovie(number, name, false)
+		if err != nil {
+			continue
+		}
+		for _, result := range results {
+			if result != nil && strings.EqualFold(result.Provider, name) &&
+				routing.SameNumber(result.Number, number) {
+				return providerid.ProviderID{Provider: result.Provider, ID: result.ID}, nil
+			}
+		}
+	}
+	return providerid.ProviderID{}, mt.ErrInfoNotFound
+}
+
+// aggregateRouteProviders resolves the provider chain for a category, with a
+// broad-search fallback when the number cannot be classified safely. An explicit
+// category that cannot be resolved is returned as an error instead of silently
+// broadening the search, so misconfiguration is visible to the caller.
+func (e *Engine) aggregateRouteProviders(number string, category routing.Category, config routing.Config) (routing.Category, []string, error) {
+	candidateCategory := category
+	if candidateCategory == "" {
+		if inferred, ok := routing.InferCategory(number); ok {
+			candidateCategory = inferred
+		}
+	}
+
+	registered := make([]string, 0, len(e.GetMovieProviders()))
+	for name := range e.GetMovieProviders() {
+		registered = append(registered, name)
+	}
+	if candidateCategory != "" {
+		providers, err := config.Resolve(candidateCategory, "", registered)
+		if err == nil {
+			return candidateCategory, providers, nil
+		}
+		if category != "" {
+			return candidateCategory, nil, err
+		}
+	}
+	// Ambiguous number or no route provider registered: fall back to all
+	// providers so the merged candidate still resolves.
+	providers := append([]string(nil), registered...)
+	sort.Strings(providers)
+	return candidateCategory, providers, nil
 }
 
 // mergeMovieInfoInRouteOrder uses the first non-empty value in route order for

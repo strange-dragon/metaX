@@ -194,3 +194,19 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Recorded the local Go `1.23.2` versus project Go `1.26` mismatch, and distinguished the independent number-normalization smoke test from actual SDK integration tests.
 - [ ] Immediate next task: establish a usable runtime/network and Go 1.26 toolchain, check out the pinned SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`, run the integration script, focused aggregation/API/classifier tests, full relevant tests, and the integrated server build. Fix failures and rerun before feature work.
 - [ ] No SDK integration tests or server build were run as part of this documentation commit.
+
+
+### Jellyfin-facing search/detail contract and verified integration (2026-10-20)
+
+This section supersedes the earlier default-aggregation and `aggregate=false` notes above.
+
+- [x] Confirmed the user-facing model: the Jellyfin plugin sends a configured category plus a movie name/number; end users never select a provider directly.
+- [x] Category search now prepends one merged candidate (`provider=MetaX`, `id=<catalog number>`) while retaining every provider's original result in route order.
+- [x] Real-provider detail defaults to the stock response. `?aggregate=true` opts into the additive `category` + `sources[]` response.
+- [x] Reserved `MetaX` detail resolves the catalog number through the category route, keeps the `MetaX/<number>` identity stable across refreshes, and returns merged metadata + `sources[]`.
+- [x] Image routes resolve `MetaX/<number>` to the route-first real provider before the stock image path.
+- [x] Explicit unknown categories return HTTP 400 on category search and `MetaX` detail instead of silently broadening the search.
+- [x] Added deterministic endpoint tests for the merged search candidate, default stock detail, `aggregate=true`, `MetaX` detail, and unknown-category rejection.
+- [x] Verified on a clean SDK checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `go test ./routing ./engine ./route` passes; 12 provider package test targets pass; `go build -o /tmp/metatube-server-metax ./cmd/server` succeeds.
+- [ ] Plugin follow-up: if provider filtering is enabled, allow `MetaX`; forward the configured `category` on detail requests. Without `category`, detail falls back to catalog-number inference.
+- [ ] Full SDK regression remains environment-blocked: `engine/dbengine` needs a Docker daemon and `imageutil` differs under Go 1.27; CI pins Go 1.26.x.

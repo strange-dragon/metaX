@@ -25,7 +25,7 @@ func TestMetaXExplicitProviderOverridesCategory(t *testing.T) {
 	}
 	data, ok := body["data"].([]any)
 	if !ok || len(data) != 1 {
-		t.Fatalf("unexpected search result envelope: %v", body)
+		t.Fatalf("explicit provider search must not add a merged candidate: %v", body)
 	}
 	result, ok := data[0].(map[string]any)
 	if !ok {
@@ -36,9 +36,31 @@ func TestMetaXExplicitProviderOverridesCategory(t *testing.T) {
 	}
 }
 
-func TestMetaXMovieInfoAggregatesByDefaultAndPreservesSourceRecord(t *testing.T) {
+func TestMetaXMovieInfoDefaultIsStockDetailResponse(t *testing.T) {
 	router := newContractRouter(t)
 	status, body := requestJSON(t, router, "/v1/movies/"+contractMovieName+"/movie-123")
+	if status != http.StatusOK {
+		t.Fatalf("detail status=%d want=%d body=%v", status, http.StatusOK, body)
+	}
+
+	data, ok := body["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected detail response envelope: %v", body)
+	}
+	if data["id"] != "movie-123" || data["provider"] != contractMovieName || data["title"] != "Contract title" {
+		t.Fatalf("stock MovieInfo fields changed: %v", data)
+	}
+	if _, exists := data["category"]; exists {
+		t.Fatalf("default detail must omit category: %v", data)
+	}
+	if _, exists := data["sources"]; exists {
+		t.Fatalf("default detail must omit source records: %v", data)
+	}
+}
+
+func TestMetaXMovieInfoAggregatesOnRequestAndPreservesSourceRecord(t *testing.T) {
+	router := newContractRouter(t)
+	status, body := requestJSON(t, router, "/v1/movies/"+contractMovieName+"/movie-123?aggregate=true")
 	if status != http.StatusOK {
 		t.Fatalf("detail status=%d want=%d body=%v", status, http.StatusOK, body)
 	}

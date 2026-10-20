@@ -17,8 +17,8 @@ The current architecture uses a metaX repository containing native provider impl
 2. Never flatten away meaningful catalog identity. In particular, `101926_01` must not normalize to `10192601`. Case, spaces, and hyphens may be normalized conservatively where justified; underscores remain significant.
 3. Route automatically from Amane-derived catalog-number families and provider-specific identity hints. Do not require users to configure a manual mapping for every category. Explicit provider selection wins; explicit category is honored; URL/detail requests retain the existing detail path; ambiguous terms preserve broad-search compatibility.
 4. Search fan-out is concurrent but output ordering is deterministic according to configured route priority. One provider failure must not discard successful results from other providers. Reuse SDK provider-specific search/cache fallback instead of duplicating it.
-5. Keep the selected detail identity (`provider + id`) stable. Cross-provider metadata enrichment requires conservative catalog-number identity validation; never merge works solely because their titles look alike.
-6. Default detail output should preserve the existing `MovieInfo` fields at the top level and add `category` plus `sources[]`. Each source record should identify provider, provider ID when known, status/error, and that provider's independent structured `MovieInfo` metadata. `?aggregate=false` must retain the stock detail response without additive `category` or `sources`.
+5. Keep detail identity stable. Real-provider requests keep their `provider + id`; the merged view uses the reserved `MetaX` provider with the catalog number as its ID, so later refreshes continue to resolve through aggregation. Cross-provider metadata enrichment requires conservative catalog-number identity validation; never merge works solely because their titles look alike.
+6. Category search returns every provider's original candidate plus one merged candidate under the reserved `MetaX` provider. Real-provider detail defaults to the stock response; `?aggregate=true` adds `category` plus `sources[]`; `MetaX` detail resolves the catalog number through the category route and returns the merged view with `category` and `sources[]`. Each source record identifies provider, provider ID when known, status/error, and that provider's independent structured `MovieInfo` metadata.
 7. Be precise about “raw source data”: current `sources[].metadata` preserves provider-normalized structured `MovieInfo`, **not** the original HTML, JSON response body, or raw HTTP payload. Do not claim raw payload capture exists unless separately implemented and tested.
 8. Scalar merge uses first non-empty values in configured route order; list/image collections use stable deduplicated unions; do not average incomparable provider scores; preserve field semantics and the selected provider identity.
 9. Movie and actor crawling are separate contracts. Do not force actor metadata through movie-provider interfaces.
@@ -47,11 +47,11 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
 - Amane-derived catalog-number classification and ordered category routing.
 - Concurrent category search fan-out with deterministic configured-order results, per-provider error tolerance, and SDK search/cache fallback.
 - Native provider implementations and deterministic local HTTP tests for several uncovered sites.
-- SDK overlay for detail metadata aggregation, conservative number matching, field fill/union rules, and independent source records.
-- SDK-route tests for default aggregated detail response and `aggregate=false` stock response.
+- SDK overlay for category search's merged candidate, detail metadata aggregation, conservative number matching, field fill/union rules, independent source records, and reserved-provider image resolution.
+- SDK-route tests for the merged search candidate, default stock detail, `aggregate=true`, the reserved `MetaX` detail path, and rejection of explicit unknown categories.
 - Regression assertion that `101926_01` and `10192601` remain distinct.
 
-**Critical status: integration validation is incomplete.** The last recorded local attempt to clone GitHub failed with `Could not resolve host: github.com`. The local execution environment reported Go `1.23.2`, while the metaX module declares Go `1.26`. These observations do not establish the root cause of DNS failure and do not imply that the user's CachyOS machine has the same network/toolchain limitations. The independent number-normalization smoke test passed, but it is not a repository test or SDK integration test. Do not mark the aggregate/API/routing tests or full server build as passing until they actually run.
+**Integration status (2026-10-20).** Focused SDK integration is verified on a clean checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `routing`, `engine`, `route`, and 12 provider package test targets pass, and `go build ./cmd/server` succeeds. Full SDK regression still encounters two environment-only failures: `engine/dbengine` requires a Docker daemon, and `imageutil` expects Go 1.26 JPEG behavior. CI pins Go 1.26.x and sets `GITHUB_ACTIONS=true` to skip live provider tests. Do not treat unresolved full-regression environment checks as product failures, and do not re-run live-site tests as the only evidence.
 
 ## 5. Immediate next actions — do these in order
 
@@ -66,8 +66,8 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
 From the metaX workspace, apply `.github/scripts/integrate-category-routing.sh` to the clean pinned SDK checkout. Then run, in order:
 1. `gofmt -w` on modified/injected Go files (the script already formats its target set; inspect its output and run a formatting check after integration).
 2. Focused engine aggregation tests, including number normalization, underscore identity, scalar/list merging, and top-level/source-record JSON contract.
-3. Focused SDK route contract tests: default detail aggregation and `?aggregate=false`.
-4. Category classifier/routing tests and category search fan-out API tests.
+3. Focused SDK route contract tests: merged search candidate, default stock detail, `?aggregate=true`, and the reserved `MetaX` detail path.
+4. Category classifier/routing tests, category search fan-out API tests, and rejection of explicit unknown categories.
 5. Full SDK tests and relevant metaX Go tests.
 6. Build the actual integrated server/runtime that imports the modified SDK and metaX provider packages.
 7. Fix any failures, rerun the failing tests, and rerun the complete relevant verification sequence. Capture actual command results/CI run links in the checklist.

@@ -134,12 +134,8 @@ func init() {
 	})
 }
 
-// newContractRouter uses a real in-memory database because the SDK engine
-// persists every successfully fetched MovieInfo. engine.New(nil) panics on
-// detail requests and would surface as an HTTP 500 in endpoint tests.
-func newContractRouter(t *testing.T) *gin.Engine {
+func newContractEngine(t *testing.T) *engine.Engine {
 	t.Helper()
-	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open("file:metax-api-contract?mode=memory&cache=shared"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
@@ -149,7 +145,16 @@ func newContractRouter(t *testing.T) *gin.Engine {
 	if err := db.AutoMigrate(&model.MovieInfo{}, &model.ActorInfo{}); err != nil {
 		t.Fatalf("migrate test database: %v", err)
 	}
-	return sdkroute.New(engine.New(db), nil)
+	return engine.New(db)
+}
+
+// newContractRouter uses a real in-memory database because the SDK engine
+// persists every successfully fetched MovieInfo. engine.New(nil) panics on
+// detail requests and would surface as an HTTP 500 in endpoint tests.
+func newContractRouter(t *testing.T) *gin.Engine {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	return sdkroute.New(newContractEngine(t), nil)
 }
 
 func requestJSON(t *testing.T, router http.Handler, target string) (int, map[string]any) {

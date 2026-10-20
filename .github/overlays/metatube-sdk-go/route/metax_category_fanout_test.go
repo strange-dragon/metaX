@@ -141,14 +141,17 @@ func TestMetaXCategorySearchFansOutAndKeepsSuccessfulProviderResults(t *testing.
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v; body=%s", err, recorder.Body.String())
 	}
-	if len(response.Data) != 2 {
-		t.Fatalf("successful result count=%d want=2: %+v", len(response.Data), response.Data)
+	if len(response.Data) != 3 {
+		t.Fatalf("result count=%d want=3 (merged + 2 providers): %+v", len(response.Data), response.Data)
 	}
-	if response.Data[0].Provider != routeHealthyProvider || response.Data[0].ID != "healthy-123" {
-		t.Fatalf("first result should follow Amane route order: %+v", response.Data)
+	if response.Data[0].Provider != engine.AggregatedProviderName || response.Data[0].ID != "TEST-123" {
+		t.Fatalf("first result should be the merged candidate: %+v", response.Data[0])
 	}
-	if response.Data[1].Provider != routeSecondHealthyProvider || response.Data[1].ID != "healthy-123" {
-		t.Fatalf("second result should follow Amane route order: %+v", response.Data)
+	if response.Data[1].Provider != routeHealthyProvider || response.Data[1].ID != "healthy-123" {
+		t.Fatalf("first provider result should follow Amane route order: %+v", response.Data)
+	}
+	if response.Data[2].Provider != routeSecondHealthyProvider || response.Data[2].ID != "healthy-123" {
+		t.Fatalf("second provider result should follow Amane route order: %+v", response.Data)
 	}
 }
 
@@ -203,10 +206,13 @@ func TestMetaXFC2NumberAutoRoutesWithoutCategory(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v; body=%s", err, recorder.Body.String())
 	}
-	if len(response.Data) != 2 {
-		t.Fatalf("successful result count=%d want=2: %+v", len(response.Data), response.Data)
+	if len(response.Data) != 3 {
+		t.Fatalf("result count=%d want=3 (merged + 2 providers): %+v", len(response.Data), response.Data)
 	}
-	if response.Data[0].Provider != routeHealthyProvider || response.Data[1].Provider != routeSecondHealthyProvider {
+	if response.Data[0].Provider != engine.AggregatedProviderName {
+		t.Fatalf("first result should be the merged candidate: %+v", response.Data[0])
+	}
+	if response.Data[1].Provider != routeHealthyProvider || response.Data[2].Provider != routeSecondHealthyProvider {
 		t.Fatalf("automatic FC2 route did not preserve configured provider order: %+v", response.Data)
 	}
 }

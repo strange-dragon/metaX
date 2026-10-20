@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"errors"
 	"net/url"
 	"testing"
 
@@ -178,5 +179,64 @@ func TestAggregatedMovieInfoMergesFieldsAndKeepsOriginalProviderMetadata(t *test
 		if !ok || source["metadata"] == nil {
 			t.Fatalf("source record lost its original metadata in JSON: %v", raw)
 		}
+	}
+}
+
+func TestAggregatedMovieInfoByNumberUsesRouteOrderIdentity(t *testing.T) {
+	e := New(openAggregateTestDB(t))
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryUncensored: {aggregateSecondProvider, aggregateBaselineProvider},
+	}}
+
+	got, err := e.GetAggregatedMovieInfoByNumber("FC2-PPV-123456", routing.CategoryUncensored, false, config)
+	if err != nil {
+		t.Fatalf("aggregate by number: %v", err)
+	}
+	if got.Category != string(routing.CategoryUncensored) {
+		t.Fatalf("category = %q, want uncensored", got.Category)
+	}
+	// The first matching provider in route order becomes the public identity.
+	if got.Provider != aggregateSecondProvider || got.ID != aggregateSecondProvider+"-id" {
+		t.Fatalf("identity = %s/%s, want %s", got.Provider, got.ID, aggregateSecondProvider)
+	}
+	if got.Title != "Second title" || got.Summary != "Second summary" {
+		t.Fatalf("merged fields = title %q, summary %q", got.Title, got.Summary)
+	}
+	if len(got.Sources) != 2 {
+		t.Fatalf("source records = %d, want 2: %#v", len(got.Sources), got.Sources)
+	}
+	for _, source := range got.Sources {
+		if source.Status != "success" || source.Metadata == nil {
+			t.Fatalf("source %s lost its original metadata: %+v", source.Provider, source)
+		}
+	}
+}
+
+func TestAggregatedMovieInfoByNumberRejectsUnknownCategory(t *testing.T) {
+	e := New(openAggregateTestDB(t))
+
+	_, err := e.GetAggregatedMovieInfoByNumber(
+		"FC2-123456",
+		routing.Category("not-a-category"),
+		false,
+		routing.DefaultConfig(),
+	)
+	if !errors.Is(err, routing.ErrUnknownCategory) {
+		t.Fatalf("error = %v, want ErrUnknownCategory", err)
+	}
+}
+
+func TestResolveAggregatedProviderIDUsesRouteOrder(t *testing.T) {
+	e := New(openAggregateTestDB(t))
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryUncensored: {aggregateSecondProvider, aggregateBaselineProvider},
+	}}
+
+	pid, err := e.ResolveAggregatedProviderID("FC2-PPV-123456", routing.CategoryUncensored, config)
+	if err != nil {
+		t.Fatalf("resolve aggregated provider id: %v", err)
+	}
+	if pid.Provider != aggregateSecondProvider || pid.ID != aggregateSecondProvider+"-id" {
+		t.Fatalf("resolved identity = %s/%s, want %s", pid.Provider, pid.ID, aggregateSecondProvider)
 	}
 }

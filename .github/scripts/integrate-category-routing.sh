@@ -25,6 +25,7 @@ cp "$overlay/engine/metax_aggregate_fanout_test.go" "$sdk_root/engine/metax_aggr
 cp "$overlay/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
 cp "$overlay/route/metax_test_helpers_test.go" "$sdk_root/route/metax_test_helpers_test.go"
 cp "$overlay/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
+cp "$overlay/route/metax_aggregate_endpoint_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go"
 
 python3 - "$sdk_root/route/search.go" <<'PY'
 from pathlib import Path
@@ -61,6 +62,13 @@ if 'Category string `form:"category"`' not in source:
         1,
     )
 
+if '"strings"' not in source:
+    source = source.replace(
+        'import (\n\tstderrors "errors"\n\t"net/http"\n\tpkgurl "net/url"\n',
+        'import (\n\tstderrors "errors"\n\t"net/http"\n\tpkgurl "net/url"\n\t"strings"\n',
+        1,
+    )
+
 if "func getSearchWithConfig(" not in source:
     source = source.replace(
         'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
@@ -86,7 +94,7 @@ source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\t\tif routeErr != nil {
 \t\t\t\t\terr = routeErr
 \t\t\t\t} else {
-\t\t\t\t\tresults, err = app.SearchMovieProviders(query.Q, providers, query.Fallback)
+\t\t\t\t\tresults, err = searchMovieProvidersAggregated(app, query.Q, providers, query.Fallback)
 \t\t\t\t}
 \t\t\t} else if inferredCategory, ok := routing.InferCategory(query.Q); searchAll && ok {
 \t\t\t\tproviders, routeErr := resolveMovieRoute(app, routingConfig, inferredCategory)
@@ -94,7 +102,7 @@ source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\t\t\t// Automatic classification is best-effort; preserve broad-search compatibility if no route provider is installed.
 \t\t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
 \t\t\t\t} else {
-\t\t\t\t\tresults, err = app.SearchMovieProviders(query.Q, providers, query.Fallback)
+\t\t\t\t\tresults, err = searchMovieProvidersAggregated(app, query.Q, providers, query.Fallback)
 \t\t\t\t}
 \t\t\t} else if searchAll {
 \t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
@@ -110,6 +118,37 @@ if 'func resolveMovieRoute(' not in source:
 \t\tregistered = append(registered, name)
 \t}
 \treturn config.Resolve(category, "", registered)
+}
+
+'''
+    anchor = 'func getSearchWithConfig('
+    index = source.find(anchor)
+    if index < 0:
+        raise SystemExit("getSearchWithConfig declaration not found")
+    source = source[:index] + helper + source[index:]
+
+if 'func searchMovieProvidersAggregated(' not in source:
+    helper = '''// searchMovieProvidersAggregated keeps the per-provider results and prepends
+// one merged candidate under the reserved provider name. Jellyfin then renders
+// both the merged result and every original provider result as choices.
+func searchMovieProvidersAggregated(app *engine.Engine, keyword string, providers []string, fallback bool) ([]*model.MovieSearchResult, error) {
+\tresults, err := app.SearchMovieProviders(keyword, providers, fallback)
+\tif err != nil {
+\t\treturn nil, err
+\t}
+\treturn prependAggregatedCandidate(results), nil
+}
+
+func prependAggregatedCandidate(results []*model.MovieSearchResult) []*model.MovieSearchResult {
+\tif len(results) == 0 || results[0] == nil || strings.TrimSpace(results[0].Number) == "" {
+\t\treturn results
+\t}
+\tmerged := *results[0]
+\tmerged.Provider = engine.AggregatedProviderName
+\tmerged.ID = merged.Number
+\tout := make([]*model.MovieSearchResult, 0, len(results)+1)
+\tout = append(out, &merged)
+\treturn append(out, results...)
 }
 
 '''
@@ -147,7 +186,9 @@ required = [
     'Category string `form:"category"`',
     'func getSearchWithConfig(app *engine.Engine, typ searchType, routingConfig routing.Config) gin.HandlerFunc {',
     'func resolveMovieRoute(app *engine.Engine, config routing.Config, category routing.Category) ([]string, error) {',
-    'app.SearchMovieProviders(query.Q, providers, query.Fallback)',
+    'func searchMovieProvidersAggregated(app *engine.Engine, keyword string, providers []string, fallback bool) ([]*model.MovieSearchResult, error) {',
+    'engine.AggregatedProviderName',
+    'searchMovieProvidersAggregated(app, query.Q, providers, query.Fallback)',
     'routing.InferCategory(query.Q)',
     'stderrors.Is(err, routing.ErrUnknownCategory)',
 ]
@@ -164,35 +205,170 @@ import sys
 
 path = Path(sys.argv[1])
 source = path.read_text()
-source = source.replace(
-    'type infoQuery struct {\n\tLazy bool `form:"lazy"`\n}',
-    'type infoQuery struct {\n\tLazy      bool `form:"lazy"`\n\tAggregate bool `form:"aggregate"`\n}',
-    1,
-)
-source = source.replace(
-    '\t\tquery := &infoQuery{\n\t\t\tLazy: true, // enable lazy by default.\n\t\t}',
-    '\t\tquery := &infoQuery{\n\t\t\tLazy: true, // enable lazy by default.\n\t\t\tAggregate: true, // aggregate movie metadata by default; callers may opt out.\n\t\t}',
-    1,
-)
-source = source.replace(
-    '\t\tcase movieInfoType:\n\t\t\tinfo, err = app.GetMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)',
-    '\t\tcase movieInfoType:\n\t\t\tif query.Aggregate {\n\t\t\t\tinfo, err = app.GetAggregatedMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)\n\t\t\t} else {\n\t\t\t\tinfo, err = app.GetMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)\n\t\t\t}',
-    1,
-)
+
+if 'stderrors "errors"' not in source:
+    source = source.replace(
+        'import (\n\t"net/http"\n',
+        'import (\n\tstderrors "errors"\n\t"net/http"\n',
+        1,
+    )
+if '"github.com/metatube-community/metatube-sdk-go/routing"' not in source:
+    source = source.replace(
+        '\t"github.com/metatube-community/metatube-sdk-go/engine/providerid"\n',
+        '\t"github.com/metatube-community/metatube-sdk-go/engine/providerid"\n'
+        '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
+        1,
+    )
+
+if 'Category  string `form:"category"`' not in source:
+    source = source.replace(
+        'type infoQuery struct {\n\tLazy bool `form:"lazy"`\n}',
+        'type infoQuery struct {\n\tLazy      bool   `form:"lazy"`\n\tAggregate bool   `form:"aggregate"`\n\tCategory  string `form:"category"`\n}',
+        1,
+    )
+
+if 'func getInfoWithConfig(' not in source:
+    source = source.replace(
+        'func getInfo(app *engine.Engine, typ infoType) gin.HandlerFunc {\n\treturn func(c *gin.Context) {',
+        'func getInfo(app *engine.Engine, typ infoType) gin.HandlerFunc {\n'
+        '\treturn getInfoWithConfig(app, typ, routing.DefaultConfig())\n'
+        '}\n\n'
+        'func getInfoWithConfig(app *engine.Engine, typ infoType, routingConfig routing.Config) gin.HandlerFunc {\n'
+        '\treturn func(c *gin.Context) {',
+        1,
+    )
+
+if 'Aggregate: true' in source:
+    source = source.replace(
+        'Aggregate: true, // aggregate movie metadata by default; callers may opt out.',
+        'Aggregate: false, // stock detail by default; merged data is opt-in or requested via MetaX.',
+        1,
+    )
+elif 'Aggregate: false' not in source and 'Aggregate bool' in source:
+    source = source.replace(
+        '\t\tquery := &infoQuery{\n\t\t\tLazy: true, // enable lazy by default.\n\t\t}',
+        '\t\tquery := &infoQuery{\n'
+        '\t\t\tLazy: true, // enable lazy by default.\n'
+        '\t\t\tAggregate: false, // stock detail by default; merged data is opt-in or requested via MetaX.\n'
+        '\t\t}',
+        1,
+    )
+
+if 'engine.IsAggregatedProvider(uri.Provider)' not in source:
+    source = source.replace(
+        '\t\tcase movieInfoType:\n\t\t\tinfo, err = app.GetMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)',
+        '\t\tcase movieInfoType:\n'
+        '\t\t\tif engine.IsAggregatedProvider(uri.Provider) {\n'
+        '\t\t\t\taggregated, aggErr := app.GetAggregatedMovieInfoByNumber(uri.ID, routing.Category(query.Category), query.Lazy, routingConfig)\n'
+        '\t\t\t\tif aggErr == nil {\n'
+        '\t\t\t\t\t// Keep the merged identity stable so refreshes continue to\n'
+        '\t\t\t\t\t// resolve through the reserved provider name.\n'
+        '\t\t\t\t\taggregated.Provider = engine.AggregatedProviderName\n'
+        '\t\t\t\t\taggregated.ID = uri.ID\n'
+        '\t\t\t\t\tinfo = aggregated\n'
+        '\t\t\t\t}\n'
+        '\t\t\t\terr = aggErr\n'
+        '\t\t\t} else if query.Aggregate {\n'
+        '\t\t\t\tinfo, err = app.GetAggregatedMovieInfoByProviderIDWithCategory(uri.AsProviderID(), query.Lazy, routingConfig, routing.Category(query.Category))\n'
+        '\t\t\t} else {\n'
+        '\t\t\t\tinfo, err = app.GetMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)\n'
+        '\t\t\t}',
+        1,
+    )
+
+if 'routing.ErrNoAvailableProvider' not in source:
+    needle = '''\t\tif err != nil {
+\t\t\tabortWithError(c, err)
+\t\t\treturn
+\t\t}'''
+    replacement = '''\t\tif err != nil {
+\t\t\tif stderrors.Is(err, routing.ErrUnknownCategory) || stderrors.Is(err, routing.ErrNoAvailableProvider) {
+\t\t\t\tabortWithStatusMessage(c, http.StatusBadRequest, err)
+\t\t\t\treturn
+\t\t\t}
+\t\t\tabortWithError(c, err)
+\t\t\treturn
+\t\t}'''
+    index = source.rfind(needle)
+    if index < 0:
+        raise SystemExit("could not locate info error handler")
+    source = source[:index] + replacement + source[index + len(needle):]
+
 required = [
-    'Aggregate bool `form:"aggregate"`',
-    'Aggregate: true',
-    'app.GetAggregatedMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)',
-    'if query.Aggregate {',
+    'stderrors "errors"',
+    '"github.com/metatube-community/metatube-sdk-go/routing"',
+    'Aggregate bool',
+    'Category  string `form:"category"`',
+    'func getInfoWithConfig(app *engine.Engine, typ infoType, routingConfig routing.Config) gin.HandlerFunc {',
+    'Aggregate: false',
+    'engine.IsAggregatedProvider(uri.Provider)',
+    'app.GetAggregatedMovieInfoByNumber(uri.ID, routing.Category(query.Category), query.Lazy, routingConfig)',
+    'aggregated.Provider = engine.AggregatedProviderName',
+    'app.GetAggregatedMovieInfoByProviderIDWithCategory(uri.AsProviderID(), query.Lazy, routingConfig, routing.Category(query.Category))',
+    'routing.ErrNoAvailableProvider',
 ]
 missing = [item for item in required if item not in source]
 if missing:
-    raise SystemExit("could not patch detail aggregation endpoint; missing expected markers: " + repr(missing))
+    raise SystemExit("could not patch detail endpoint; missing expected markers: " + repr(missing))
+path.write_text(source)
+PY
+
+python3 - "$sdk_root/route/image.go" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+
+if '"github.com/metatube-community/metatube-sdk-go/routing"' not in source:
+    source = source.replace(
+        '\t"github.com/metatube-community/metatube-sdk-go/engine"\n',
+        '\t"github.com/metatube-community/metatube-sdk-go/engine"\n'
+        '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
+        1,
+    )
+
+if 'Category string  `form:"category"`' not in source:
+    source = source.replace(
+        '\tQuality  int     `form:"quality"`\n}',
+        '\tQuality  int     `form:"quality"`\n\tCategory string  `form:"category"`\n}',
+        1,
+    )
+
+if 'engine.IsAggregatedProvider(uri.Provider)' not in source:
+    marker = '''\t\t// TODO: how to handle providers that implement
+\t\t//   both actor and movie provider interfaces?'''
+    replacement = '''\t\t// The merged search candidate carries the reserved provider name.
+\t\t// Resolve it to the route-first real provider before the stock image paths.
+\t\tif engine.IsAggregatedProvider(uri.Provider) {
+\t\t\tresolved, resolveErr := app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.DefaultConfig())
+\t\t\tif resolveErr != nil {
+\t\t\t\tabortWithError(c, resolveErr)
+\t\t\t\treturn
+\t\t\t}
+\t\t\turi.Provider = resolved.Provider
+\t\t\turi.ID = resolved.ID
+\t\t}
+
+''' + marker
+    if marker not in source:
+        raise SystemExit("image provider dispatch marker not found; SDK route/image.go changed")
+    source = source.replace(marker, replacement, 1)
+
+required = [
+    '"github.com/metatube-community/metatube-sdk-go/routing"',
+    'Category string  `form:"category"`',
+    'engine.IsAggregatedProvider(uri.Provider)',
+    'app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.DefaultConfig())',
+]
+missing = [item for item in required if item not in source]
+if missing:
+    raise SystemExit("could not patch image endpoint; missing expected markers: " + repr(missing))
 path.write_text(source)
 PY
 
 gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" \
   "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go" \
-  "$sdk_root/route/info.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" \
-  "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go"
+  "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" \
+  "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go"
 echo "Integrated Amane category routes, FC2/uncensored merging, field-level movie aggregation, and source records."

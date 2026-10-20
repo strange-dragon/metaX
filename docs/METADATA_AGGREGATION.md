@@ -1,16 +1,50 @@
 # Movie metadata aggregation and source records
 
-## API contract
+## Jellyfin interaction model
 
-The existing detail endpoint remains the entry point:
+End users only see the Jellyfin plugin, not provider names. The plugin sends a configured category plus a movie name or catalog number, renders the candidates the backend returns, and then requests detail for the candidate the user selects. metaX therefore exposes both one merged candidate and the original result from each provider.
+
+## Search contract
 
 ```http
-GET /v1/movies/:provider/:id
+GET /v1/movies/search?q=:keyword&category=:category
 ```
 
-Aggregation is enabled by default. The response keeps the existing `data` envelope and the existing `MovieInfo` fields at the top level of `data`, then adds:
+When a category is supplied, or a catalog number is confidently classified, the response keeps every provider's original search result and prepends one merged candidate:
 
-- `category`: the confidently inferred route category, or `unknown` when the number does not match a supported classifier. FC2 is merged into `uncensored`, so FC2 numbers report `uncensored`.
+```json
+[
+  {"provider": "MetaX", "id": "FC2-PPV-123456", "number": "FC2-PPV-123456"},
+  {"provider": "FC2",    "id": "123456",         "number": "FC2-PPV-123456"},
+  {"provider": "JavDB",  "id": "abc123",         "number": "FC2-PPV-123456"}
+]
+```
+
+- `MetaX` is a reserved provider name. It is not a registered provider package.
+- The merged candidate carries the route-first provider's display fields and the catalog number as its ID. Selecting it runs the full aggregation in the detail endpoint, so search stays cheap.
+- An explicit `provider` parameter remains a manual override and does not add the merged candidate.
+- The merged candidate is only added when a category route is used. Broad, unclassified search keeps the stock SDK response.
+- If the plugin enables provider filtering, its allowlist must include `MetaX`.
+
+## Detail contract
+
+```http
+GET /v1/movies/:provider/:id?category=:category&aggregate=:bool
+```
+
+The endpoint has three modes:
+
+1. **Real provider, default (`aggregate` omitted or `false`)** — stock MetaTube detail response for that provider. Selecting an original provider candidate returns exactly that provider's unmerged metadata.
+2. **Real provider, `aggregate=true`** — merged `MovieInfo` at the top level plus `category` and `sources`. This is the explicit opt-in path for callers that already hold a provider + ID.
+3. **Reserved provider `MetaX`** — `id` is treated as a catalog number. The backend resolves the category route, searches each provider, uses the route-first candidate whose detail succeeds as the underlying identity, and returns the merged view plus `category` and `sources`.
+
+For `MetaX`, the response keeps `provider=MetaX` and `id=<catalog number>` so later refreshes continue to resolve through aggregation. The per-provider records below `sources` still expose each provider's original identity and metadata.
+
+`category` takes precedence over provider/number inference. An explicit but unknown category returns HTTP 400 instead of silently broadening the search. FC2 is folded into `uncensored` in responses, while `category=fc2` remains accepted as an input alias.
+
+When aggregation runs, the response keeps the existing `data` envelope and the existing `MovieInfo` fields at the top level, then adds:
+
+- `category`: the resolved route category, or `unknown` when the number does not match a supported classifier.
 - `sources`: one record per route provider, plus the selected provider when it is outside the route. The top-level `MovieInfo` is the merged view; each record keeps that provider's original, unmerged metadata.
 
   - `provider`, `id`: source identity.
@@ -18,12 +52,18 @@ Aggregation is enabled by default. The response keeps the existing `data` envelo
   - `error`: diagnostic text when a source fails or cannot be safely used.
   - `metadata`: that provider's independent, normalized SDK `MovieInfo` record, when available.
 
-Use `?aggregate=false` to request the stock detail response without the added `category` and `sources` fields. The public identity at the top level remains the originally requested provider + ID so existing detail URLs and plugin identity semantics are not rewritten.
+## Image contract
+
+```http
+GET /v1/images/{primary|thumb|backdrop}/:provider/:id?category=:category&url=:url
+```
+
+Images requested with `provider=MetaX` are resolved to the route-first real provider before the stock image path runs. The plugin normally passes the image URL from the selected metadata; the `category` parameter is optional and is inferred from the catalog number when omitted.
 
 ## Merge rules
 
-1. The selected provider's detail must succeed before the endpoint can return a result.
-2. Cross-provider lookup is enabled only when the catalog number can be classified confidently. Unknown formats return the selected provider's record and an explanatory `baseline_only` source entry instead of guessing a category.
+1. For a real-provider aggregate request, the selected provider's detail must succeed before the endpoint can return a result. For `MetaX`, the first route candidate whose detail succeeds becomes the baseline identity; if no provider matches the catalog number, the endpoint returns not found.
+2. Cross-provider lookup is enabled when `category` is explicit or the catalog number can be classified confidently. Unknown formats on the real-provider path return the selected provider's record and an explanatory `baseline_only` source entry instead of guessing a category. `MetaX` with an explicit but unknown category returns HTTP 400.
 3. Supplemental details are eligible only when their normalized catalog number matches the selected record. Normalization follows Amane's `fold_number`: case, spaces, and hyphens are ignored, underscores remain significant, and leading zeros are preserved. On top of that, the FC2 family is canonicalized because providers spell the same product differently (`FC2-123456`, `FC2PPV123456`, `FC2-PPV-123456`, `FC2_PPV_123456` all match). Bare numeric provider IDs do not match FC2 catalog numbers.
 
 4. Scalar descriptive fields use the first non-empty value in configured route order. Empty supplemental values never erase populated values.
@@ -39,7 +79,7 @@ The current MetaTube `MovieProvider` contract returns `model.MovieInfo`, after e
 
 - Automatic classification follows the Amane-style number families implemented in metaX (censored catalog numbers, known uncensored prefixes and six-digit sequence IDs, FC2, Chinese MD/MKY, amateur prefixes, KIN8/Western studio-date IDs, and Getchu identifiers). For non-catalog identifiers, a small number of source-specific hints are used (ThePornDB, Getchu, FC2 marketplaces). Directory-only overrides and ambiguous identifiers are not guessed; the selected record is returned with a `baseline_only` source status.
 - Field-level preferences per individual metadata field, source/language variants, Amane's two-phase partial-source protocol, actor aggregation, and persistent raw HTTP payload capture are not implemented by this first pass.
-- This is an integration overlay for the pinned MetaTube SDK, not a standalone Amane service. The SDK integration script applies the engine method, detail-route wiring, and deterministic tests.
+- This is an integration overlay for the pinned MetaTube SDK, not a standalone Amane service. The SDK integration script applies the engine methods, search/detail/image-route wiring, and deterministic tests.
 - Tests and integrated build must be run in a local SDK checkout after applying the overlay; this documentation alone is not verification.
 
 ## Verification (2026-10-20)
@@ -72,5 +112,7 @@ go test ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2c
 go build -o /tmp/metatube-server ./cmd/server
 # -> build succeeds
 ```
+
+The latest run on 2026-10-20 added endpoint coverage for the merged search candidate, default stock detail, `aggregate=true`, the reserved `MetaX` detail path, and rejection of explicit unknown categories. The image route is built and its `MetaX` resolution path is covered by the engine resolver tests; it is not exercised with live image bytes.
 
 Full SDK regression (`go test $(go list ./... | grep -Ev .../translate)`) had two pre-existing environment failures only: `engine/dbengine` requires a Docker daemon, and `imageutil` expects Go 1.26 JPEG behavior while this run used Go 1.27.3. CI sets `GITHUB_ACTIONS=true` to skip live provider tests and pins Go 1.26.x.

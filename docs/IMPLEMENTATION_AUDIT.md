@@ -126,22 +126,22 @@ Limitations to carry forward:
 
 ### Implemented first pass: detail aggregation plus source records
 
-The project owner has chosen to include Amane-style detail aggregation. The first integration pass is implemented in `.github/overlays/metatube-sdk-go/engine/metax_aggregate.go` and wired into the SDK detail route by `.github/scripts/integrate-category-routing.sh`.
+The project owner has chosen to include Amane-style detail aggregation. The first integration pass is implemented in `.github/overlays/metatube-sdk-go/engine/metax_aggregate.go` and wired into the SDK search, detail, and image routes by `.github/scripts/integrate-category-routing.sh`.
 
-- The existing detail response keeps the original `MovieInfo` fields and adds `category` and `sources` to the same `data` object. `?aggregate=false` opts out and returns the stock detail response.
-- The selected provider + ID remain the top-level public identity. Supplemental records are accepted only after a normalized catalog-number match.
+- Category search returns each provider's original candidate plus one merged candidate under the reserved `MetaX` provider.
+- Real-provider detail returns the stock response by default. `?aggregate=true` keeps the original `MovieInfo` fields and adds `category` and `sources` to the same `data` object. `MetaX/:number` resolves the catalog number through the route and returns the merged view.
+- For the merged path, the top-level public identity stays `MetaX` + catalog number so refreshes remain aggregated. Each source record keeps the route-first real `provider` + `id`, status, diagnostic error where relevant, and that provider's independent structured SDK metadata.
 - Scalar fields use route-order first-non-empty semantics; list fields are stably deduplicated; scores are not averaged across unlike provider scales.
-- Each source record keeps the provider name, ID, status, diagnostic error where relevant, and that provider's independent structured SDK metadata. This is not raw HTML/HTTP/API wire data; the existing `MovieProvider` interface does not expose those payloads.
-- Unknown/ambiguous categories do not trigger speculative fan-out. The selected provider record is returned with a `baseline_only` source status and an explanation.
-- Regression tests were added to the SDK overlay, but the integration script, tests, formatter, and build have **not yet been run** after this change. Do not treat compilation or runtime compatibility as verified.
+- Each source record's metadata is not raw HTML/HTTP/API wire data; the existing `MovieProvider` interface does not expose those payloads.
+- An explicit unknown category is rejected. An ambiguous catalog number on the real-provider path returns the selected record with a `baseline_only` source status and an explanation.
+- The overlay, focused tests, and integrated server build have been run against the pinned SDK checkout; see `docs/METADATA_AGGREGATION.md`.
 
 ### Remaining aggregation work
 
-1. Apply the overlay to the pinned SDK checkout and fix any compile/test issues without triggering GitHub Actions.
-2. Add endpoint-level contract tests for the additive `sources` response and `aggregate=false` compatibility path.
-3. Expand automatic classification only where source evidence supports a high-confidence category; keep ambiguous IDs on the safe baseline-only path.
-4. Consider Amane's per-field preference configuration and two-phase partial-source protocol only after the basic integration builds and deterministic tests pass.
-5. If raw source-site HTML/JSON is required, design a separate provider result contract; do not mislabel normalized `MovieInfo` as wire-level raw data.
+1. Add plugin-side handling for the reserved `MetaX` provider (allowlist) and forward the configured category on detail requests.
+2. Expand automatic classification only where source evidence supports a high-confidence category; keep ambiguous IDs on the safe baseline-only path.
+3. Consider Amane's per-field preference configuration and two-phase partial-source protocol only after the basic integration builds and deterministic tests pass.
+4. If raw source-site HTML/JSON is required, design a separate provider result contract; do not mislabel normalized `MovieInfo` as wire-level raw data.
 
 ## 5. Existing documentation to consult before repeating work
 
