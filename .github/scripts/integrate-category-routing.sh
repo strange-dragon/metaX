@@ -14,6 +14,7 @@ sdk_root="$(cd "$1" && pwd)"
 mkdir -p "$sdk_root/routing"
 cp "$workspace_root/routing/routes.go" "$sdk_root/routing/routes.go"
 cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
+cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate.go"
 cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
 cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
 
@@ -125,5 +126,38 @@ if missing:
 path.write_text(source)
 PY
 
-gofmt -w "$sdk_root/routing/routes.go" "$sdk_root/engine/metax_search.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" "$sdk_root/route/metax_category_fanout_test.go"
-echo "Integrated Amane category routes into /v1/movies/search and added SDK-level API/fan-out tests."
+
+python3 - "$sdk_root/route/info.go" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+source = source.replace(
+    'type infoQuery struct {\n\tLazy bool `form:"lazy"`\n}',
+    'type infoQuery struct {\n\tLazy      bool `form:"lazy"`\n\tAggregate bool `form:"aggregate"`\n}',
+    1,
+)
+source = source.replace(
+    '\t\tquery := &infoQuery{\n\t\t\tLazy: true, // enable lazy by default.\n\t\t}',
+    '\t\tquery := &infoQuery{\n\t\t\tLazy: true, // enable lazy by default.\n\t\t\tAggregate: true, // aggregate movie metadata by default; callers may opt out.\n\t\t}',
+    1,
+)
+source = source.replace(
+    '\t\tcase movieInfoType:\n\t\t\tinfo, err = app.GetMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)',
+    '\t\tcase movieInfoType:\n\t\t\tif query.Aggregate {\n\t\t\t\tinfo, err = app.GetAggregatedMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)\n\t\t\t} else {\n\t\t\t\tinfo, err = app.GetMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)\n\t\t\t}',
+    1,
+)
+required = [
+    'Aggregate bool `form:"aggregate"`',
+    'app.GetAggregatedMovieInfoByProviderID(uri.AsProviderID(), query.Lazy)',
+    'if query.Aggregate {',
+]
+missing = [item for item in required if item not in source]
+if missing:
+    raise SystemExit("could not patch detail aggregation endpoint; missing expected markers: " + repr(missing))
+path.write_text(source)
+PY
+
+gofmt -w "$sdk_root/routing/routes.go" "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" "$sdk_root/route/info.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" "$sdk_root/route/metax_category_fanout_test.go"
+echo "Integrated Amane category routes, field-level movie aggregation, source records, and SDK-level API/fan-out tests."
