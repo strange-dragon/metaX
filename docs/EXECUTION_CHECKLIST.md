@@ -325,15 +325,13 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] CI on commit `63e2688` passed Go tests in [run 39402434168](https://github.com/strange-dragon/metaX/actions/runs/39402434168), SDK patch/full-regression/focused-provider/build in [39402434294](https://github.com/strange-dragon/metaX/actions/runs/39402434294), live FC2/uncensored in [39402434186](https://github.com/strange-dragon/metaX/actions/runs/39402434186), and live MOON-023 in [39402434223](https://github.com/strange-dragon/metaX/actions/runs/39402434223). The integrated CI build registered `WikipediaActor`.
 - Note: the pinned Jellyfin plugin has no provider-cookie configuration or pass-through protocol. Server-side environment cookies remain the current fallback until an additive plugin change is made.
 
-### Task: authenticated runtime cookie update API (2026-10-20)
+### Task: request-scoped provider cookies from the plugin (2026-10-20)
 
-- [x] Added `Engine.SetProviderConfig` in the SDK overlay. It resolves `movie`/`actor` providers case-insensitively, requires `provider.ConfigSetter`, accepts only `cookies`/`cookie`, and rejects CR/LF and empty updates.
-- [x] Added `PUT /v1/providers/config` under the existing bearer-token private route group. The body is bounded to 64 KiB, rejects unknown JSON fields and trailing JSON, and returns an explicit applied response.
-- [x] Added deterministic engine tests for case-insensitive provider/type lookup, cookie application, unknown providers, unsupported providers, unsupported keys, and header injection.
-- [x] Added route tests for authentication, successful cookie application, unknown provider, empty config, unknown fields, unsupported keys, CR/LF, and trailing JSON.
-- [x] Wired the new files into the integration overlay, focused test target, route registration patch, and build format gate.
-- [x] Local verification on the clean pinned SDK checkout: `go test ./engine ./route -count=1` passes; `go build ./cmd/server` succeeds; live endpoint checks returned `401` without a token, `200` with a valid token, `400` for unsupported keys, and `404` for an unknown provider.
-- [x] CI on commit `fd6b895` passed Go tests in [run 39405816480](https://github.com/strange-dragon/metaX/actions/runs/39405816480), SDK focused tests/full regression/build in [39405816482](https://github.com/strange-dragon/metaX/actions/runs/39405816482), formatting in [39405816528](https://github.com/strange-dragon/metaX/actions/runs/39405816528), and live FC2/uncensored in [39405816839](https://github.com/strange-dragon/metaX/actions/runs/39405816839).
-- [ ] Local full pinned SDK regression remains environment-blocked for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch; CI runs the full suite.
-- [ ] This task is in-memory only. Persistence and startup replay are the next task.
-- [ ] Jellyfin plugin configuration fields and the plugin-to-backend call remain out of scope for the backend-only phase.
+- [x] Reversed the server-side `PUT /v1/providers/config` direction: the Jellyfin plugin configuration is the only persistent cookie source, and the server must not store or replay cookies.
+- [x] Added the `X-MetaX-Provider-Cookies` request header as a JSON dictionary (`provider name -> cookie header value`) on movie/actor search, detail, review, and image routes.
+- [x] Added `Engine.WithRequestCookies`: for each known provider entry it creates a fresh provider instance from the registered factory, overlays the request cookie on the startup provider configuration, and rebuilds host lookups. Shared provider instances are never mutated.
+- [x] Added 16 KiB header, malformed/trailing JSON, non-string value, empty-name, CR/LF, unsupported-provider, unknown-provider, and concurrency-isolation coverage.
+- [x] Removed the runtime configuration endpoint and its files so there is no second cookie source of truth. Environment variables remain the fallback when the header is absent.
+- [x] Wired the overlay files into the integration script, focused tests, and formatting gate. `go test ./engine ./route -count=1` passes on the clean pinned SDK checkout; `go build ./cmd/server` succeeds.
+- [ ] The Jellyfin plugin still needs its own additive change to store the provider dictionary and send the header; that work is outside this backend-only phase.
+- [ ] Full pinned SDK regression remains environment-blocked locally for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch; CI runs the full suite.

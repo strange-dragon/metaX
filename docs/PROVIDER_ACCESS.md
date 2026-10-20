@@ -76,36 +76,48 @@ are point-in-time network evidence, not parser tests.
 | Getchu fuzzy search | Exact `GETCHU-<digits>` fallback works; fuzzy catalog search deferred | Amane uses the first search result | Do not copy the weaker first-result behavior; add an exact identity check first. |
 | Wikipedia/Wikidata actor biography | Implemented as `WikipediaActor` | Wikidata entity filtering + Wikipedia extraction | Exact label/alias identity, AV occupation/description filtering, and deterministic API fixtures are covered locally; live-site verification remains pending. |
 
-## Runtime cookie update API
+## Request-scoped cookies from the Jellyfin plugin
 
-The backend now exposes an authenticated runtime update endpoint for expiring
-cookies:
+The Jellyfin plugin is the only persistent owner of provider cookies. Its
+configuration should store a dictionary keyed by provider name, for example:
 
-```bash
-curl -X PUT http://127.0.0.1:8080/v1/providers/config \
-  -H "Authorization: Bearer $METATUBE_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"movie","provider":"JavDB","config":{"cookies":"session=..."}}'
+```json
+{
+  "JavDB": "session=...; cf_clearance=...",
+  "Freejavbt": "login=..."
+}
 ```
 
-- `type` is `movie` or `actor`; `provider` uses the registered provider name.
-- Only `cookies` / `cookie` keys are accepted in this task.
-- The endpoint requires the existing MetaTube bearer token; without a token the
-  server's other private `/v1` routes are equally open, so deploy behind TLS and
-  configure a token.
-- The provider must implement `provider.ConfigSetter`. This covers JavDB,
-  Freejavbt, and scraper-based providers through patch `0015`.
-- Updates are applied immediately and are **in memory only**. A restart restores
-  the startup environment configuration. Persistence/startup replay is a
-  separate follow-up task.
-- The API never logs cookie values. It rejects CR/LF and unsupported keys.
+On every API request the plugin sends the dictionary in one request header:
 
-The intended user-facing location is still the Jellyfin plugin configuration,
-so a cookie can be refreshed without rebuilding the container. The pinned
-upstream plugin (`f7c1f336`) currently exposes only the server URL/token and has
-no provider cookie fields or pass-through protocol. The plugin change is a
-separate project task; until it exists, call this endpoint directly or use the
-server-side environment variables as the fallback.
+```http
+X-MetaX-Provider-Cookies: {"JavDB":"session=...; cf_clearance=...","Freejavbt":"login=..."}
+```
+
+The header value is a JSON object (`map<string,string>`). The server applies
+the matching entry only to that request, then discards it. There is no
+server-side cookie persistence and no startup replay; restarting the server
+does not lose plugin-managed cookies. Requests without the header continue to
+use the environment-variable fallback described above.
+
+Implementation rules:
+
+- Provider names are matched case-insensitively. Empty names and empty values
+  are ignored. Unknown provider names are ignored for forward compatibility.
+- A known provider must implement `provider.ConfigSetter`; otherwise the
+  request is rejected with HTTP 400. JavDB, Freejavbt, and scraper providers
+  covered by patch `0015` satisfy this.
+- The raw header is limited to 16 KiB. Malformed JSON, trailing JSON, non-string
+  values, empty provider names, and CR/LF are rejected with HTTP 400.
+- Provider instances are recreated per request with the request cookie overlaid
+  on the provider's startup configuration. The shared provider instance is not
+  mutated, so concurrent requests with different cookie dictionaries cannot
+  leak into each other.
+- Cookie values are never logged or returned in an error message.
+- The same header can be sent to image endpoints when a provider's images also
+  require authentication.
+- The plugin integration is a separate project task. Until that change exists,
+  send the header directly or use the environment-variable fallback.
 
 ## Security notes
 

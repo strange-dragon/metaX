@@ -522,6 +522,9 @@ pages. The Go runtime now exposes equivalent configuration:
 - Native JavDB and Freejavbt accept `COOKIES`/`COOKIE` through `SetConfig`.
 - SDK scraper providers receive the same settings through
   `patches/metatube-sdk-go/0015-scraper-provider-cookies.patch`.
+- The planned Jellyfin-plugin cookie dictionary is applied per request through
+  `X-MetaX-Provider-Cookies`; the server creates request-local provider
+  instances and does not persist or replay the values.
 - Existing per-provider `PROXY` and `TIMEOUT` settings remain unchanged.
 
 See [Provider access, cookies, and proxy configuration](PROVIDER_ACCESS.md) for

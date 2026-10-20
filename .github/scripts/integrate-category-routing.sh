@@ -23,40 +23,20 @@ cp "$overlay/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate.go"
 cp "$overlay/engine/metax_aggregate_cache.go" "$sdk_root/engine/metax_aggregate_cache.go"
 cp "$overlay/engine/metax_aggregate_db.go" "$sdk_root/engine/metax_aggregate_db.go"
 cp "$overlay/engine/metax_fanout.go" "$sdk_root/engine/metax_fanout.go"
-cp "$overlay/engine/metax_provider_config.go" "$sdk_root/engine/metax_provider_config.go"
+cp "$overlay/engine/metax_request_cookies.go" "$sdk_root/engine/metax_request_cookies.go"
 cp "$overlay/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_test.go"
 cp "$overlay/engine/metax_aggregate_fanout_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go"
 cp "$overlay/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_cache_test.go"
 cp "$overlay/engine/metax_aggregate_db_test.go" "$sdk_root/engine/metax_aggregate_db_test.go"
 cp "$overlay/engine/metax_fanout_test.go" "$sdk_root/engine/metax_fanout_test.go"
-cp "$overlay/engine/metax_provider_config_test.go" "$sdk_root/engine/metax_provider_config_test.go"
+cp "$overlay/engine/metax_request_cookies_test.go" "$sdk_root/engine/metax_request_cookies_test.go"
 cp "$overlay/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
 cp "$overlay/route/metax_test_helpers_test.go" "$sdk_root/route/metax_test_helpers_test.go"
 cp "$overlay/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
 cp "$overlay/route/metax_search_merge_test.go" "$sdk_root/route/metax_search_merge_test.go"
 cp "$overlay/route/metax_aggregate_endpoint_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go"
-cp "$overlay/route/metax_provider_config.go" "$sdk_root/route/metax_provider_config.go"
-cp "$overlay/route/metax_provider_config_test.go" "$sdk_root/route/metax_provider_config_test.go"
-
-python3 - "$sdk_root/route/route.go" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-source = path.read_text()
-if 'updateProviderConfig(app)' not in source:
-    marker = '\t\tdb := private.Group("/db")\n'
-    if marker not in source:
-        raise SystemExit("route.go private group not found; SDK route/route.go changed")
-    addition = (
-        '\t\tproviders := private.Group("/providers")\n'
-        '\t\t{\n'
-        '\t\t\tproviders.PUT("/config", updateProviderConfig(app))\n'
-        '\t\t}\n\n'
-    )
-    source = source.replace(marker, marker + addition, 1)
-path.write_text(source)
-PY
+cp "$overlay/route/metax_request_cookies.go" "$sdk_root/route/metax_request_cookies.go"
+cp "$overlay/route/metax_request_cookies_test.go" "$sdk_root/route/metax_request_cookies_test.go"
 
 python3 - "$sdk_root/route/search.go" <<'PY'
 from pathlib import Path
@@ -610,13 +590,45 @@ if missing:
 path.write_text(source)
 PY
 
+python3 - "$sdk_root/route/search.go" "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/review.go" <<'PY'
+from pathlib import Path
+import sys
+
+scoped = '''\t\trequestApp, requestErr := requestEngine(c, app)
+\t\tif requestErr != nil {
+\t\t\tabortWithStatusMessage(c, http.StatusBadRequest, requestErr)
+\t\t\treturn
+\t\t}
+\t\tapp = requestApp
+
+'''
+patches = {
+    'search.go': '\t\t// if provider is not specified, search with all providers.\n',
+    'info.go': '\t\tvar (\n\t\t\tinfo any\n',
+    'image.go': '\t\t// The merged search candidate carries the reserved provider name.\n',
+    'review.go': '\t\tif !app.IsMovieProvider(uri.Provider) {\n',
+}
+for raw_path in sys.argv[1:]:
+    path = Path(raw_path)
+    source = path.read_text()
+    if 'requestEngine(c, app)' in source:
+        continue
+    marker = patches[path.name]
+    if marker not in source:
+        raise SystemExit(f"request cookie marker not found in {path.name}")
+    source = source.replace(marker, scoped + marker, 1)
+    path.write_text(source)
+PY
+
 gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" \
   "$sdk_root/engine/metax_aggregate_cache.go" "$sdk_root/engine/metax_aggregate_db.go" \
-  "$sdk_root/engine/metax_fanout.go" \
+  "$sdk_root/engine/metax_fanout.go" "$sdk_root/engine/metax_request_cookies.go" \
   "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go" \
   "$sdk_root/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_db_test.go" \
-  "$sdk_root/engine/metax_fanout_test.go" \
-  "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" \
+  "$sdk_root/engine/metax_fanout_test.go" "$sdk_root/engine/metax_request_cookies_test.go" \
+  "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/search.go" "$sdk_root/route/review.go" \
+  "$sdk_root/route/metax_request_cookies.go" "$sdk_root/route/metax_request_cookies_test.go" \
+  "$sdk_root/route/metax_category_api_test.go" \
   "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" \
   "$sdk_root/route/metax_search_merge_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go" \
   "$sdk_root/cmd/cmd.go"
