@@ -202,8 +202,12 @@ func InferCategory(keyword string) (Category, bool) {
 		strings.HasPrefix(compact, "300MIUM") {
 		return CategoryAmateur, true
 	}
-	if isUncensoredCatalog(compact) {
+	if isUncensoredCatalog(compact) || strings.HasPrefix(compact, "TH101") ||
+		(len(compact) == 5 && (strings.HasPrefix(compact, "N") || strings.HasPrefix(compact, "K")) && allDigits(compact[1:])) {
 		return CategoryUncensored, true
+	}
+	if amateurNumericPrefixPattern(value) {
+		return CategoryAmateur, true
 	}
 
 	// Western studio/date codes are not standard Japanese catalog numbers.
