@@ -171,15 +171,13 @@ behavior deterministic under test.
 
 ## Recommended execution order
 
-1. **1.5** route aliases for the cookie dictionary — small and directly closes
-   the current contract.
-2. **2.2** ThePornDB actor audit — deterministic and unblocked.
-3. **7.3** health/status surface — useful for operations without touching
+1. **2.2** ThePornDB actor audit — deterministic and unblocked.
+2. **7.3** health/status surface — useful for operations without touching
    metadata semantics.
-4. **7.1** shared retry policy — highest-value resilience work.
-5. **3.1** Official router contract — large, but the only remaining
+3. **7.1** shared retry policy — highest-value resilience work.
+4. **3.1** Official router contract — large, but the only remaining
    high-impact provider gap that can be designed without live scraping.
-6. Blocked tasks 4–6 only after evidence or an explicit architecture decision.
+5. Blocked tasks 4–6 only after evidence or an explicit architecture decision.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.
