@@ -51,39 +51,39 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
 - SDK-route tests for the merged search candidate, default stock detail, `aggregate=true`, the reserved `MetaX` detail path, and rejection of explicit unknown categories.
 - Regression assertion that `101926_01` and `10192601` remain distinct.
 
+- Request-scoped provider cookies from the Jellyfin plugin: the server accepts a
+  per-request `X-MetaX-Provider-Cookies` JSON dictionary, creates request-local
+  provider instances, and never stores or replays cookies. The old server-side
+  runtime configuration endpoint was removed.
+- Native actor providers for JavDB, Minnano, AVBase, and Wikipedia/Wikidata.
+  The stock SDK's Gfriends image injection for Japanese actor profiles was
+  verified; it is not a missing provider.
+- Remaining backend coverage and hardening are tracked as big/small tasks in
+  `docs/BACKEND_TASKS.md`; plugin-side work is recorded but intentionally
+  deferred in `docs/JELLYFIN_PLUGIN.md`.
+
 **Integration status (2026-10-20).** Focused SDK integration is verified on a clean checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `routing`, `engine`, `route`, and 12 provider package test targets pass, and `go build ./cmd/server` succeeds. Full SDK regression still encounters two environment-only failures: `engine/dbengine` requires a Docker daemon, and `imageutil` expects Go 1.26 JPEG behavior. CI pins Go 1.26.x and sets `GITHUB_ACTIONS=true` to skip live provider tests. Do not treat unresolved full-regression environment checks as product failures, and do not re-run live-site tests as the only evidence.
 
-## 5. Immediate next actions — do these in order
+## 5. Current execution plan
 
-### Step A — establish a usable verification environment
-1. Retry DNS and HTTPS diagnostics from the actual execution environment: inspect `getent ahosts github.com`, `curl -I https://github.com`, proxy environment variables, and configured DNS/resolver. Do not infer a single root cause from the previous error alone.
-2. If this execution environment cannot access GitHub, use an available connected GitHub connector to retrieve repository files only as source inspection, or switch to a runtime with Git/network access. Do not pretend the connector file reads constitute a local checkout.
-3. Obtain a clean SDK checkout at the exact pinned commit `c62584675c593816cc07e7b5b977d14c7eb505a3`.
-4. Obtain/select Go `1.26` as declared by the project. If auto-toolchain download is used, verify network access first; do not lower `go.mod` merely to accommodate the old local compiler.
-5. Record the exact SDK commit, Go version, OS/runtime, and network outcome in the checklist.
+The environment and core-backend blockers are settled. Remaining work is
+maintained as small, independently verifiable tasks in
+`docs/BACKEND_TASKS.md`. The recommended unblocked order is:
 
-### Step B — run integration and fix defects before feature work
-From the metaX workspace, apply `.github/scripts/integrate-category-routing.sh` to the clean pinned SDK checkout. Then run, in order:
-1. `gofmt -w` on modified/injected Go files (the script already formats its target set; inspect its output and run a formatting check after integration).
-2. Focused engine aggregation tests, including number normalization, underscore identity, scalar/list merging, and top-level/source-record JSON contract.
-3. Focused SDK route contract tests: merged search candidate, default stock detail, `?aggregate=true`, and the reserved `MetaX` detail path.
-4. Category classifier/routing tests, category search fan-out API tests, and rejection of explicit unknown categories.
-5. Full SDK tests and relevant metaX Go tests.
-6. Build the actual integrated server/runtime that imports the modified SDK and metaX provider packages.
-7. Fix any failures, rerun the failing tests, and rerun the complete relevant verification sequence. Capture actual command results/CI run links in the checklist.
+1. route aliases in the request-cookie dictionary;
+2. the ThePornDB actor comparison;
+3. a non-secret provider/health status surface;
+4. a shared retry/backoff policy for transient provider failures;
+5. the Official manufacturer-router contract, which must be designed before it
+   is implemented.
 
-Do not begin the next feature until these checks are green or a concrete blocker is documented.
+Prestige, R18Dev, and fuzzy Getchu work remain blocked on permitted-region
+responses/fixtures or an explicit data-source architecture decision. Do not
+claim any blocked source works from configuration alone.
 
-### Step C — verify runtime wiring
-The source audit warns that adding a provider package to this repository does not automatically register it in a stock MetaTube server. Inspect the actual server's dependency/import/registration path and prove that each intended provider is loaded. If the SDK integration workspace is only a patching workspace, document how the production server consumes the patched SDK and native provider packages. Do not call provider support end-to-end complete until registration and an API request are demonstrated.
-
-### Step D — complete the aggregation contract
-After integration is green:
-1. Review whether provider results are matched by canonical number consistently with Amane, including FC2 and uncensored cases.
-2. Add deterministic tests for multiple successful providers, partial provider failure, no matching candidate, detail-fetch failure, identity mismatch, and route ordering.
-3. Verify field-by-field merge behavior and stable source records; ensure the selected `provider + id` and canonical number do not change.
-4. Decide explicitly whether actual raw HTTP/site payload capture is required. If required, design a bounded, opt-in, privacy-conscious payload contract separately; do not conflate it with structured `MovieInfo`.
-5. Validate response compatibility with the Jellyfin plugin/client and document additive fields.
+At each task boundary, update `docs/EXECUTION_CHECKLIST.md` with the commit,
+commands actually run, pass/fail outcomes, and the next small task. Stop after
+reporting the result unless the user explicitly asks to continue.
 
 ## 6. Subsequent roadmap (priority order)
 
@@ -115,3 +115,5 @@ Stop after reporting the result and wait for test/integration/build outcomes bef
 - `docs/INTEGRATION.md` — pinned SDK integration and patch process.
 - `docs/COMPATIBILITY_MATRIX.md` — provider and behavior comparisons.
 - `docs/METADATA_AGGREGATION.md` — aggregation response and merge contract.
+- `docs/BACKEND_TASKS.md` — big/small backend task breakdown and blockers.
+- `docs/JELLYFIN_PLUGIN.md` — deferred plugin configuration and transport plan.
