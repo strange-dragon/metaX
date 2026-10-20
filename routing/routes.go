@@ -6,7 +6,6 @@ package routing
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -25,88 +24,6 @@ const (
 )
 
 var (
-	fc2NumberPattern  = regexp.MustCompile(`(?i)^fc2(?:-?ppv)?[-_]?\d+(?:[-_]\d+)?// Package routing defines ordered, category-based provider selection.
-// It deliberately has no dependency on MetaTube's HTTP or provider packages so
-// routing behavior can be tested independently and embedded at the SDK boundary.
-package routing
-
-import (
-	"errors"
-	"fmt"
-	"regexp"
-	"strings"
-)
-
-type Category string
-
-const (
-	CategoryCensored         Category = "censored"
-	CategoryUncensored       Category = "uncensored"
-	CategoryFC2              Category = "fc2"
-	CategoryChinese          Category = "chinese"
-	CategoryChineseSubtitles Category = "chinese_subtitles" // Legacy alias for Amane's "chinese".
-	CategoryAmateur          Category = "amateur"
-	CategoryWestern          Category = "western"
-	CategoryHentai           Category = "hentai"
-	CategoryAnimation        Category = "animation" // Legacy alias for Amane's "hentai".
-)
-
-)
-	fc2DatePattern    = regexp.MustCompile(`^\d{6,8}_\d{2,3}// Package routing defines ordered, category-based provider selection.
-// It deliberately has no dependency on MetaTube's HTTP or provider packages so
-// routing behavior can be tested independently and embedded at the SDK boundary.
-package routing
-
-import (
-	"errors"
-	"fmt"
-	"regexp"
-	"strings"
-)
-
-type Category string
-
-const (
-	CategoryCensored         Category = "censored"
-	CategoryUncensored       Category = "uncensored"
-	CategoryFC2              Category = "fc2"
-	CategoryChinese          Category = "chinese"
-	CategoryChineseSubtitles Category = "chinese_subtitles" // Legacy alias for Amane's "chinese".
-	CategoryAmateur          Category = "amateur"
-	CategoryWestern          Category = "western"
-	CategoryHentai           Category = "hentai"
-	CategoryAnimation        Category = "animation" // Legacy alias for Amane's "hentai".
-)
-
-)
-	kin8NumberPattern = regexp.MustCompile(`(?i)^kin8(?:tengoku)?[-_ ]?\d{1,4}// Package routing defines ordered, category-based provider selection.
-// It deliberately has no dependency on MetaTube's HTTP or provider packages so
-// routing behavior can be tested independently and embedded at the SDK boundary.
-package routing
-
-import (
-	"errors"
-	"fmt"
-	"regexp"
-	"strings"
-)
-
-type Category string
-
-const (
-	CategoryCensored         Category = "censored"
-	CategoryUncensored       Category = "uncensored"
-	CategoryFC2              Category = "fc2"
-	CategoryChinese          Category = "chinese"
-	CategoryChineseSubtitles Category = "chinese_subtitles" // Legacy alias for Amane's "chinese".
-	CategoryAmateur          Category = "amateur"
-	CategoryWestern          Category = "western"
-	CategoryHentai           Category = "hentai"
-	CategoryAnimation        Category = "animation" // Legacy alias for Amane's "hentai".
-)
-
-)
-
 	ErrUnknownCategory     = errors.New("unknown content category")
 	ErrNoAvailableProvider = errors.New("no registered provider for category")
 	ErrProviderUnavailable = errors.New("explicit provider is not registered")
@@ -232,11 +149,43 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 // MetaTube's existing all-provider search behavior instead of guessing between
 // censored and uncensored catalogues.
 func InferCategory(keyword string) (Category, bool) {
-	value := strings.TrimSpace(keyword)
-	if value == "" { return "", false }
-	if fc2NumberPattern.MatchString(value) || fc2DatePattern.MatchString(value) { return CategoryFC2, true }
-	if kin8NumberPattern.MatchString(value) { return CategoryWestern, true }
+	value := strings.ToUpper(strings.TrimSpace(keyword))
+	if value == "" {
+		return "", false
+	}
+	compact := strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
+	if strings.HasPrefix(compact, "FC2") {
+		number := strings.TrimPrefix(compact, "FC2")
+		number = strings.TrimPrefix(number, "PPV")
+		if allDigits(number) {
+			return CategoryFC2, true
+		}
+	}
+	parts := strings.Split(value, "_")
+	if len(parts) == 2 && (len(parts[0]) == 6 || len(parts[0]) == 8) && (len(parts[1]) == 2 || len(parts[1]) == 3) && allDigits(parts[0]) && allDigits(parts[1]) {
+		return CategoryFC2, true
+	}
+	kin8 := strings.TrimPrefix(compact, "KIN8TENGOKU")
+	if kin8 != compact && len(kin8) >= 1 && len(kin8) <= 4 && allDigits(kin8) {
+		return CategoryWestern, true
+	}
+	kin8 = strings.TrimPrefix(compact, "KIN8")
+	if kin8 != compact && len(kin8) >= 1 && len(kin8) <= 4 && allDigits(kin8) {
+		return CategoryWestern, true
+	}
 	return "", false
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func normalize(value string) string {
