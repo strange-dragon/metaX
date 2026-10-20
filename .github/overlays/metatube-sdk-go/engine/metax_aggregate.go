@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -10,6 +9,7 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/metatube-community/metatube-sdk-go/engine/providerid"
+	"github.com/lib/pq"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	"github.com/metatube-community/metatube-sdk-go/routing"
 )
@@ -198,13 +198,13 @@ func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieI
 		firstNonEmpty(&result.Label, info.Label)
 		firstNonEmpty(&result.Series, info.Series)
 		if len(info.Actors) > 0 {
-			result.Actors = appendUniqueStrings(result.Actors, []string(info.Actors)...)
+			result.Actors = pq.StringArray(appendUniqueStrings([]string(result.Actors), []string(info.Actors)...))
 		}
 		if len(info.Genres) > 0 {
-			result.Genres = appendUniqueStrings(result.Genres, []string(info.Genres)...)
+			result.Genres = pq.StringArray(appendUniqueStrings([]string(result.Genres), []string(info.Genres)...))
 		}
 		if len(info.PreviewImages) > 0 {
-			result.PreviewImages = appendUniqueStrings(result.PreviewImages, []string(info.PreviewImages)...)
+			result.PreviewImages = pq.StringArray(appendUniqueStrings([]string(result.PreviewImages), []string(info.PreviewImages)...))
 		}
 		if result.Runtime == 0 && info.Runtime > 0 {
 			result.Runtime = info.Runtime
@@ -257,6 +257,3 @@ func appendUniqueStrings(dst []string, values ...string) []string {
 	return dst
 }
 
-// Ensure unexpected provider failures can be wrapped by callers without
-// losing the original diagnostic text.
-var _ = errors.New
