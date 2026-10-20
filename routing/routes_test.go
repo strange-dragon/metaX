@@ -171,3 +171,16 @@ func TestConfigValidateRejectsDuplicates(t *testing.T) {
 		t.Fatal("Validate() error = nil, want duplicate provider error")
 	}
 }
+
+func TestInferCategoryRecognizesUnambiguousNumberFormats(t *testing.T) {
+	tests := []struct { keyword string; want Category }{
+		{"fc2-ppv3954834", CategoryFC2}, {"FC2PPV3954834", CategoryFC2},
+		{"fc2-ppv-3954834", CategoryFC2}, {"101926_01", CategoryFC2},
+		{"KIN8-1234", CategoryWestern}, {"kin8tengoku_42", CategoryWestern},
+	}
+	for _, tc := range tests { t.Run(tc.keyword, func(t *testing.T) { got, ok := InferCategory(tc.keyword); if !ok || got != tc.want { t.Fatalf("InferCategory(%q) = (%q, %v), want (%q, true)", tc.keyword, got, ok, tc.want) } }) }
+}
+
+func TestInferCategoryLeavesAmbiguousNumbersUnclassified(t *testing.T) {
+	for _, keyword := range []string{"", "ABC-123", "ABF-123", "200GANA-123", "https://example.invalid/movie/123"} { if got, ok := InferCategory(keyword); ok { t.Errorf("InferCategory(%q) = (%q, true), want unclassified", keyword, got) } }
+}

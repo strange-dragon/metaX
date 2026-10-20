@@ -147,3 +147,10 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Prefer a valid same-origin canonical actor URL for ActorInfo.ID and Homepage; ignore invalid canonical URLs and retain the requested URL fallback.
 - [x] Added a deterministic local HTTP test for canonical identity resolution.
 - [ ] Go tests and formatting not run; no GitHub Actions workflow was dispatched.
+
+## Automatic category routing for unambiguous identifiers (2026-10-20)
+
+- [x] Added routing.InferCategory for high-confidence identifier shapes: FC2 PPV variants (including 101926_01) resolve to the project's shared FC2/uncensored route; KIN8 IDs resolve to the western route.
+- [x] Integrated inference into the pinned SDK overlay: explicit provider and explicit category still win; URLs still use the existing detail path; ambiguous identifiers preserve the original all-provider search; if a classified route has no installed providers, broad search is retained as a compatibility fallback.
+- [x] Added classifier regression cases and an SDK-level HTTP test proving an FC2 query without a category parameter fans out, tolerates one provider failure, and keeps successful results in route order.
+- [ ] Go tests, formatting, and integrated server build were not run. No GitHub Actions workflow was dispatched.

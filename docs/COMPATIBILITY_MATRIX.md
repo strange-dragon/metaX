@@ -477,3 +477,9 @@ The native actor parser now removes these trailing markers (including full-width
 Amane derives the actor provider ID and source URL from the profile's canonical link when available, falling back to the requested page URL. The native Go parser previously always retained the requested ID and reconstructed its homepage, which could store a non-canonical identity when the site resolves an alias URL to a canonical actor profile.
 
 The Go parser now accepts a canonical URL only after normalizing it against JavDB's base URL and validating it with the existing actor URL/origin rules. Invalid or off-origin canonical links are ignored; the requested identity remains the fallback. A deterministic HTTP fixture test covers a requested actor URL whose page declares a different canonical actor ID. No live requests or Go test/format commands were run.
+
+## Automatic category inference and routed search (2026-10-20)
+
+The API's optional category parameter alone was insufficient for the existing Jellyfin plugin contract, which sends movie number/provider but does not supply an Amane content type. Added conservative inference for identifier forms that strongly imply a category: FC2 PPV forms (FC2-PPV3954834, FC2PPV3954834, FC2-PPV-3954834) and date/sequence forms such as 101926_01 use the project's combined FC2/uncensored route; KIN8 identifiers use the western route.
+
+Explicit provider overrides remain unchanged, explicit categories still take precedence, URL lookups remain direct detail lookups, and ambiguous numbers retain the SDK's broad search behavior. If an inferred category has no installed route providers, the API falls back to broad search instead of turning an optimization into a hard failure. Deterministic unit and API/fan-out regression tests were added, but Go tests, formatting, integrated build, and live-site requests were not run.

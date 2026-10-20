@@ -75,11 +75,17 @@ source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\t\t} else {
 \t\t\t\t\tresults, err = app.SearchMovieProviders(query.Q, providers, query.Fallback)
 \t\t\t\t}
+\t\t\t} else if inferredCategory, ok := routing.InferCategory(query.Q); searchAll && ok {
+\t\t\t\tregistered := make([]string, 0, len(app.GetMovieProviders()))
+\t\t\t\tfor name := range app.GetMovieProviders() { registered = append(registered, name) }
+\t\t\t\tproviders, routeErr := config.Resolve(inferredCategory, "", registered)
+\t\t\t\tif routeErr != nil {
+\t\t\t\t\t// Automatic classification is best-effort; preserve broad-search compatibility if no route provider is installed.
+\t\t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
+\t\t\t\t} else { results, err = app.SearchMovieProviders(query.Q, providers, query.Fallback) }
 \t\t\t} else if searchAll {
 \t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
-\t\t\t} else {
-\t\t\t\tresults, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
-\t\t\t}
+\t\t\t} else { results, err = app.SearchMovie(query.Q, query.Provider, query.Fallback) }
 ''' + source[end:]
 
 source = source.replace(
@@ -109,6 +115,7 @@ required = [
     'Category string `form:"category"`',
     'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
     'app.SearchMovieProviders(query.Q, providers, query.Fallback)',
+    'routing.InferCategory(query.Q)',
     providers, routeErr := config.Resolve(routing.Category(query.Category), \"\", registered),
     'stderrors.Is(err, routing.ErrUnknownCategory)',
 ]

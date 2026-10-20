@@ -6,6 +6,7 @@ package routing
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -24,6 +25,88 @@ const (
 )
 
 var (
+	fc2NumberPattern  = regexp.MustCompile(`(?i)^fc2(?:-?ppv)?[-_]?\d+(?:[-_]\d+)?// Package routing defines ordered, category-based provider selection.
+// It deliberately has no dependency on MetaTube's HTTP or provider packages so
+// routing behavior can be tested independently and embedded at the SDK boundary.
+package routing
+
+import (
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+type Category string
+
+const (
+	CategoryCensored         Category = "censored"
+	CategoryUncensored       Category = "uncensored"
+	CategoryFC2              Category = "fc2"
+	CategoryChinese          Category = "chinese"
+	CategoryChineseSubtitles Category = "chinese_subtitles" // Legacy alias for Amane's "chinese".
+	CategoryAmateur          Category = "amateur"
+	CategoryWestern          Category = "western"
+	CategoryHentai           Category = "hentai"
+	CategoryAnimation        Category = "animation" // Legacy alias for Amane's "hentai".
+)
+
+)
+	fc2DatePattern    = regexp.MustCompile(`^\d{6,8}_\d{2,3}// Package routing defines ordered, category-based provider selection.
+// It deliberately has no dependency on MetaTube's HTTP or provider packages so
+// routing behavior can be tested independently and embedded at the SDK boundary.
+package routing
+
+import (
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+type Category string
+
+const (
+	CategoryCensored         Category = "censored"
+	CategoryUncensored       Category = "uncensored"
+	CategoryFC2              Category = "fc2"
+	CategoryChinese          Category = "chinese"
+	CategoryChineseSubtitles Category = "chinese_subtitles" // Legacy alias for Amane's "chinese".
+	CategoryAmateur          Category = "amateur"
+	CategoryWestern          Category = "western"
+	CategoryHentai           Category = "hentai"
+	CategoryAnimation        Category = "animation" // Legacy alias for Amane's "hentai".
+)
+
+)
+	kin8NumberPattern = regexp.MustCompile(`(?i)^kin8(?:tengoku)?[-_ ]?\d{1,4}// Package routing defines ordered, category-based provider selection.
+// It deliberately has no dependency on MetaTube's HTTP or provider packages so
+// routing behavior can be tested independently and embedded at the SDK boundary.
+package routing
+
+import (
+	"errors"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+type Category string
+
+const (
+	CategoryCensored         Category = "censored"
+	CategoryUncensored       Category = "uncensored"
+	CategoryFC2              Category = "fc2"
+	CategoryChinese          Category = "chinese"
+	CategoryChineseSubtitles Category = "chinese_subtitles" // Legacy alias for Amane's "chinese".
+	CategoryAmateur          Category = "amateur"
+	CategoryWestern          Category = "western"
+	CategoryHentai           Category = "hentai"
+	CategoryAnimation        Category = "animation" // Legacy alias for Amane's "hentai".
+)
+
+)
+
 	ErrUnknownCategory     = errors.New("unknown content category")
 	ErrNoAvailableProvider = errors.New("no registered provider for category")
 	ErrProviderUnavailable = errors.New("explicit provider is not registered")
@@ -42,8 +125,8 @@ type Config struct {
 	Routes map[Category][]string
 }
 
-// DefaultConfig mirrors Amane's _DEFAULT_CONTENT_ROUTES. Compatibility aliases
-// are accepted by Resolve, but are not additional default content categories.
+// DefaultConfig mirrors Amane's ordered content routes where the SDK has an equivalent.
+// This project intentionally merges FC2 and uncensored into one shared route.
 func DefaultConfig() Config {
 	return Config{Routes: map[Category][]string{
 		CategoryCensored:   {"DMM", "JavDB", "JavBus", "Official"},
@@ -142,6 +225,18 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 		return nil, fmt.Errorf("%w: %s", ErrNoAvailableProvider, category)
 	}
 	return result, nil
+}
+
+// InferCategory recognizes only number formats that identify a route with high
+// confidence. Ambiguous numbers deliberately return false so callers can retain
+// MetaTube's existing all-provider search behavior instead of guessing between
+// censored and uncensored catalogues.
+func InferCategory(keyword string) (Category, bool) {
+	value := strings.TrimSpace(keyword)
+	if value == "" { return "", false }
+	if fc2NumberPattern.MatchString(value) || fc2DatePattern.MatchString(value) { return CategoryFC2, true }
+	if kin8NumberPattern.MatchString(value) { return CategoryWestern, true }
+	return "", false
 }
 
 func normalize(value string) string {

@@ -51,3 +51,7 @@ The backend orchestration layer is being implemented separately from the Jellyfi
 - The SDK overlay includes API contract tests for search/detail response shape, unknown-category rejection, and explicit-provider override. The latest category-routing validation run is [GitHub Actions run 39192134634](https://github.com/strange-dragon/metaX/actions/runs/39192134634); final status should be confirmed before treating this milestone as complete.
 - Next backend milestones: validate live-source behavior, reviewed category membership against Amane’s original route definitions; the audit added the omitted Airav source to FC2 and aligned the canonical `hentai` category name. Next, validate live-source behavior and address any remaining metadata-field enrichment and network resilience. Avoid cross-provider record merging unless a clear matching key and merge policy are established.
 - Jellyfin plugin changes are explicitly out of scope for this backend phase.
+
+### Automatic category routing
+
+The existing Jellyfin plugin does not send an Amane content type. The backend now infers a route only for high-confidence identifiers (FC2 PPV and KIN8); ambiguous numbers keep the existing all-provider search instead of guessing. The FC2 and uncensored route remains intentionally combined. This first inference pass is deterministic and source-derived, not a claim that all categories can be inferred from every movie number.
