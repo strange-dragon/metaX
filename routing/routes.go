@@ -202,7 +202,7 @@ func InferCategory(keyword string) (Category, bool) {
 		strings.HasPrefix(compact, "300MIUM") {
 		return CategoryAmateur, true
 	}
-	if isUncensoredCatalog(compact) || strings.HasPrefix(compact, "TH101") ||
+	if isUncensoredCatalog(value) || strings.HasPrefix(compact, "TH101") ||
 		(len(compact) == 5 && (strings.HasPrefix(compact, "N") || strings.HasPrefix(compact, "K")) && allDigits(compact[1:])) {
 		return CategoryUncensored, true
 	}
@@ -229,16 +229,25 @@ func InferCategory(keyword string) (Category, bool) {
 	return "", false
 }
 
-func isUncensoredCatalog(compact string) bool {
+func isUncensoredCatalog(value string) bool {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	// Hyphenated prefixes must keep their boundary (JAV- is uncensored;
+	// JAVDB- is not). The compact prefixes below are families whose canonical
+	// forms do not require a separator.
 	for _, prefix := range []string{
-		"BT", "CT", "EMP", "CCDV", "CWP", "CWPBD", "DSAM", "DRC", "DRG",
-		"DRGBD", "GACHI", "GACHIG", "HEYDOUGA", "JAV", "LAF", "LAFBD",
-		"HEYZO", "KTG", "KP", "KG", "LLDV", "MCDV", "MKD", "MKBD",
-		"MMDV", "NIP", "PB", "PT", "QE", "RED", "RHJ", "S2M", "SKY",
-		"SKYHD", "SMD", "SMBD", "SMDV", "SSDV", "SSKP", "TRG", "TS",
-		"XXXAV", "YKB", "BIRD", "BOUGA", "H4610", "C0930", "H0930", "MCB3D",
+		"BT-", "CT-", "EMP-", "CCDV-", "CWP-", "CWPBD-", "DSAM-", "DRC-",
+		"DRG-", "DRGBD-", "GACHI-", "GACHIG-", "JAV-", "LAF-", "LAFBD-",
+		"HEYZO-", "KTG-", "KP-", "KG-", "LLDV-", "MCDV-", "MKD-", "MKBD-",
+		"MMDV-", "NIP-", "PB-", "PT-", "QE-", "RED-", "RHJ-", "S2M-",
+		"SKY-", "SKYHD-", "SMD-", "SMBD-", "SMDV-", "SSDV-", "SSKP-",
+		"TRG-", "TS-", "XXX-AV-", "H4610-", "C0930-", "H0930-",
 	} {
-		if strings.HasPrefix(compact, prefix) {
+		if strings.HasPrefix(value, prefix) {
+			return true
+		}
+	}
+	for _, prefix := range []string{"HEYDOUGA", "YKB", "BIRD", "BOUGA", "S2M", "MCB3D"} {
+		if strings.HasPrefix(value, prefix) {
 			return true
 		}
 	}
