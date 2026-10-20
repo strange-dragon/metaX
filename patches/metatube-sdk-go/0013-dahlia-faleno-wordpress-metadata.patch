@@ -167,7 +167,7 @@ new file mode 100644
 index 0000000..0000000
 --- /dev/null
 +++ b/provider/dahlia/core/core_wordpress_metadata_test.go
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,125 @@
 +package core
 +
 +import (
