@@ -132,3 +132,11 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Kept category search as concurrent provider fan-out while aggregating results in configured route order; an individual provider error does not discard successful results from other providers.
 - [x] Delegated per-provider cache fallback to the SDK's existing `searchMovie(keyword, provider, fallback)` path, preserving provider-specific keyword normalization and the SDK's live-result/cache merge semantics; removed the duplicate category-level database fallback query.
 - [ ] Full SDK integration/build tests intentionally not run in this task per user direction. Source-level checks only; no workflow was manually dispatched.
+
+ 
+### JavDB actor name normalization follow-up (2026-10-20)
+
+- [x] Compared Amane's JavDB actor name parser with the native Go actor provider.
+- [x] Added suffix normalization for `(無碼)`, `(无码)`, and `(Uncensored)`, including full-width parentheses.
+- [x] Added a deterministic test for suffix removal and duplicate elimination.
+- [ ] Local Go tests and formatting not run; no GitHub Actions workflow was dispatched.

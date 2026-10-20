@@ -90,3 +90,8 @@ func TestJavDBActorRegistered(t *testing.T) {
 	})
 	require.True(t, found, "JavDB actor provider should be registered")
 }
+
+func TestSplitActorNamesRemovesUncensoredMarkers(t *testing.T) {
+	got := splitActorNames("Example Name (Uncensored), 葵（無碼）, 乙 (无码), Example Name")
+	require.Equal(t, []string{"Example Name", "葵", "乙"}, got)
+}

@@ -27,6 +27,35 @@ var (
 	actorFilmCountRE                  = regexp.MustCompile(`(?i)^\d+\s*(?:部影片|movie\(s\))$`)
 	actorGenderRE                     = regexp.MustCompile(`(?i)^(?:男優|男优|女優|女优|male|female)$`)
 	actorAvatarRE                     = regexp.MustCompile(`(?i)url\(\s*['"]?(https?://[^)'"]+)['"]?\s*\)`)
+	actorUncensoredMarkerRE            = regexp.MustCompile(`(?i)\s*[\(（](?:無碼|无码|uncensored)[\)）]\s*// Copyright 2026 metaX contributors.
+//
+// Feature-level comparison reference: https://github.com/sqzw-x/amane.
+// Native actor-provider implementation; no Amane source or fixtures are vendored.
+package javdb
+
+import (
+	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/lib/pq"
+	"golang.org/x/text/language"
+
+	"github.com/metatube-community/metatube-sdk-go/model"
+	mt "github.com/metatube-community/metatube-sdk-go/provider"
+)
+
+const ActorProviderName = "JavDBActor"
+
+var (
+	_                mt.ActorProvider = (*JavDBActor)(nil)
+	_                mt.ActorSearcher = (*JavDBActor)(nil)
+	actorSlugRE                       = regexp.MustCompile(`^[A-Za-z0-9]+$`)
+	actorFilmCountRE                  = regexp.MustCompile(`(?i)^\d+\s*(?:部影片|movie\(s\))$`)
+	actorGenderRE                     = regexp.MustCompile(`(?i)^(?:男優|男优|女優|女优|male|female)$`)
+)
 )
 
 // JavDBActor exposes JavDB's actor search and profile pages through the SDK
@@ -192,7 +221,8 @@ func splitActorNames(raw string) []string {
 	parts := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == '，' })
 	out := make([]string, 0, len(parts))
 	for _, part := range parts {
-		part = cleanText(part)
+		part = actorUncensoredMarkerRE.ReplaceAllString(cleanText(part), "")
+		part = strings.TrimSpace(part)
 		if part != "" {
 			out = appendUnique(out, part)
 		}
