@@ -15,6 +15,7 @@ mkdir -p "$sdk_root/routing"
 cp "$workspace_root/routing/routes.go" "$sdk_root/routing/routes.go"
 cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
 cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate.go"
+cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_test.go"
 cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
 cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
 
@@ -159,5 +160,5 @@ if missing:
 path.write_text(source)
 PY
 
-gofmt -w "$sdk_root/routing/routes.go" "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" "$sdk_root/route/info.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" "$sdk_root/route/metax_category_fanout_test.go"
+gofmt -w "$sdk_root/routing/routes.go" "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/route/info.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" "$sdk_root/route/metax_category_fanout_test.go"
 echo "Integrated Amane category routes, field-level movie aggregation, source records, and SDK-level API/fan-out tests."
