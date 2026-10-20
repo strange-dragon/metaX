@@ -27,6 +27,7 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 - [Compatibility matrix](docs/COMPATIBILITY_MATRIX.md)
 - [Initial implementation comparison](docs/INITIAL_FINDINGS.md)
 - [Implementation-level Amane ↔ MetaTube audit](docs/IMPLEMENTATION_AUDIT.md)
+- [Metadata aggregation and source-record API](docs/METADATA_AGGREGATION.md)
 - [Licensing and attribution policy](docs/LICENSING.md)
 
 ## Reproducible integrated server build
@@ -49,8 +50,10 @@ The backend orchestration layer is being implemented separately from the Jellyfi
 - The `routing` package defines category routes for censored, uncensored, FC2, Chinese-subtitle, amateur, western, and hentai content (`animation` remains an alias). The FC2 route includes Airav, matching Amane’s default route. It preserves explicit provider selection as a manual override and skips providers not registered in the current SDK build.
 - The SDK overlay adds an optional `category` query parameter to `/v1/movies/search`. For example, `/v1/movies/search?q=ABC-123&category=uncensored` fans out concurrently to all registered providers in that category. Omitting `category` preserves MetaTube's original all-provider behavior; specifying `provider` preserves single-provider behavior.
 - Search results keep MetaTube's existing response envelope and model, including each record's `provider` + `id` identity for detail lookup. Per-provider errors and empty results do not discard successful results from other providers. Results are deduplicated by provider + ID and sorted using MetaTube's existing relevance/priority approach.
-- The SDK overlay includes API contract tests for search/detail response shape, unknown-category rejection, and explicit-provider override. The latest category-routing validation run is [GitHub Actions run 39192134634](https://github.com/strange-dragon/metaX/actions/runs/39192134634); final status should be confirmed before treating this milestone as complete.
-- Next backend milestones: validate live-source behavior, reviewed category membership against Amane’s original route definitions; the audit added the omitted Airav source to FC2 and aligned the canonical `hentai` category name. Next, validate live-source behavior and address any remaining metadata-field enrichment and network resilience. Avoid cross-provider record merging unless a clear matching key and merge policy are established.
+- The SDK overlay now adds detail-boundary field aggregation while preserving the selected provider + ID as the public identity. It retains each participating provider’s independent structured `MovieInfo` under `data.sources`, with per-source status/error information; the merged `MovieInfo` fields remain at the top level of `data`. See [metadata aggregation contract](docs/METADATA_AGGREGATION.md).
+- Aggregation uses an exact normalized catalog-number identity gate, route-order first-non-empty scalar fields, stable list deduplication, and no cross-provider score averaging. Unknown categories safely return the selected provider’s record and explain why aggregation was skipped; `?aggregate=false` opts back into the stock detail response.
+- Added deterministic engine tests for fill-empty behavior, route-order conflicts, list deduplication, selected identity preservation, and conservative number normalization. The new overlay and tests have **not yet been run** in a local SDK checkout; no CI run was triggered for this change.
+- Remaining backend milestones: validate the new overlay against the pinned SDK build, broaden only well-supported automatic category classification, and then verify live-source behavior and network resilience. Raw website HTML/HTTP payload capture remains out of scope because the current Provider contract exposes normalized `MovieInfo` records, not wire-level responses.
 - Jellyfin plugin changes are explicitly out of scope for this backend phase.
 
 ### Automatic category routing
