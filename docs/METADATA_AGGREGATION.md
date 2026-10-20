@@ -21,7 +21,7 @@ When a category is supplied, or a catalog number is confidently classified, the 
 ```
 
 - `MetaX` is a reserved provider name. It is not a registered provider package.
-- The merged candidate carries the route-first provider's display fields and the catalog number as its ID. Selecting it runs the full aggregation in the detail endpoint, so search stays cheap.
+- The merged candidate uses the first valid result's catalog number as its ID, then fills empty title, homepage, thumbnail, cover, score, release date, and actor fields from later results in route order. Actor names are deduplicated case-insensitively. This is a display merge only: selecting the candidate runs the full detail aggregation, so search stays cheap and does not fetch every provider's detail page.
 - An explicit `provider` parameter remains a manual override and does not add the merged candidate.
 - The merged candidate is only added when a category route is used. Broad, unclassified search keeps the stock SDK response.
 - If the plugin enables provider filtering, its allowlist must include `MetaX`.
@@ -79,9 +79,12 @@ Images requested with `provider=MetaX` are resolved to the route-first real prov
 Aggregated detail responses and `MetaX/<number>` image identity resolution are cached in-process and coalesced with `singleflight`:
 
 - `METAX_AGGREGATE_CACHE_TTL` controls the TTL (default `10m`; `0`, `off`, or `disabled` turns caching off).
-- `METAX_AGGREGATE_CACHE_MAX` controls the maximum number of entries per cache (default `256`).\n- `METAX_AGGREGATE_FANOUT` bounds concurrent provider calls from category search and detail source fan-out (default `16`; `0`, `off`, `disabled`, or `none` disables the bound). The server's `--request-timeout` (default `1m`) remains the per-provider HTTP deadline; the limiter only bounds concurrency and never abandons a running provider call.
+- `METAX_AGGREGATE_CACHE_MAX` controls the maximum number of entries per cache (default `256`).
+- `METAX_AGGREGATE_FANOUT` bounds concurrent provider calls from category search and detail source fan-out (default `16`; `0`, `off`, `disabled`, or `none` disables the bound). The server's `--request-timeout` (default `1m`) remains the per-provider HTTP deadline; the limiter only bounds concurrency and never abandons a running provider call.
 
 Only successful results are cached; failures are returned to the caller and retried on the next request. Cache keys include the route-table fingerprint, category, lazy flag, and provider/number identity. FC2 and uncensored share a cache key because they resolve to the same route. Returned values are cloned so the `MetaX` identity rewrite cannot corrupt the cached entry. The cache is per-process and is cleared on restart; it is not shared across server instances.
+
+For multi-instance deployments, the in-process cache is intentionally not a distributed cache: instances may fetch the same metadata independently, and a restart clears only that instance's entries. Route-table drift is the more important consistency risk, so `METAX_ROUTES_FINGERPRINT` pins the expected `FingerprintHash()` value. Set the same pin on every instance to make a mismatched route table abort startup instead of serving results from a different route configuration. The hash is also logged at startup for comparison.
 
 ## DB-first catalog-number resolution
 
@@ -100,7 +103,9 @@ The server route table is configurable at startup:
 - Both `{"routes":{"censored":["DMM","JavDB"]}}` and the bare `{"censored":["DMM","JavDB"]}` shape are accepted.
 - Category keys must be canonical: `censored`, `uncensored`, `chinese`, `amateur`, `western`, or `hentai`. Legacy aliases (`fc2`, `chinese_subtitles`, `animation`) are rejected in configuration so they cannot silently shadow the canonical route; query values still canonicalize through `Category.Canonical()`.
 - Unknown categories, empty routes, empty or duplicate provider names, malformed JSON, and extra top-level fields abort server startup with a nonzero exit.
-- Provider availability is resolved against the providers registered in the running binary. A route whose providers are all unavailable still returns HTTP 400 (`ErrNoAvailableProvider`), and unregistered entries are skipped.
+- `METAX_ROUTES_FINGERPRINT` optionally pins the expected `Config.FingerprintHash()` value (SHA-256 of the canonical route table; a `sha256:` prefix is accepted). A mismatch aborts startup before the database is opened. The startup log prints the actual fingerprint.
+- Provider availability is resolved against the providers registered in the running binary. Amane route names that differ from SDK package names are bridged explicitly: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails if any configured category has zero available providers; individual gaps are logged because some entries are intentionally deferred (currently `Official` and token-gated `ThePornDB`).
+- A route whose providers are all unavailable returns HTTP 400 (`ErrNoAvailableProvider`), and unregistered entries are skipped.
 - The stock search/detail wrappers read `routing.ActiveConfig()`; explicit `...WithConfig` engine methods remain available for tests and embedders. The cache key includes the route fingerprint, so changing the active table never reuses results from a previous table.
 
 ## Merge rules
@@ -117,6 +122,35 @@ The server route table is configurable at startup:
 ## What “source data” means here
 
 The current MetaTube `MovieProvider` contract returns `model.MovieInfo`, after each provider has parsed its website or upstream API. Therefore `sources[].metadata` preserves each provider's complete independent **structured SDK record**, not raw HTML, HTTP headers, response bytes, or the source site's original JSON document. Those wire-level payloads are not available consistently through the current interface and must not be implied by this API.
+
+## Live verification (2026-10-20)
+
+A local macOS run with Go 1.27.3, the pinned SDK checkout, and public network access built the integrated server and ran:
+
+```bash
+bash .github/scripts/live-metax-api-smoke.sh /tmp/metatube-server-metax 18086
+# -> OK: censored-search, censored-detail, censored image, fc2-search, fingerprint pin
+# -> LIVE_API_SMOKE_OK
+```
+
+Point-in-time observations:
+
+- `GET /v1/movies/search?q=ABP-123&category=censored&fallback=false` returned HTTP 200 with `MetaX` first, followed by JavBus and JavDB results. `MetaX` used `ABP-123` as its ID and filled its display fields from the route results.
+- `GET /v1/movies/MetaX/ABP-123?category=censored` returned merged metadata with title, actors, genres, cover, release date, and `sources[]`; JavDB and JavBus were `success`, while FANZA failed in this region/age-gate path.
+- `GET /v1/images/primary/MetaX/ABP-123?category=censored` returned HTTP 200 `image/jpeg` (359×539).
+- `GET /v1/movies/search?q=FC2-PPV-3954834&category=uncensored&fallback=false` returned HTTP 200 with a merged `MetaX` candidate and FC2/JavDB results. `GET /v1/movies/MetaX/FC2-3954834?category=uncensored` merged the FC2 source successfully, including a non-empty summary, genres, cover, and release date.
+- Amateur (`200GANA-123`), hentai (`GETCHU-12345`), and actor (`三上悠亜`) searches returned HTTP 200. The actor search returned a Gfriends result first.
+- `GET /v1/movies/search?q=ABP-123&category=not-a-category` returned HTTP 400, and an incorrect `METAX_ROUTES_FINGERPRINT` aborted startup with `fingerprint mismatch`.
+
+Live limitations observed on the same date:
+
+- JavDB search works for FC2 numbers, but FC2 detail redirects to the JavDB login page; anonymous detail verification is not possible.
+- FANZA requests were redirected to a region/age-gate page from this network. FANZA search/detail behavior remains unverified outside an allowed region.
+- Freejavbt returned HTTP 503; FC2PPVDB returned HTTP 403; FALENO returned HTTP 403 from its hosting provider. These are external availability/anti-bot results, not proofs of parser correctness.
+- Kin8 sample `KIN8-1234`, Chinese sample `MD-1234`, and Western sample `KIN8-1234` returned 404/empty. The samples may not be valid catalog entries; they do not establish provider failure.
+- No Jellyfin runtime or plugin-side scrape was exercised here.
+
+The live results are evidence for the tested numbers only. Deterministic tests remain the regression baseline.
 
 ## Current limits
 

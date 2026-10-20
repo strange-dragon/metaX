@@ -52,7 +52,8 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] CI applies the patch to a clean checkout of pinned SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`; formatting and focused URL-origin plus exact-number tests passed in run [38875105403](https://github.com/strange-dragon/metaX/actions/runs/38875105403). This verifies patch applicability and focused tests only, not the full SDK regression suite or live-site behavior.
 - [x] Implement bounded number variants, exact-first selection, and a unique loose match only when the difference is the leading numeric segment on one side. Preserve Amane's rule that hyphens/spaces fold but underscores remain significant. Duplicate result URLs are deduplicated before ambiguity is assessed.
 - [x] Add deterministic tests for leading-digit variants, exact-match priority, wrong-number rejection, ambiguous candidates, duplicate URLs, and required title/number fields. Patch application, gofmt, and focused tests passed in run [38878430661](https://github.com/strange-dragon/metaX/actions/runs/38878430661). The SDK patch-validation workflow now explicitly runs all five deterministic test groups rather than an obsolete test name.
-- [x] Compared AVBase against Amane and found that SDK search results dropped the prefix from canonical detail URLs; added a proposed SDK patch plus prefixed/unprefixed URL tests. Combined patch application, gofmt, JavBus focused tests, and AVBase URL tests passed in run [38880331157](https://github.com/strange-dragon/metaX/actions/runs/38880331157).\n- [ ] Full SDK regression suite, live-site compatibility, and end-to-end MetaTube server integration remain unverified.
+- [x] Compared AVBase against Amane and found that SDK search results dropped the prefix from canonical detail URLs; added a proposed SDK patch plus prefixed/unprefixed URL tests. Combined patch application, gofmt, JavBus focused tests, and AVBase URL tests passed in run [38880331157](https://github.com/strange-dragon/metaX/actions/runs/38880331157).
+- [ ] Full SDK regression suite, live-site compatibility, and end-to-end MetaTube server integration remain unverified.
 
 
 ### Task 4d — FC2Club compatibility and request-origin hardening
@@ -270,3 +271,34 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; focused fan-out tests pass; server build succeeds.
 - [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
 - Backend core tasks are complete. Remaining work is provider coverage or the separate Jellyfin plugin project.
+
+### Task: startup provider coverage and route fingerprint pin (2026-10-20)
+
+- [x] Added `routing.Config.ProviderCoverage` and `ValidateRegisteredProviders`; startup now rejects a configured category with zero available providers and logs individual unavailable entries.
+- [x] Added aliases for Amane route names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`.
+- [x] Added `Config.FingerprintHash()` (SHA-256 of the canonical route table) and `METAX_ROUTES_FINGERPRINT`; a mismatch aborts startup before the database opens. The actual fingerprint is logged at startup.
+- [x] Wired coverage/fingerprint checks into the generated `cmd.Router` integration and covered both in deterministic tests.
+- [x] Verified the default integrated build logs only the intentional gaps (`Official`, token-gated `ThePornDB`) instead of the previous false `MGStage`/`ThePornDB` name gaps.
+- [x] Verification: `go test ./routing -count=1` in metaX; `go test ./routing ./engine ./route -count=1` in the integrated SDK; `go build -o /tmp/metatube-server-metax ./cmd/server`; live startup log and fingerprint mismatch both observed.
+- [ ] Full SDK regression remains environment-blocked locally (`engine/dbengine` needs Docker; `imageutil` differs under Go 1.27); CI pins Go 1.26.x.
+
+### Task: search-stage merged candidate (2026-10-20)
+
+- [x] Replaced the previous copy-the-first-result search candidate with a real display merge: first valid catalog number supplies identity; empty title/homepage/thumbnail/cover/score/release-date fields are filled from later route results, and actor names are deduplicated case-insensitively.
+- [x] Originals remain in route order after the `MetaX` candidate; results without a catalog number do not produce a candidate.
+- [x] Added deterministic route tests for field filling, actor deduplication, nil/empty results, and original-result preservation.
+- [x] Made the integration-script helper migration idempotent so older checkouts do not retain duplicate helpers.
+- [x] Added `route/search.go` and the new test file to the build format gate.
+- [x] Verification: integrated `go test ./routing ./engine ./route -count=1` passes; server build succeeds; live censored and FC2 searches showed populated merged candidates.
+
+### Task: provider coverage and live API verification (2026-10-20)
+
+- [x] Added `.github/scripts/live-metax-api-smoke.sh` and a `workflow_dispatch`/path-triggered workflow. The script checks category search, `MetaX` detail plus `sources[]`, image bytes, FC2 search, unknown-category HTTP 400, and fingerprint-pin startup failure.
+- [x] Local live run passed: `bash .github/scripts/live-metax-api-smoke.sh /tmp/metatube-server-metax 18086` → `LIVE_API_SMOKE_OK`.
+- [x] Live censored detail merged JavDB/JavBus data and returned a JPEG; live FC2 detail merged FC2 summary/genres/cover/release date.
+- [x] Live amateur (`200GANA-123`), hentai (`GETCHU-12345`), and actor (`三上悠亜`) searches returned HTTP 200; Gfriends supplied the actor result.
+- [x] Recorded provider-specific limits in `docs/COMPATIBILITY_MATRIX.md`: JavDB FC2 detail login redirect; FANZA region/age gate; Freejavbt 503; FC2PPVDB/FALENO/MGS 403; Kin8/Chinese/Western samples 404 or empty.
+- [x] Updated the Faleno matrix entry to reflect the existing exact REST metadata/search patches (`0013`, `0014`) and their deterministic tests; live Faleno remains blocked by HTTP 403.
+- [x] Fixed the trailing blank line in patch `0013` that failed the CI gofmt gate.
+- [ ] CI validation and the new manual live workflow still need to run on the pushed commit; local live results are point-in-time evidence only.
+- [ ] Still deferred: Official manufacturer router, Prestige, R18Dev offline PostgreSQL, fuzzy Getchu catalog search, JavDB login/cookie support, and Wikipedia/Wikidata actor biographies.
