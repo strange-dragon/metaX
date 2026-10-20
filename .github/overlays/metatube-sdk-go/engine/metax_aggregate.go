@@ -171,7 +171,7 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 
 func normalizeAggregationNumber(value string) string {
 	value = strings.ToUpper(strings.TrimSpace(value))
-	return strings.NewReplacer(" ", "", "-", "", "_", "").Replace(value)
+	return strings.NewReplacer(" ", "", "-", "").Replace(value)
 }
 
 // mergeMovieInfoInRouteOrder uses the first non-empty value in route order for
