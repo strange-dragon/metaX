@@ -156,3 +156,13 @@ This file is the durable handoff for small, independently reviewable work units.
 - [ ] Go tests, formatting, and integrated server build were not run. No GitHub Actions workflow was dispatched.
 
 - [x] Corrected the SDK integration script's generated Go statement and its static marker assertion so category-routing integration produces valid Go source.
+
+
+### Task 6 — Implementation-level Amane ↔ MetaTube audit
+- [x] Read Amane's pinned crawler base contract, movie metadata model, movie/actor crawler registries, aggregation engine/result model, and default category routes at `a2d45880e83df7047d461452965919692701e8c9`.
+- [x] Read the pinned SDK provider interfaces, engine search/detail implementation, and movie model at `c62584675c593816cc07e7b5b977d14c7eb505a3`.
+- [x] Compared those behaviors with the current metaX routing and SDK search overlay.
+- [x] Recorded the durable findings and exact next-task boundary in `docs/IMPLEMENTATION_AUDIT.md`; consult this before repeating source exploration.
+- [x] Main finding: current metaX/SDK has concurrent candidate search, ordered route fan-out, provider+ID deduplication, provider-priority ranking, per-provider error tolerance, and SDK cache fallback. It does **not** yet implement Amane-style field-by-field detail metadata aggregation across providers.
+- [x] Next recommended task: design safe detail metadata enrichment with identity validation, fill-empty semantics, field/list/image merge rules, and deterministic tests. Do not merge search candidates solely by title.
+- [ ] No tests, formatter, integrated build, live-site requests, or Jellyfin runtime were executed for this source audit.
