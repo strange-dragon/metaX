@@ -69,7 +69,7 @@ source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\t\tfor name := range app.GetMovieProviders() {
 \t\t\t\t\tregistered = append(registered, name)
 \t\t\t\t}
-\t\t\t\tproviders, routeErr := config.Resolve(routing.Category(query.Category), "", registered)
+    'providers, routeErr := config.Resolve(routing.Category(query.Category), "", registered)',
 \t\t\t\tif routeErr != nil {
 \t\t\t\t\terr = routeErr
 \t\t\t\t} else {
