@@ -177,7 +177,7 @@ needle = '''\t\tif err != nil {
 \t\t\treturn
 \t\t}'''
 replacement = '''\t\tif err != nil {
-\t\t\tif stderrors.Is(err, routing.ErrUnknownCategory) {
+\t\t\tif stderrors.Is(err, routing.ErrUnknownCategory) || stderrors.Is(err, routing.ErrNoAvailableProvider) {
 \t\t\t\tabortWithStatusMessage(c, http.StatusBadRequest, err)
 \t\t\t\treturn
 \t\t\t}
@@ -190,6 +190,12 @@ if 'stderrors.Is(err, routing.ErrUnknownCategory)' not in source:
         raise SystemExit("could not locate search error handler")
     source = source[:index] + replacement + source[index + len(needle):]
 
+# Migrate checkouts that only mapped unknown categories to 400.
+source = source.replace(
+    'if stderrors.Is(err, routing.ErrUnknownCategory) {',
+    'if stderrors.Is(err, routing.ErrUnknownCategory) || stderrors.Is(err, routing.ErrNoAvailableProvider) {',
+)
+
 required = [
     'stderrors "errors"',
     '"github.com/metatube-community/metatube-sdk-go/routing"',
@@ -201,6 +207,7 @@ required = [
     'searchMovieProvidersAggregated(app, query.Q, providers, query.Fallback)',
     'routing.InferCategory(query.Q)',
     'stderrors.Is(err, routing.ErrUnknownCategory)',
+    'stderrors.Is(err, routing.ErrNoAvailableProvider)',
 ]
 missing = [item for item in required if item not in source]
 if missing:
@@ -343,6 +350,12 @@ if '"github.com/metatube-community/metatube-sdk-go/routing"' not in source:
         '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
         1,
     )
+if 'stderrors "errors"' not in source:
+    source = source.replace(
+        'import (\n\t"bytes"\n',
+        'import (\n\t"bytes"\n\tstderrors "errors"\n',
+        1,
+    )
 
 if 'Category string  `form:"category"`' not in source:
     source = source.replace(
@@ -359,6 +372,10 @@ if 'engine.IsAggregatedProvider(uri.Provider)' not in source:
 \t\tif engine.IsAggregatedProvider(uri.Provider) {
 \t\t\tresolved, resolveErr := app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.ActiveConfig())
 \t\t\tif resolveErr != nil {
+\t\t\t\tif stderrors.Is(resolveErr, routing.ErrUnknownCategory) || stderrors.Is(resolveErr, routing.ErrNoAvailableProvider) {
+\t\t\t\t\tabortWithStatusMessage(c, http.StatusBadRequest, resolveErr)
+\t\t\t\t\treturn
+\t\t\t\t}
 \t\t\t\tabortWithError(c, resolveErr)
 \t\t\t\treturn
 \t\t\t}
@@ -371,6 +388,24 @@ if 'engine.IsAggregatedProvider(uri.Provider)' not in source:
         raise SystemExit("image provider dispatch marker not found; SDK route/image.go changed")
     source = source.replace(marker, replacement, 1)
 
+# Migrate checkouts that returned 500 for invalid MetaX image categories.
+if 'stderrors.Is(resolveErr' not in source:
+    old = '''\t\t\tif resolveErr != nil {
+\t\t\t\tabortWithError(c, resolveErr)
+\t\t\t\treturn
+\t\t\t}'''
+    new = '''\t\t\tif resolveErr != nil {
+\t\t\t\tif stderrors.Is(resolveErr, routing.ErrUnknownCategory) || stderrors.Is(resolveErr, routing.ErrNoAvailableProvider) {
+\t\t\t\t\tabortWithStatusMessage(c, http.StatusBadRequest, resolveErr)
+\t\t\t\t\treturn
+\t\t\t\t}
+\t\t\t\tabortWithError(c, resolveErr)
+\t\t\t\treturn
+\t\t\t}'''
+    if old not in source:
+        raise SystemExit("could not locate MetaX image resolve error handler")
+    source = source.replace(old, new, 1)
+
 # Migrate checkouts integrated before route-table configuration existed.
 source = source.replace(
     'app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.DefaultConfig())',
@@ -379,9 +414,12 @@ source = source.replace(
 
 required = [
     '"github.com/metatube-community/metatube-sdk-go/routing"',
+    'stderrors "errors"',
     'Category string  `form:"category"`',
     'engine.IsAggregatedProvider(uri.Provider)',
     'app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.ActiveConfig())',
+    'stderrors.Is(resolveErr, routing.ErrUnknownCategory)',
+    'routing.ErrNoAvailableProvider',
 ]
 missing = [item for item in required if item not in source]
 if missing:

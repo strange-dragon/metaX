@@ -40,7 +40,7 @@ The endpoint has three modes:
 
 For `MetaX`, the response keeps `provider=MetaX` and `id=<catalog number>` so later refreshes continue to resolve through aggregation. The per-provider records below `sources` still expose each provider's original identity and metadata.
 
-`category` takes precedence over provider/number inference. An explicit but unknown category returns HTTP 400 instead of silently broadening the search. FC2 is folded into `uncensored` in responses, while `category=fc2` remains accepted as an input alias.
+`category` takes precedence over provider/number inference. An explicit but unknown category returns HTTP 400 whenever the category participates in routing: category search without an explicit provider, `MetaX` detail/image, and `aggregate=true`. The explicit-provider search override and stock (`aggregate=false`) detail keep their existing behavior and ignore `category` for compatibility. FC2 is folded into `uncensored` in responses, while `category=fc2` remains accepted as an input alias.
 
 When aggregation runs, the response keeps the existing `data` envelope and the existing `MovieInfo` fields at the top level, then adds:
 
@@ -51,6 +51,20 @@ When aggregation runs, the response keeps the existing `data` envelope and the e
   - `status`: `success`, `error`, `not_found`, `identity_mismatch`, or `baseline_only`.
   - `error`: diagnostic text when a source fails or cannot be safely used.
   - `metadata`: that provider's independent, normalized SDK `MovieInfo` record, when available.
+
+### Error and partial-failure semantics
+
+| Situation | Result |
+| --- | --- |
+| Invalid or empty keyword, malformed query, unknown category used for routing | 400 |
+| Category route exists but no route provider is registered | 400 (`ErrNoAvailableProvider`) |
+| `MetaX` detail or category search has no matching candidate | 404 (`ErrInfoNotFound`) |
+| All category providers fail or return no valid results | 404, matching stock MetaTube search behavior |
+| Some category providers fail or return nothing | 200; successful provider results are kept, failures are logged |
+| Aggregation baseline detail fails | baseline error (404 for not found, 500 for incomplete metadata) |
+| A non-baseline source detail fails | 200; `sources[]` records `error`, `not_found`, or `identity_mismatch` while successful sources still merge |
+| An inferred category cannot be resolved on detail | 200 with a `baseline_only` source record |
+| `MetaX` image with an invalid category | 400 |
 
 ## Image contract
 

@@ -151,3 +151,59 @@ func TestAggregatedDetailEndpointRejectsUnknownCategory(t *testing.T) {
 		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
 	}
 }
+
+func TestAggregatedDetailEndpointRejectsUnknownCategoryForRealProvider(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {endpointAggregateProvider},
+	}}
+	router := gin.New()
+	router.GET("/v1/movies/:provider/:id", getInfoWithConfig(engine.New(openEndpointAggregateDB(t)), movieInfoType, config))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/v1/movies/"+endpointAggregateProvider+"/endpoint-1?aggregate=true&category=not-a-category", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+}
+
+func TestAggregatedDetailEndpointRejectsCategoryWithoutProviders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {"MetaXUnregisteredProvider"},
+	}}
+	router := gin.New()
+	router.GET("/v1/movies/:provider/:id", getInfoWithConfig(engine.New(openEndpointAggregateDB(t)), movieInfoType, config))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/v1/movies/"+endpointAggregateProvider+"/endpoint-1?aggregate=true&category=censored", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodGet,
+		"/v1/movies/"+engine.AggregatedProviderName+"/ABP-123?category=censored", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("merged detail status=%d want=%d body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+}
+
+func TestMetaXImageRejectsUnknownCategory(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/v1/images/primary/:provider/:id", getImage(engine.New(nil), primaryImageType))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/v1/images/primary/"+engine.AggregatedProviderName+"/ABP-123?category=not-a-category", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+}

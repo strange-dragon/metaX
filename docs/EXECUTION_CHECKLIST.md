@@ -246,3 +246,16 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; server build succeeds; an invalid `METAX_ROUTES` exits with code 1 and `unknown category "bogus"`.
 - [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
 - Next: tighten partial-failure and provider-error semantics with endpoint tests.
+
+### Task: explicit-category error and partial-failure semantics (2026-10-20)
+
+- [x] Added `routing.ParseCategory` to validate and canonicalize category inputs while still accepting `fc2`, `chinese_subtitles`, and `animation` aliases.
+- [x] Explicit unknown or unroutable categories now return errors from the engine instead of a misleading `baseline_only` success when the caller supplied the category.
+- [x] Category search maps both `ErrUnknownCategory` and `ErrNoAvailableProvider` to HTTP 400; all-provider failures remain HTTP 404 like stock MetaTube search.
+- [x] Real-provider `aggregate=true` now rejects unknown categories and categories without registered providers with HTTP 400.
+- [x] `MetaX` image resolution maps invalid/unroutable categories to HTTP 400 instead of 500.
+- [x] Preserved compatibility: an explicit provider search override and stock (`aggregate=false`) detail continue to ignore `category`.
+- [x] Added engine and endpoint tests for unknown categories, missing providers on search/detail/image, all-provider search failure, and alias canonicalization.
+- [x] Verification: `go test ./... -count=1` in metaX passes; `go test ./routing ./engine ./route -count=1` in the integrated SDK passes; focused new tests pass; server build succeeds.
+- [ ] Not run: full SDK regression, because `engine/dbengine` requires a Docker daemon and `imageutil` differs under Go 1.27 versus the CI-pinned Go 1.26.
+- Next: bound aggregation fan-out and expose a per-request provider deadline.

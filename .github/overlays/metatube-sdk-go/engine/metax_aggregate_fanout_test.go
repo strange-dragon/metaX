@@ -240,3 +240,52 @@ func TestResolveAggregatedProviderIDUsesRouteOrder(t *testing.T) {
 		t.Fatalf("resolved identity = %s/%s, want %s", pid.Provider, pid.ID, aggregateSecondProvider)
 	}
 }
+
+func TestAggregatedMovieInfoExplicitUnknownCategoryReturnsError(t *testing.T) {
+	e := New(openAggregateTestDB(t))
+	_, err := e.GetAggregatedMovieInfoByProviderIDWithCategory(
+		providerid.ProviderID{Provider: aggregateBaselineProvider, ID: "baseline-id"},
+		false,
+		routing.DefaultConfig(),
+		routing.Category("not-a-category"),
+	)
+	if !errors.Is(err, routing.ErrUnknownCategory) {
+		t.Fatalf("aggregate error = %v, want ErrUnknownCategory", err)
+	}
+}
+
+func TestAggregatedMovieInfoExplicitCategoryWithoutProvidersReturnsError(t *testing.T) {
+	e := New(openAggregateTestDB(t))
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {"MetaXUnregisteredProvider"},
+	}}
+	_, err := e.GetAggregatedMovieInfoByProviderIDWithCategory(
+		providerid.ProviderID{Provider: aggregateBaselineProvider, ID: "baseline-id"},
+		false,
+		config,
+		routing.CategoryCensored,
+	)
+	if !errors.Is(err, routing.ErrNoAvailableProvider) {
+		t.Fatalf("aggregate error = %v, want ErrNoAvailableProvider", err)
+	}
+}
+
+func TestAggregatedMovieInfoByNumberExplicitUnknownCategoryReturnsError(t *testing.T) {
+	e := New(openAggregateTestDB(t))
+	_, err := e.GetAggregatedMovieInfoByNumber(
+		"ABP-123", routing.Category("not-a-category"), false, routing.DefaultConfig(),
+	)
+	if !errors.Is(err, routing.ErrUnknownCategory) {
+		t.Fatalf("aggregate-by-number error = %v, want ErrUnknownCategory", err)
+	}
+}
+
+func TestResolveAggregatedProviderIDExplicitUnknownCategoryReturnsError(t *testing.T) {
+	e := New(openAggregateTestDB(t))
+	_, err := e.ResolveAggregatedProviderID(
+		"ABP-123", routing.Category("not-a-category"), routing.DefaultConfig(),
+	)
+	if !errors.Is(err, routing.ErrUnknownCategory) {
+		t.Fatalf("resolve error = %v, want ErrUnknownCategory", err)
+	}
+}

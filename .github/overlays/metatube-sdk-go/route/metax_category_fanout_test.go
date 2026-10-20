@@ -284,3 +284,66 @@ func TestMetaXCategorySearchUsesActiveRouteTable(t *testing.T) {
 		t.Fatalf("original provider=%q want=%q", response.Data[1].Provider, routeHealthyProvider)
 	}
 }
+
+func TestMetaXCategorySearchRejectsCategoryWithoutProviders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {"MetaXUnregisteredProvider"},
+	}}
+	router := gin.New()
+	router.GET("/v1/movies/search", getSearchWithConfig(engine.New(nil), movieSearchType, config))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/v1/movies/search?q=ABP-123&category=censored&fallback=false", nil)
+	router.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusBadRequest, recorder.Body.String())
+	}
+}
+
+func TestMetaXCategorySearchAllProviderFailuresReturnNotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	routeSearchStarted = make(chan string, 1)
+	routeSearchRelease = make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-routeSearchRelease:
+		default:
+			close(routeSearchRelease)
+		}
+	})
+
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {routeFailingProvider},
+	}}
+	router := gin.New()
+	router.GET("/v1/movies/search", getSearchWithConfig(engine.New(nil), movieSearchType, config))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/v1/movies/search?q=route-test&category=censored&fallback=false", nil)
+	done := make(chan struct{})
+	go func() {
+		router.ServeHTTP(recorder, request)
+		close(done)
+	}()
+
+	select {
+	case name := <-routeSearchStarted:
+		if name != routeFailingProvider {
+			t.Errorf("searched %q, want %q", name, routeFailingProvider)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("category search did not start the failing provider")
+	}
+	close(routeSearchRelease)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("category search did not return after provider failure")
+	}
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusNotFound, recorder.Body.String())
+	}
+}

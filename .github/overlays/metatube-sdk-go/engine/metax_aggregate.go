@@ -88,7 +88,11 @@ func (e *Engine) getAggregatedMovieInfo(pid providerid.ProviderID, lazy bool, co
 		ok       bool
 	)
 	if requested != "" {
-		category, ok = requested.Canonical(), true
+		canonical, parseErr := routing.ParseCategory(string(requested))
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		category, ok = canonical, true
 	} else {
 		// These providers represent category-specific catalogues whose
 		// identifiers may be slugs or numeric product IDs rather than standard
@@ -123,6 +127,12 @@ func (e *Engine) getAggregatedMovieInfo(pid providerid.ProviderID, lazy bool, co
 	}
 	providers, routeErr := config.Resolve(category, "", registered)
 	if routeErr != nil {
+		// An explicit category is a routing instruction: surfacing the error
+		// gives callers a 400 instead of a misleading baseline-only success.
+		// Inferred categories remain best-effort and preserve the baseline.
+		if requested != "" {
+			return nil, routeErr
+		}
 		return &AggregatedMovieInfo{
 			MovieInfo: baseline,
 			Category:  string(category.Canonical()),
@@ -321,6 +331,12 @@ func (e *Engine) aggregateRouteProviders(number string, category routing.Categor
 		if inferred, ok := routing.InferCategory(number); ok {
 			candidateCategory = inferred
 		}
+	} else {
+		canonical, err := routing.ParseCategory(string(candidateCategory))
+		if err != nil {
+			return "", nil, err
+		}
+		candidateCategory = canonical
 	}
 
 	registered := make([]string, 0, len(e.GetMovieProviders()))

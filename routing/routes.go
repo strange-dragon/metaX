@@ -40,6 +40,30 @@ func (c Category) Canonical() Category {
 	}
 }
 
+var knownCategories = map[Category]struct{}{
+	CategoryCensored:   {},
+	CategoryUncensored: {},
+	CategoryChinese:    {},
+	CategoryAmateur:    {},
+	CategoryWestern:    {},
+	CategoryHentai:     {},
+}
+
+// ParseCategory validates a category supplied by an API caller or route table
+// and returns its canonical form. Legacy aliases are accepted and folded;
+// unknown or empty values return ErrUnknownCategory.
+func ParseCategory(value string) (Category, error) {
+	category := Category(strings.ToLower(strings.TrimSpace(value)))
+	if category == "" {
+		return "", fmt.Errorf("%w: empty category", ErrUnknownCategory)
+	}
+	canonical := category.Canonical()
+	if _, ok := knownCategories[canonical]; !ok {
+		return "", fmt.Errorf("%w: %s", ErrUnknownCategory, value)
+	}
+	return canonical, nil
+}
+
 var (
 	ErrUnknownCategory     = errors.New("unknown content category")
 	ErrNoAvailableProvider = errors.New("no registered provider for category")
@@ -108,10 +132,7 @@ func (c Config) Validate() error {
 		if canonical := category.Canonical(); canonical != category {
 			return fmt.Errorf("category %q is a legacy alias; use %q", category, canonical)
 		}
-		switch category {
-		case CategoryCensored, CategoryUncensored, CategoryChinese,
-			CategoryAmateur, CategoryWestern, CategoryHentai:
-		default:
+		if _, known := knownCategories[category]; !known {
 			return fmt.Errorf("unknown category %q", category)
 		}
 		if len(providers) == 0 {

@@ -239,3 +239,35 @@ func TestConfigFingerprintIsDeterministicAndOrderSensitive(t *testing.T) {
 		t.Fatal("different route tables must not share a fingerprint")
 	}
 }
+
+func TestParseCategoryCanonicalizesAliasesAndRejectsUnknown(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    Category
+		wantErr bool
+	}{
+		{input: "censored", want: CategoryCensored},
+		{input: " CENSORED ", want: CategoryCensored},
+		{input: "fc2", want: CategoryUncensored},
+		{input: "chinese_subtitles", want: CategoryChinese},
+		{input: "animation", want: CategoryHentai},
+		{input: "bogus", wantErr: true},
+		{input: "", wantErr: true},
+	}
+	for _, tc := range tests {
+		got, err := ParseCategory(tc.input)
+		if tc.wantErr {
+			if !errors.Is(err, ErrUnknownCategory) {
+				t.Errorf("ParseCategory(%q) error = %v, want ErrUnknownCategory", tc.input, err)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("ParseCategory(%q) error = %v", tc.input, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("ParseCategory(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
