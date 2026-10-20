@@ -65,7 +65,6 @@ source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\t\t// An explicit provider remains a manual override, even if a category is supplied.
 \t\t\t\tresults, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
 \t\t\t} else if query.Category != "" {
-\t\t\t\tconfig := routing.DefaultConfig()
 \t\t\t\tregistered := make([]string, 0, len(app.GetMovieProviders()))
 \t\t\t\tfor name := range app.GetMovieProviders() {
 \t\t\t\t\tregistered = append(registered, name)
@@ -110,6 +109,7 @@ required = [
     'Category string `form:"category"`',
     'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
     'app.SearchMovieProviders(query.Q, providers, query.Fallback)',
+    providers, routeErr := config.Resolve(routing.Category(query.Category), \"\", registered),
     'stderrors.Is(err, routing.ErrUnknownCategory)',
 ]
 missing = [item for item in required if item not in source]
