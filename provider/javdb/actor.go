@@ -27,7 +27,7 @@ var (
 	actorFilmCountRE                  = regexp.MustCompile(`(?i)^\d+\s*(?:部影片|movie\(s\))$`)
 	actorGenderRE                     = regexp.MustCompile(`(?i)^(?:男優|男优|女優|女优|male|female)$`)
 	actorAvatarRE                     = regexp.MustCompile(`(?i)url\(\s*['"]?(https?://[^)'"]+)['"]?\s*\)`)
-	actorUncensoredMarkerRE            = regexp.MustCompile(`(?i)\s*[\(（](?:無碼|无码|uncensored)[\)）]\s*$`)
+	actorUncensoredMarkerRE           = regexp.MustCompile(`(?i)\s*[(（](?:無碼|无码|uncensored)[)）]\s*$`)
 )
 
 // JavDBActor exposes JavDB's actor search and profile pages through the SDK
