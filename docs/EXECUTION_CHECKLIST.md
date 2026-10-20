@@ -324,3 +324,15 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [ ] Full pinned SDK regression remains environment-blocked for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch.
 - [x] CI on commit `63e2688` passed Go tests in [run 39402434168](https://github.com/strange-dragon/metaX/actions/runs/39402434168), SDK patch/full-regression/focused-provider/build in [39402434294](https://github.com/strange-dragon/metaX/actions/runs/39402434294), live FC2/uncensored in [39402434186](https://github.com/strange-dragon/metaX/actions/runs/39402434186), and live MOON-023 in [39402434223](https://github.com/strange-dragon/metaX/actions/runs/39402434223). The integrated CI build registered `WikipediaActor`.
 - Note: the pinned Jellyfin plugin has no provider-cookie configuration or pass-through protocol. Server-side environment cookies remain the current fallback until an additive plugin change is made.
+
+### Task: authenticated runtime cookie update API (2026-10-20)
+
+- [x] Added `Engine.SetProviderConfig` in the SDK overlay. It resolves `movie`/`actor` providers case-insensitively, requires `provider.ConfigSetter`, accepts only `cookies`/`cookie`, and rejects CR/LF and empty updates.
+- [x] Added `PUT /v1/providers/config` under the existing bearer-token private route group. The body is bounded to 64 KiB, rejects unknown JSON fields and trailing JSON, and returns an explicit applied response.
+- [x] Added deterministic engine tests for case-insensitive provider/type lookup, cookie application, unknown providers, unsupported providers, unsupported keys, and header injection.
+- [x] Added route tests for authentication, successful cookie application, unknown provider, empty config, unknown fields, unsupported keys, CR/LF, and trailing JSON.
+- [x] Wired the new files into the integration overlay, focused test target, route registration patch, and build format gate.
+- [x] Local verification on the clean pinned SDK checkout: `go test ./engine ./route -count=1` passes; `go build ./cmd/server` succeeds; live endpoint checks returned `401` without a token, `200` with a valid token, `400` for unsupported keys, and `404` for an unknown provider.
+- [ ] Full pinned SDK regression remains environment-blocked for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch.
+- [ ] This task is in-memory only. Persistence and startup replay are the next task.
+- [ ] Jellyfin plugin configuration fields and the plugin-to-backend call remain out of scope for the backend-only phase.

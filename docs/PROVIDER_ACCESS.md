@@ -76,16 +76,36 @@ are point-in-time network evidence, not parser tests.
 | Getchu fuzzy search | Exact `GETCHU-<digits>` fallback works; fuzzy catalog search deferred | Amane uses the first search result | Do not copy the weaker first-result behavior; add an exact identity check first. |
 | Wikipedia/Wikidata actor biography | Implemented as `WikipediaActor` | Wikidata entity filtering + Wikipedia extraction | Exact label/alias identity, AV occupation/description filtering, and deterministic API fixtures are covered locally; live-site verification remains pending. |
 
-## Jellyfin plugin configuration
+## Runtime cookie update API
 
-The intended user-facing location for expiring site cookies is the Jellyfin
-plugin configuration, so a cookie can be refreshed without rebuilding the
-container or editing server environment variables. The pinned upstream plugin
-(`f7c1f336`) currently exposes only the server URL/token and has no provider
-cookie fields or pass-through protocol. Moving cookie values there therefore
-requires a separate, additive plugin change (configuration fields plus a
-request header or authenticated configuration endpoint) before the server-side
-environment variables below can be treated as fallback-only.
+The backend now exposes an authenticated runtime update endpoint for expiring
+cookies:
+
+```bash
+curl -X PUT http://127.0.0.1:8080/v1/providers/config \
+  -H "Authorization: Bearer $METATUBE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"movie","provider":"JavDB","config":{"cookies":"session=..."}}'
+```
+
+- `type` is `movie` or `actor`; `provider` uses the registered provider name.
+- Only `cookies` / `cookie` keys are accepted in this task.
+- The endpoint requires the existing MetaTube bearer token; without a token the
+  server's other private `/v1` routes are equally open, so deploy behind TLS and
+  configure a token.
+- The provider must implement `provider.ConfigSetter`. This covers JavDB,
+  Freejavbt, and scraper-based providers through patch `0015`.
+- Updates are applied immediately and are **in memory only**. A restart restores
+  the startup environment configuration. Persistence/startup replay is a
+  separate follow-up task.
+- The API never logs cookie values. It rejects CR/LF and unsupported keys.
+
+The intended user-facing location is still the Jellyfin plugin configuration,
+so a cookie can be refreshed without rebuilding the container. The pinned
+upstream plugin (`f7c1f336`) currently exposes only the server URL/token and has
+no provider cookie fields or pass-through protocol. The plugin change is a
+separate project task; until it exists, call this endpoint directly or use the
+server-side environment variables as the fallback.
 
 ## Security notes
 
