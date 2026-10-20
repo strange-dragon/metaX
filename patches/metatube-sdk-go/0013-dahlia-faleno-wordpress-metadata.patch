@@ -167,7 +167,7 @@ new file mode 100644
 index 0000000..0000000
 --- /dev/null
 +++ b/provider/dahlia/core/core_wordpress_metadata_test.go
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,124 @@
 +package core
 +
 +import (
@@ -271,3 +271,25 @@ index 0000000..0000000
 +		t.Fatal("expected non-exact slug to be rejected")
 +	}
 +}
++func TestFalenoPublisherRouting(t *testing.T) {
++	tests := []struct {
++		name string
++		slug string
++		want string
++	}{
++		{name: "maryGOLD prefix", slug: "mgold123", want: "maryGOLD"},
++		{name: "JimmyScandal prefix", slug: "jimmy456", want: "JimmyScandal"},
++		{name: "default FALENOstar", slug: "fns257", want: "FALENOstar"},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			core := (&Core{DefaultName: "FALENO", DefaultPriority: 1}).Init()
++			info := &model.MovieInfo{}
++			core.applyWordPressWork(info, &wpWork{Slug: tt.slug})
++			if info.Label != tt.want {
++				t.Fatalf("Label = %q, want %q", info.Label, tt.want)
++			}
++		})
++	}
++}
++
