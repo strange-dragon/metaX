@@ -95,3 +95,18 @@ func TestSplitActorNamesRemovesUncensoredMarkers(t *testing.T) {
 	got := splitActorNames("Example Name (Uncensored), 葵（無碼）, 乙 (无码), Example Name")
 	require.Equal(t, []string{"Example Name", "葵", "乙"}, got)
 }
+func TestJavDBActorUsesCanonicalProfileIdentity(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/actors/Requested123", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, strings.Replace(actorDetailFixture, "/actors/Actor123", "/actors/Canonical456", 1))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := &JavDBActor{JavDB: newForTest(server.URL, nil)}
+	info, err := p.GetActorInfoByURL(server.URL + "/actors/Requested123")
+	require.NoError(t, err)
+	require.Equal(t, "Canonical456", info.ID)
+	require.Equal(t, server.URL+"/actors/Canonical456", info.Homepage)
+}
+

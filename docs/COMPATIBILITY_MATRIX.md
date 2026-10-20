@@ -471,3 +471,9 @@ Compared Amane `src/amane/crawlers/actor/sites/avbase.py` with the pinned SDK ac
 Compared Amane's JavDB actor parser with the native Go actor provider. Amane removes trailing `(無碼)`, `(无码)`, and `(Uncensored)` markers from actor names and aliases before exact-name matching. The Go provider previously retained those suffixes, which could cause duplicate aliases or failed exact-name matches between censored and uncensored listings.
 
 The native actor parser now removes these trailing markers (including full-width parentheses) when splitting canonical names and aliases. A deterministic unit test covers all three marker forms and duplicate-name de-duplication. This is a source-derived compatibility fix only; no live JavDB actor page was requested, and tests/formatting were not run in this task.
+
+## JavDB actor canonical profile identity (2026-10-20)
+
+Amane derives the actor provider ID and source URL from the profile's canonical link when available, falling back to the requested page URL. The native Go parser previously always retained the requested ID and reconstructed its homepage, which could store a non-canonical identity when the site resolves an alias URL to a canonical actor profile.
+
+The Go parser now accepts a canonical URL only after normalizing it against JavDB's base URL and validating it with the existing actor URL/origin rules. Invalid or off-origin canonical links are ignored; the requested identity remains the fallback. A deterministic HTTP fixture test covers a requested actor URL whose page declares a different canonical actor ID. No live requests or Go test/format commands were run.

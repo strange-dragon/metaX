@@ -140,3 +140,10 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Added suffix normalization for `(無碼)`, `(无码)`, and `(Uncensored)`, including full-width parentheses.
 - [x] Added a deterministic test for suffix removal and duplicate elimination.
 - [ ] Local Go tests and formatting not run; no GitHub Actions workflow was dispatched.
+
+### JavDB actor canonical identity follow-up (2026-10-20)
+
+- [x] Compared Amane's canonical URL / provider-ID resolution with the native JavDB actor parser.
+- [x] Prefer a valid same-origin canonical actor URL for ActorInfo.ID and Homepage; ignore invalid canonical URLs and retain the requested URL fallback.
+- [x] Added a deterministic local HTTP test for canonical identity resolution.
+- [ ] Go tests and formatting not run; no GitHub Actions workflow was dispatched.

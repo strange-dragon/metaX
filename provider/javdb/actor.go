@@ -113,6 +113,16 @@ func (p *JavDBActor) GetActorInfoByURL(rawURL string) (*model.ActorInfo, error) 
 		}
 	}
 
+	homepage := p.actorURL(id)
+	canonical := strings.TrimSpace(attrText(doc.Find("link[rel='canonical']").First(), "href"))
+	if canonical != "" {
+		canonical = absoluteURL(p.baseURL, canonical)
+		if canonicalID, parseErr := p.ParseActorIDFromURL(canonical); parseErr == nil {
+			id = canonicalID
+			homepage = canonical
+		}
+	}
+
 	images := make([]string, 0, 1)
 	style := attrText(doc.Find("div.actor-avatar span.avatar").First(), "style")
 	if match := actorAvatarRE.FindStringSubmatch(style); len(match) == 2 && !strings.Contains(strings.ToLower(match[1]), "actor_unknow") {
@@ -122,7 +132,7 @@ func (p *JavDBActor) GetActorInfoByURL(rawURL string) (*model.ActorInfo, error) 
 		ID:       id,
 		Name:     names[0],
 		Provider: p.Name(),
-		Homepage: p.actorURL(id),
+		Homepage: homepage,
 		Aliases:  pq.StringArray(aliases),
 		Images:   pq.StringArray(images),
 	}, nil
