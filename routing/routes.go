@@ -185,6 +185,9 @@ func InferCategory(keyword string) (Category, bool) {
 		allDigits(parts[0]) && allDigits(parts[1]) {
 		return CategoryUncensored, true
 	}
+	if sixDigitCatalogPattern(value) {
+		return CategoryUncensored, true
+	}
 	if len(value) >= 8 && allDigits(strings.ReplaceAll(value, "-", "")) {
 		// Pure numeric catalog IDs do not reliably identify a content family.
 		return "", false
@@ -222,9 +225,6 @@ func InferCategory(keyword string) (Category, bool) {
 			return CategoryAmateur, true
 		}
 		return CategoryCensored, true
-	}
-	if sixDigitCatalogPattern(value) {
-		return CategoryUncensored, true
 	}
 	return "", false
 }
