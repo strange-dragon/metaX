@@ -35,7 +35,7 @@ The current MetaTube `MovieProvider` contract returns `model.MovieInfo`, after e
 
 ## Current limits
 
-- Automatic classification currently recognizes the high-confidence formats already implemented by metaX routing (including FC2 number forms and KIN8 formats). It deliberately does not guess a category for ambiguous identifiers.
+- Automatic classification follows the Amane-style number families implemented in metaX (censored catalog numbers, known uncensored prefixes and six-digit sequence IDs, FC2, Chinese MD/MKY, amateur prefixes, KIN8/Western studio-date IDs, and Getchu identifiers). For non-catalog identifiers, a small number of source-specific hints are used (ThePornDB, Getchu, FC2 marketplaces). Directory-only overrides and ambiguous identifiers are not guessed; the selected record is returned with a `baseline_only` source status.
 - Field-level preferences per individual metadata field, source/language variants, Amane's two-phase partial-source protocol, actor aggregation, and persistent raw HTTP payload capture are not implemented by this first pass.
 - This is an integration overlay for the pinned MetaTube SDK, not a standalone Amane service. The SDK integration script applies the engine method, detail-route wiring, and deterministic tests.
 - Tests and integrated build must be run in a local SDK checkout after applying the overlay; this documentation alone is not verification.
