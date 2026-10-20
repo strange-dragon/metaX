@@ -36,7 +36,6 @@ func TestMetaXExplicitProviderOverridesCategory(t *testing.T) {
 	}
 }
 
-
 func TestMetaXMovieInfoAggregatesByDefaultAndPreservesSourceRecord(t *testing.T) {
 	router := newContractRouter(t)
 	status, body := requestJSON(t, router, "/v1/movies/"+contractMovieName+"/movie-123")
