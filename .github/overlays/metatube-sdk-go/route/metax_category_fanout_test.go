@@ -156,21 +156,57 @@ func TestMetaXFC2NumberAutoRoutesWithoutCategory(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	routeSearchStarted = make(chan string, 3)
 	routeSearchRelease = make(chan struct{})
-	defer func() { select { case <-routeSearchRelease: default: close(routeSearchRelease) } }()
-	config := routing.Config{Routes: map[routing.Category][]string{routing.CategoryUncensored: {routeHealthyProvider, routeSecondHealthyProvider, routeFailingProvider}}}
+	defer func() {
+		select {
+		case <-routeSearchRelease:
+		default:
+			close(routeSearchRelease)
+		}
+	}()
+
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryUncensored: {routeHealthyProvider, routeSecondHealthyProvider, routeFailingProvider},
+	}}
 	router := gin.New()
 	router.GET("/v1/movies/search", getSearchWithConfig(engine.New(nil), movieSearchType, config))
+
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/v1/movies/search?q=fc2-ppv3954834&fallback=false", nil)
 	done := make(chan struct{})
-	go func() { router.ServeHTTP(recorder, request); close(done) }()
+	go func() {
+		router.ServeHTTP(recorder, request)
+		close(done)
+	}()
+
 	seen := map[string]bool{}
-	for len(seen) < 3 { select { case name := <-routeSearchStarted: seen[name] = true; case <-time.After(2 * time.Second): t.Fatalf("automatic FC2 routing did not start all providers; started=%v", seen) } }
+	for len(seen) < 3 {
+		select {
+		case name := <-routeSearchStarted:
+			seen[name] = true
+		case <-time.After(2 * time.Second):
+			t.Fatalf("automatic FC2 routing did not start all providers; started=%v", seen)
+		}
+	}
 	close(routeSearchRelease)
-	select { case <-done: case <-time.After(2 * time.Second): t.Fatal("automatically routed search did not return") }
-	if recorder.Code != http.StatusOK { t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusOK, recorder.Body.String()) }
-	var response struct { Data []*model.MovieSearchResult }
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil { t.Fatalf("decode response: %v; body=%s", err, recorder.Body.String()) }
-	if len(response.Data) != 2 { t.Fatalf("successful result count=%d want=2: %+v", len(response.Data), response.Data) }
-	if response.Data[0].Provider != routeHealthyProvider || response.Data[1].Provider != routeSecondHealthyProvider { t.Fatalf("automatic FC2 route did not preserve configured provider order: %+v", response.Data) }
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("automatically routed search did not return")
+	}
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+	var response struct {
+		Data []*model.MovieSearchResult
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v; body=%s", err, recorder.Body.String())
+	}
+	if len(response.Data) != 2 {
+		t.Fatalf("successful result count=%d want=2: %+v", len(response.Data), response.Data)
+	}
+	if response.Data[0].Provider != routeHealthyProvider || response.Data[1].Provider != routeSecondHealthyProvider {
+		t.Fatalf("automatic FC2 route did not preserve configured provider order: %+v", response.Data)
+	}
 }

@@ -153,6 +153,7 @@ func InferCategory(keyword string) (Category, bool) {
 	if value == "" {
 		return "", false
 	}
+
 	compact := strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
 	if strings.HasPrefix(compact, "FC2") {
 		number := strings.TrimPrefix(compact, "FC2")
@@ -161,10 +162,16 @@ func InferCategory(keyword string) (Category, bool) {
 			return CategoryFC2, true
 		}
 	}
+
 	parts := strings.Split(value, "_")
-	if len(parts) == 2 && (len(parts[0]) == 6 || len(parts[0]) == 8) && (len(parts[1]) == 2 || len(parts[1]) == 3) && allDigits(parts[0]) && allDigits(parts[1]) {
+	validDateSequence := len(parts) == 2 &&
+		(len(parts[0]) == 6 || len(parts[0]) == 8) &&
+		(len(parts[1]) == 2 || len(parts[1]) == 3) &&
+		allDigits(parts[0]) && allDigits(parts[1])
+	if validDateSequence {
 		return CategoryFC2, true
 	}
+
 	kin8 := strings.TrimPrefix(compact, "KIN8TENGOKU")
 	if kin8 != compact && len(kin8) >= 1 && len(kin8) <= 4 && allDigits(kin8) {
 		return CategoryWestern, true
