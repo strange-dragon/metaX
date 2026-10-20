@@ -184,3 +184,13 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Confirmed the integration script already copies the API test file into the pinned SDK checkout.
 - [ ] These SDK endpoint tests have not been executed: the local environment cannot resolve GitHub to obtain the pinned SDK checkout; the installed Go toolchain is 1.23 while the metaX module declares Go 1.26. Do not treat source inspection or the independent number-normalization smoke test as SDK integration verification.
 - [ ] Next verification step when the SDK checkout/toolchain is available: run gofmt, the focused aggregation and API contract tests, the classifier/routing tests, and the server build. Keep raw HTTP/site payload capture separate from the current independent structured `MovieInfo` source records.
+
+
+### Project plan and handoff saved (2026-10-20)
+
+- [x] Added `docs/PROJECT_PLAN.md` as the durable project roadmap, architecture/dependency boundary, non-negotiable design rules, current status, verification sequence, future priorities, and handoff protocol.
+- [x] Explicitly documented that metaX currently extends a pinned upstream MetaTube SDK through an overlay; it is not an independent SDK rewrite.
+- [x] Recorded that the previous local clone failed with `Could not resolve host: github.com`, which proves a DNS resolution failure at that time but does not identify the root cause or establish the user's CachyOS network status.
+- [x] Recorded the local Go `1.23.2` versus project Go `1.26` mismatch, and distinguished the independent number-normalization smoke test from actual SDK integration tests.
+- [ ] Immediate next task: establish a usable runtime/network and Go 1.26 toolchain, check out the pinned SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`, run the integration script, focused aggregation/API/classifier tests, full relevant tests, and the integrated server build. Fix failures and rerun before feature work.
+- [ ] No SDK integration tests or server build were run as part of this documentation commit.
