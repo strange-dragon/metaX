@@ -333,6 +333,7 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Added route tests for authentication, successful cookie application, unknown provider, empty config, unknown fields, unsupported keys, CR/LF, and trailing JSON.
 - [x] Wired the new files into the integration overlay, focused test target, route registration patch, and build format gate.
 - [x] Local verification on the clean pinned SDK checkout: `go test ./engine ./route -count=1` passes; `go build ./cmd/server` succeeds; live endpoint checks returned `401` without a token, `200` with a valid token, `400` for unsupported keys, and `404` for an unknown provider.
-- [ ] Full pinned SDK regression remains environment-blocked for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch.
+- [x] CI on commit `fd6b895` passed Go tests in [run 39405816480](https://github.com/strange-dragon/metaX/actions/runs/39405816480), SDK focused tests/full regression/build in [39405816482](https://github.com/strange-dragon/metaX/actions/runs/39405816482), formatting in [39405816528](https://github.com/strange-dragon/metaX/actions/runs/39405816528), and live FC2/uncensored in [39405816839](https://github.com/strange-dragon/metaX/actions/runs/39405816839).
+- [ ] Local full pinned SDK regression remains environment-blocked for the known `engine/dbengine` Docker dependency and the Go 1.27 `imageutil/TestJPEGDecode` mismatch; CI runs the full suite.
 - [ ] This task is in-memory only. Persistence and startup replay are the next task.
 - [ ] Jellyfin plugin configuration fields and the plugin-to-backend call remain out of scope for the backend-only phase.
