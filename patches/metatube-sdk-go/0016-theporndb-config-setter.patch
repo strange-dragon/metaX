@@ -1,0 +1,197 @@
+diff --git a/provider/theporndb/actor.go b/provider/theporndb/actor.go
+index 7cf8c03..aa5e335 100644
+--- a/provider/theporndb/actor.go
++++ b/provider/theporndb/actor.go
+@@ -20,6 +20,7 @@ import (
+ var (
+ 	_ provider.ActorProvider = (*ThePornDBActor)(nil)
+ 	_ provider.ActorSearcher = (*ThePornDBActor)(nil)
++	_ provider.ConfigSetter  = (*ThePornDBActor)(nil)
+ )
+ 
+ const (
+@@ -43,9 +44,13 @@ func NewThePornDBActor() *ThePornDBActor {
+ 	}
+ }
+ 
+-func (s *ThePornDBActor) SetConfig(config map[string]string) error {
+-	if accessToken, ok := config["ACCESS_TOKEN"]; ok {
+-		s.accessToken = accessToken
++func (s *ThePornDBActor) SetConfig(config provider.Config) error {
++	token, err := accessTokenFromConfig(config)
++	if err != nil {
++		return fmt.Errorf("theporndb: read actor access token: %w", err)
++	}
++	if token != "" {
++		s.accessToken = token
+ 	}
+ 	return nil
+ }
+diff --git a/provider/theporndb/config_test.go b/provider/theporndb/config_test.go
+new file mode 100644
+index 0000000..bbb84df
+--- /dev/null
++++ b/provider/theporndb/config_test.go
+@@ -0,0 +1,95 @@
++package theporndb
++
++import (
++	"errors"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/metatube-community/metatube-sdk-go/provider"
++)
++
++type configTestValues map[string]string
++
++func (c configTestValues) Has(key string) bool {
++	_, ok := c.lookup(key)
++	return ok
++}
++
++func (c configTestValues) lookup(key string) (string, bool) {
++	for name, value := range c {
++		if strings.EqualFold(name, key) {
++			return value, true
++		}
++	}
++	return "", false
++}
++
++func (c configTestValues) GetString(key string) (string, error) {
++	value, ok := c.lookup(key)
++	if !ok {
++		return "", errors.New("key not found")
++	}
++	return value, nil
++}
++
++func (c configTestValues) GetBool(string) (bool, error) { return false, errors.New("key not found") }
++func (c configTestValues) GetInt64(string) (int64, error) {
++	return 0, errors.New("key not found")
++}
++func (c configTestValues) GetFloat64(string) (float64, error) {
++	return 0, errors.New("key not found")
++}
++func (c configTestValues) GetDuration(string) (time.Duration, error) {
++	return 0, errors.New("key not found")
++}
++
++var (
++	_ provider.ConfigSetter = (*ThePornDBActor)(nil)
++	_ provider.ConfigSetter = (*ThePornDBVideo)(nil)
++)
++
++func TestThePornDBSetConfigReadsAccessToken(t *testing.T) {
++	actor := NewThePornDBActor()
++	if err := actor.SetConfig(configTestValues{"ACCESS_TOKEN": " actor-token "}); err != nil {
++		t.Fatalf("actor SetConfig() error = %v", err)
++	}
++	if actor.accessToken != "actor-token" {
++		t.Fatalf("actor accessToken = %q, want actor-token", actor.accessToken)
++	}
++
++	movie := NewThePornDBMovie()
++	if err := movie.SetConfig(configTestValues{"access_token": "movie-token"}); err != nil {
++		t.Fatalf("movie SetConfig() error = %v", err)
++	}
++	if movie.accessToken != "movie-token" {
++		t.Fatalf("movie accessToken = %q, want movie-token", movie.accessToken)
++	}
++}
++
++func TestThePornDBSetConfigReadsAPITokenAlias(t *testing.T) {
++	actor := NewThePornDBActor()
++	if err := actor.SetConfig(configTestValues{"API_TOKEN": "amanetoken"}); err != nil {
++		t.Fatalf("SetConfig() error = %v", err)
++	}
++	if actor.accessToken != "amanetoken" {
++		t.Fatalf("accessToken = %q, want amanetoken", actor.accessToken)
++	}
++}
++
++func TestThePornDBSetConfigPreservesTokenWhenAbsent(t *testing.T) {
++	actor := NewThePornDBActor()
++	actor.accessToken = "existing"
++	if err := actor.SetConfig(configTestValues{}); err != nil {
++		t.Fatalf("SetConfig() error = %v", err)
++	}
++	if actor.accessToken != "existing" {
++		t.Fatalf("accessToken = %q, want existing", actor.accessToken)
++	}
++	if err := actor.SetConfig(nil); err != nil {
++		t.Fatalf("SetConfig(nil) error = %v", err)
++	}
++	if actor.accessToken != "existing" {
++		t.Fatalf("accessToken after nil config = %q, want existing", actor.accessToken)
++	}
++}
+diff --git a/provider/theporndb/theporndb.go b/provider/theporndb/theporndb.go
+index c225dc1..52451f1 100644
+--- a/provider/theporndb/theporndb.go
++++ b/provider/theporndb/theporndb.go
+@@ -1,6 +1,8 @@
+ package theporndb
+ 
+ import (
++	"strings"
++
+ 	"github.com/metatube-community/metatube-sdk-go/provider"
+ )
+ 
+@@ -16,3 +18,23 @@ func init() {
+ 	provider.Register(MovieProviderName, NewThePornDBMovie)
+ 	provider.Register(ActorProviderName, NewThePornDBActor)
+ }
++
++// accessTokenFromConfig reads the shared ThePornDB API token. Both the SDK's
++// documented ACCESS_TOKEN key and Amane's api_token name are accepted; provider
++// configuration keys are case-insensitive.
++func accessTokenFromConfig(config provider.Config) (string, error) {
++	if config == nil {
++		return "", nil
++	}
++	for _, key := range []string{"access_token", "api_token"} {
++		if !config.Has(key) {
++			continue
++		}
++		token, err := config.GetString(key)
++		if err != nil {
++			return "", err
++		}
++		return strings.TrimSpace(token), nil
++	}
++	return "", nil
++}
+diff --git a/provider/theporndb/video.go b/provider/theporndb/video.go
+index f6b1c69..2ba5c95 100644
+--- a/provider/theporndb/video.go
++++ b/provider/theporndb/video.go
+@@ -20,6 +20,7 @@ import (
+ var (
+ 	_ provider.MovieProvider = (*ThePornDBVideo)(nil)
+ 	_ provider.MovieSearcher = (*ThePornDBVideo)(nil)
++	_ provider.ConfigSetter  = (*ThePornDBVideo)(nil)
+ )
+ 
+ const (
+@@ -97,10 +98,13 @@ func NewThePornDBMovie() *ThePornDBVideo {
+ 	return new(MovieProviderName, movieBaseURL, moviePageURL, apiGetMovieURL, apiSearchMovieURL)
+ }
+ 
+-func (s *ThePornDBVideo) SetConfig(config map[string]string) error {
+-	if accessToken, ok := config["ACCESS_TOKEN"]; ok {
+-		fmt.Println(s.Name(), "set token")
+-		s.accessToken = accessToken
++func (s *ThePornDBVideo) SetConfig(config provider.Config) error {
++	token, err := accessTokenFromConfig(config)
++	if err != nil {
++		return fmt.Errorf("theporndb: read movie access token: %w", err)
++	}
++	if token != "" {
++		s.accessToken = token
+ 	}
+ 	return nil
+ }
