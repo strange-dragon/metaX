@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/lib/pq"
@@ -57,5 +58,40 @@ func TestNormalizeAggregationNumberOnlyNormalizesSeparatorsAndCase(t *testing.T)
 	}
 	if normalizeAggregationNumber("FC2-PPV3954834") == normalizeAggregationNumber("FC2-PPV3954835") {
 		t.Fatal("different catalog numbers must not match")
+	}
+}
+
+func TestAggregatedMovieInfoKeepsMovieFieldsTopLevelAndIncludesSources(t *testing.T) {
+	aggregate := &AggregatedMovieInfo{
+		MovieInfo: &model.MovieInfo{
+			ID: "movie-1", Provider: "Selected", Number: "FC2-PPV3954834",
+			Title: "Selected title", Homepage: "https://selected.example/movie/1",
+		},
+		Category: "fc2",
+		Sources: []MovieSourceRecord{{
+			Provider: "Selected", ID: "movie-1", Status: "success",
+			Metadata: &model.MovieInfo{ID: "movie-1", Provider: "Selected", Number: "FC2-PPV3954834"},
+		}},
+	}
+	encoded, err := json.Marshal(aggregate)
+	if err != nil {
+		t.Fatalf("marshal aggregate: %v", err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(encoded, &body); err != nil {
+		t.Fatalf("unmarshal aggregate: %v", err)
+	}
+	if body["id"] != "movie-1" || body["provider"] != "Selected" {
+		t.Fatalf("MovieInfo fields were not kept at the top level: %s", encoded)
+	}
+	if _, nested := body["MovieInfo"]; nested {
+		t.Fatalf("MovieInfo was unexpectedly nested: %s", encoded)
+	}
+	if body["category"] != "fc2" {
+		t.Fatalf("category missing from aggregate response: %s", encoded)
+	}
+	sources, ok := body["sources"].([]any)
+	if !ok || len(sources) != 1 {
+		t.Fatalf("source records missing from aggregate response: %s", encoded)
 	}
 }
