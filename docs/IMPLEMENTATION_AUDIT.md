@@ -99,11 +99,11 @@ Already implemented in source:
 - It reuses the SDK's `searchMovie` helper, so normalization, provider-specific cache fallback, and SDK semantics are not independently reimplemented.
 - Results are deduplicated by provider + ID, validated, and ranked by number match and provider priority; configured route order breaks ties.
 - The API retains MetaTube's existing response envelope/model and the provider + ID identity used for detail lookup.
-- Automatic inference currently recognizes FC2-like IDs, the `NNNNNN_NN` / `NNNNNNNN_NN` pattern, and KIN8/KIN8TENGOKU prefixes. Other keywords remain broad searches rather than being guessed into a category.
+- Automatic inference now recognizes Amane-style catalog families: ordinary censored catalog numbers, known uncensored prefixes and sequence IDs, FC2, Chinese MD/MKY, amateur prefixes, KIN8/Western studio-date IDs, and Getchu identifiers. A few non-catalog provider IDs use source-specific hints.
 
 Limitations to carry forward:
 - This is a search fan-out layer, not Amane's field-level metadata aggregation.
-- Automatic inference is intentionally incomplete. The generic date/sequence-shaped underscore rule is broad and needs careful review before it is expanded; do not infer censored vs uncensored from arbitrary IDs.
+- Classification remains intentionally conservative where a number or provider identity does not identify a route; such detail requests return baseline-only metadata rather than fan-out. Directory-based type overrides are unavailable at the provider-ID API boundary.
 - `Official` is a manufacturer-routing concept in Amane, not one ordinary SDK scraper. Do not assume a registered provider named `Official` exists.
 - A category with no registered route providers and an unknown category are different failure modes; preserve the existing explicit-provider and URL lookup precedence.
 - The route overlay has source-level tests, but this audit did not run them or build the integrated SDK.
