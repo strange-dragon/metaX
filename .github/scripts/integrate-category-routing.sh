@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Integrate Amane-derived category routing into the actual pinned MetaTube SDK
-# build, not just into standalone metaX unit tests.
+# Integrate Amane-derived category routing and field-level movie aggregation
+# into the actual pinned MetaTube SDK build, not just into standalone metaX
+# unit tests.
+#
+# This is the single script that patches route/search.go. Running it twice is
+# safe: every replacement is guarded by a marker check.
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 /path/to/metatube-sdk-go-checkout" >&2
   exit 2
@@ -10,16 +14,17 @@ fi
 
 workspace_root="$(cd "$(dirname "$0")/../.." && pwd)"
 sdk_root="$(cd "$1" && pwd)"
+overlay="$workspace_root/.github/overlays/metatube-sdk-go"
 
 mkdir -p "$sdk_root/routing"
-cp "$workspace_root/routing/routes.go" "$sdk_root/routing/routes.go"
-cp "$workspace_root/routing/routes_test.go" "$sdk_root/routing/routes_test.go"
-cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
-cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate.go"
-cp "$workspace_root/.github/overlays/metatube-sdk-go/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_test.go"
-cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
-cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_test_helpers_test.go" "$sdk_root/route/metax_test_helpers_test.go"
-cp "$workspace_root/.github/overlays/metatube-sdk-go/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
+cp "$workspace_root"/routing/*.go "$sdk_root/routing/"
+cp "$overlay/engine/metax_search.go" "$sdk_root/engine/metax_search.go"
+cp "$overlay/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate.go"
+cp "$overlay/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_test.go"
+cp "$overlay/engine/metax_aggregate_fanout_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go"
+cp "$overlay/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
+cp "$overlay/route/metax_test_helpers_test.go" "$sdk_root/route/metax_test_helpers_test.go"
+cp "$overlay/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
 
 python3 - "$sdk_root/route/search.go" <<'PY'
 from pathlib import Path
@@ -28,33 +33,41 @@ import sys
 path = Path(sys.argv[1])
 source = path.read_text()
 
-source = source.replace(
-    'import (\n\t"net/http"\n\tpkgurl "net/url"\n',
-    'import (\n\tstderrors "errors"\n\t"net/http"\n\tpkgurl "net/url"\n',
-    1,
-)
-source = source.replace(
-    '\t"github.com/metatube-community/metatube-sdk-go/errors"\n',
-    '\tsdkerrors "github.com/metatube-community/metatube-sdk-go/errors"\n',
-    1,
-)
-source = source.replace(
-    '\t"github.com/metatube-community/metatube-sdk-go/model"\n',
-    '\t"github.com/metatube-community/metatube-sdk-go/model"\n'
-    '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
-    1,
-)
-source = source.replace(
-    '\tProvider string `form:"provider"`\n\tFallback bool   `form:"fallback"`',
-    '\tProvider string `form:"provider"`\n\tCategory string `form:"category"`\n\tFallback bool   `form:"fallback"`',
-    1,
-)
+if 'stderrors "errors"' not in source:
+    marker = 'import (\n\t"net/http"\n\tpkgurl "net/url"\n'
+    if marker not in source:
+        raise SystemExit("search.go import block not found; SDK route/search.go changed")
+    source = source.replace(marker, 'import (\n\tstderrors "errors"\n\t"net/http"\n\tpkgurl "net/url"\n', 1)
 
+if 'sdkerrors "github.com/metatube-community/metatube-sdk-go/errors"' not in source:
+    source = source.replace(
+        '\t"github.com/metatube-community/metatube-sdk-go/errors"\n',
+        '\tsdkerrors "github.com/metatube-community/metatube-sdk-go/errors"\n',
+        1,
+    )
+
+if '"github.com/metatube-community/metatube-sdk-go/routing"' not in source:
+    source = source.replace(
+        '\t"github.com/metatube-community/metatube-sdk-go/model"\n',
+        '\t"github.com/metatube-community/metatube-sdk-go/model"\n'
+        '\t"github.com/metatube-community/metatube-sdk-go/routing"\n',
+        1,
+    )
+
+if 'Category string `form:"category"`' not in source:
+    source = source.replace(
+        '\tProvider string `form:"provider"`\n\tFallback bool   `form:"fallback"`',
+        '\tProvider string `form:"provider"`\n\tCategory string `form:"category"`\n\tFallback bool   `form:"fallback"`',
+        1,
+    )
 
 if "func getSearchWithConfig(" not in source:
     source = source.replace(
         'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
-        'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\\n\\treturn getSearchWithConfig(app, typ, routing.DefaultConfig())\\n}\\n\\nfunc getSearchWithConfig(app *engine.Engine, typ searchType, config routing.Config) gin.HandlerFunc {',
+        'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {\n'
+        '\treturn getSearchWithConfig(app, typ, routing.DefaultConfig())\n'
+        '}\n\n'
+        'func getSearchWithConfig(app *engine.Engine, typ searchType, routingConfig routing.Config) gin.HandlerFunc {',
         1,
     )
 
@@ -69,28 +82,42 @@ source = source[:start] + '''\t\tcase movieSearchType:
 \t\t\t\t// An explicit provider remains a manual override, even if a category is supplied.
 \t\t\t\tresults, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
 \t\t\t} else if query.Category != "" {
-\t\t\t\tregistered := make([]string, 0, len(app.GetMovieProviders()))
-\t\t\t\tfor name := range app.GetMovieProviders() {
-\t\t\t\t\tregistered = append(registered, name)
-\t\t\t\t}
-\t\t\t\tproviders, routeErr := config.Resolve(routing.Category(query.Category), "", registered)
+\t\t\t\tproviders, routeErr := resolveMovieRoute(app, routingConfig, routing.Category(query.Category))
 \t\t\t\tif routeErr != nil {
 \t\t\t\t\terr = routeErr
 \t\t\t\t} else {
 \t\t\t\t\tresults, err = app.SearchMovieProviders(query.Q, providers, query.Fallback)
 \t\t\t\t}
 \t\t\t} else if inferredCategory, ok := routing.InferCategory(query.Q); searchAll && ok {
-\t\t\t\tregistered := make([]string, 0, len(app.GetMovieProviders()))
-\t\t\t\tfor name := range app.GetMovieProviders() { registered = append(registered, name) }
-\t\t\t\tproviders, routeErr := config.Resolve(inferredCategory, "", registered)
+\t\t\t\tproviders, routeErr := resolveMovieRoute(app, routingConfig, inferredCategory)
 \t\t\t\tif routeErr != nil {
 \t\t\t\t\t// Automatic classification is best-effort; preserve broad-search compatibility if no route provider is installed.
 \t\t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
-\t\t\t\t} else { results, err = app.SearchMovieProviders(query.Q, providers, query.Fallback) }
+\t\t\t\t} else {
+\t\t\t\t\tresults, err = app.SearchMovieProviders(query.Q, providers, query.Fallback)
+\t\t\t\t}
 \t\t\t} else if searchAll {
 \t\t\t\tresults, err = app.SearchMovieAll(query.Q, query.Fallback)
-\t\t\t} else { results, err = app.SearchMovie(query.Q, query.Provider, query.Fallback) }
+\t\t\t} else {
+\t\t\t\tresults, err = app.SearchMovie(query.Q, query.Provider, query.Fallback)
+\t\t\t}
 ''' + source[end:]
+
+if 'func resolveMovieRoute(' not in source:
+    helper = '''func resolveMovieRoute(app *engine.Engine, config routing.Config, category routing.Category) ([]string, error) {
+\tregistered := make([]string, 0, len(app.GetMovieProviders()))
+\tfor name := range app.GetMovieProviders() {
+\t\tregistered = append(registered, name)
+\t}
+\treturn config.Resolve(category, "", registered)
+}
+
+'''
+    anchor = 'func getSearchWithConfig('
+    index = source.find(anchor)
+    if index < 0:
+        raise SystemExit("getSearchWithConfig declaration not found")
+    source = source[:index] + helper + source[index:]
 
 source = source.replace(
     'abortWithError(c, errors.FromCode(http.StatusNotFound))',
@@ -108,19 +135,20 @@ replacement = '''\t\tif err != nil {
 \t\t\tabortWithError(c, err)
 \t\t\treturn
 \t\t}'''
-index = source.rfind(needle)
-if index < 0:
-    raise SystemExit("could not locate search error handler")
-source = source[:index] + replacement + source[index + len(needle):]
+if 'stderrors.Is(err, routing.ErrUnknownCategory)' not in source:
+    index = source.rfind(needle)
+    if index < 0:
+        raise SystemExit("could not locate search error handler")
+    source = source[:index] + replacement + source[index + len(needle):]
 
 required = [
     'stderrors "errors"',
     '"github.com/metatube-community/metatube-sdk-go/routing"',
     'Category string `form:"category"`',
-    'func getSearch(app *engine.Engine, typ searchType) gin.HandlerFunc {',
+    'func getSearchWithConfig(app *engine.Engine, typ searchType, routingConfig routing.Config) gin.HandlerFunc {',
+    'func resolveMovieRoute(app *engine.Engine, config routing.Config, category routing.Category) ([]string, error) {',
     'app.SearchMovieProviders(query.Q, providers, query.Fallback)',
     'routing.InferCategory(query.Q)',
-    'providers, routeErr := config.Resolve(routing.Category(query.Category), "", registered)',
     'stderrors.Is(err, routing.ErrUnknownCategory)',
 ]
 missing = [item for item in required if item not in source]
@@ -163,5 +191,8 @@ if missing:
 path.write_text(source)
 PY
 
-gofmt -w "$sdk_root/routing/routes.go" "$sdk_root/routing/routes_test.go" "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/route/info.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go"
-echo "Integrated Amane category routes, field-level movie aggregation, source records, and SDK-level API/fan-out tests."
+gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" \
+  "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go" \
+  "$sdk_root/route/info.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" \
+  "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go"
+echo "Integrated Amane category routes, FC2/uncensored merging, field-level movie aggregation, and source records."
