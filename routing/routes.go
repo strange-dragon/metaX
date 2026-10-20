@@ -144,17 +144,20 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 	return result, nil
 }
 
-// InferCategory recognizes only number formats that identify a route with high
-// confidence. Ambiguous numbers deliberately return false so callers can retain
-// MetaTube's existing all-provider search behavior instead of guessing between
-// censored and uncensored catalogues.
+// InferCategory classifies recognizable catalog-number families using Amane's
+// content-type distinctions. It is deliberately identifier-based: directory
+// overrides (for example a folder named "Getchu" or "欧美") are unavailable at
+// this API boundary and must not be guessed from a title.
 func InferCategory(keyword string) (Category, bool) {
 	value := strings.ToUpper(strings.TrimSpace(keyword))
-	if value == "" {
+	if value == "" || strings.Contains(value, "://") || strings.ContainsAny(value, "/\\") {
 		return "", false
 	}
+	compact := strings.NewReplacer("-", "", "_", "", " ", "", ".", "").Replace(value)
 
-	compact := strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
+	if strings.HasPrefix(compact, "GETCHU") {
+		return CategoryHentai, true
+	}
 	if strings.HasPrefix(compact, "FC2") {
 		number := strings.TrimPrefix(compact, "FC2")
 		number = strings.TrimPrefix(number, "PPV")
@@ -162,25 +165,128 @@ func InferCategory(keyword string) (Category, bool) {
 			return CategoryFC2, true
 		}
 	}
+	if strings.HasPrefix(compact, "KIN8TENGOKU") || strings.HasPrefix(compact, "KIN8") {
+		number := strings.TrimPrefix(strings.TrimPrefix(compact, "KIN8TENGOKU"), "KIN8")
+		if len(number) >= 1 && len(number) <= 4 && allDigits(number) {
+			return CategoryWestern, true
+		}
+	}
 
+	// Amane treats six-digit date/sequence catalog numbers as uncensored; the
+	// metaX FC2/uncensored routes intentionally share the same provider chain.
 	parts := strings.Split(value, "_")
-	validDateSequence := len(parts) == 2 &&
-		(len(parts[0]) == 6 || len(parts[0]) == 8) &&
+	if len(parts) == 2 && len(parts[0]) == 6 &&
+		(len(parts[1]) == 2 || len(parts[1]) == 3 || len(parts[1]) == 4) &&
+		allDigits(parts[0]) && allDigits(parts[1]) {
+		return CategoryUncensored, true
+	}
+	if len(parts) == 2 && len(parts[0]) == 8 &&
 		(len(parts[1]) == 2 || len(parts[1]) == 3) &&
-		allDigits(parts[0]) && allDigits(parts[1])
-	if validDateSequence {
-		return CategoryFC2, true
+		allDigits(parts[0]) && allDigits(parts[1]) {
+		return CategoryUncensored, true
+	}
+	if len(value) >= 8 && allDigits(strings.ReplaceAll(value, "-", "")) {
+		// Pure numeric catalog IDs do not reliably identify a content family.
+		return "", false
 	}
 
-	kin8 := strings.TrimPrefix(compact, "KIN8TENGOKU")
-	if kin8 != compact && len(kin8) >= 1 && len(kin8) <= 4 && allDigits(kin8) {
+	// Type-specific catalog families take precedence over the generic JAV
+	// catalog pattern, matching Amane's number-based classification behavior.
+	if strings.HasPrefix(compact, "MD") && !strings.HasPrefix(compact, "MDVR") ||
+		strings.HasPrefix(compact, "MKY") {
+		return CategoryChinese, true
+	}
+	if strings.HasPrefix(compact, "LUXU") || strings.HasPrefix(compact, "ARA") ||
+		strings.HasPrefix(compact, "MIUM") || strings.HasPrefix(compact, "NTK") ||
+		strings.HasPrefix(compact, "MAAN") || strings.HasPrefix(compact, "SIRO") ||
+		strings.HasPrefix(compact, "300MIUM") {
+		return CategoryAmateur, true
+	}
+	if isUncensoredCatalog(compact) {
+		return CategoryUncensored, true
+	}
+
+	// Western studio/date codes are not standard Japanese catalog numbers.
+	if westernDatePattern(value) {
 		return CategoryWestern, true
 	}
-	kin8 = strings.TrimPrefix(compact, "KIN8")
-	if kin8 != compact && len(kin8) >= 1 && len(kin8) <= 4 && allDigits(kin8) {
-		return CategoryWestern, true
+	// Generic catalog number: standard two-or-more-letter prefix + digits.
+	// Unlike the earlier narrow classifier, this allows ordinary censored JAV
+	// numbers (e.g. ABC-123) to use Amane's censored route.
+	if catalogNumberPattern(value) {
+		if amateurNumericPrefixPattern(value) {
+			return CategoryAmateur, true
+		}
+		return CategoryCensored, true
+	}
+	if sixDigitCatalogPattern(value) {
+		return CategoryUncensored, true
 	}
 	return "", false
+}
+
+func isUncensoredCatalog(compact string) bool {
+	for _, prefix := range []string{
+		"BT", "CT", "EMP", "CCDV", "CWP", "CWPBD", "DSAM", "DRC", "DRG",
+		"DRGBD", "GACHI", "GACHIG", "HEYDOUGA", "JAV", "LAF", "LAFBD",
+		"HEYZO", "KTG", "KP", "KG", "LLDV", "MCDV", "MKD", "MKBD",
+		"MMDV", "NIP", "PB", "PT", "QE", "RED", "RHJ", "S2M", "SKY",
+		"SKYHD", "SMD", "SMBD", "SMDV", "SSDV", "SSKP", "TRG", "TS",
+		"XXXAV", "YKB", "BIRD", "BOUGA", "H4610", "C0930", "H0930", "MCB3D",
+	} {
+		if strings.HasPrefix(compact, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func catalogNumberPattern(value string) bool {
+	parts := strings.Split(value, "-")
+	if len(parts) != 2 || len(parts[0]) < 2 || len(parts[1]) < 2 {
+		return false
+	}
+	for _, r := range parts[0] {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	digits := strings.TrimSuffix(parts[1], "Z")
+	return allDigits(digits)
+}
+
+func amateurNumericPrefixPattern(value string) bool {
+	parts := strings.Split(value, "-")
+	if len(parts) != 2 || len(parts[1]) < 2 || !allDigits(parts[1]) {
+		return false
+	}
+	prefix := parts[0]
+	i := 0
+	for i < len(prefix) && prefix[i] >= '0' && prefix[i] <= '9' {
+		i++
+	}
+	if i < 3 || i == len(prefix) {
+		return false
+	}
+	for _, r := range prefix[i:] {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+func sixDigitCatalogPattern(value string) bool {
+	parts := strings.FieldsFunc(value, func(r rune) bool { return r == '-' || r == '_' })
+	return len(parts) == 2 && len(parts[0]) == 6 && len(parts[1]) >= 2 &&
+		len(parts[1]) <= 4 && allDigits(parts[0]) && allDigits(parts[1])
+}
+
+func westernDatePattern(value string) bool {
+	parts := strings.FieldsFunc(value, func(r rune) bool { return r == '.' || r == '-' })
+	return len(parts) >= 4 && len(parts[0]) >= 2 &&
+		len(parts[len(parts)-3]) == 2 && len(parts[len(parts)-2]) == 2 && len(parts[len(parts)-1]) == 2 &&
+		allDigits(parts[len(parts)-3]) && allDigits(parts[len(parts)-2]) && allDigits(parts[len(parts)-1])
 }
 
 func allDigits(value string) bool {
