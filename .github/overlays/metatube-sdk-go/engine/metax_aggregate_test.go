@@ -29,11 +29,11 @@ func TestMergeMovieInfoFillsMissingFieldsAndKeepsRouteOrder(t *testing.T) {
 	}
 
 	got := mergeMovieInfoInRouteOrder(identity, []*model.MovieInfo{first, second, identity})
-	if got.ID != identity.ID || got.Provider != identity.Provider || got.Number != identity.Number || got.Title != identity.Title {
+	if got.ID != identity.ID || got.Provider != identity.Provider || got.Number != identity.Number || got.Homepage != identity.Homepage {
 		t.Fatalf("selected provider identity changed: %#v", got)
 	}
-	if got.Summary != "Preferred summary" || got.Director != "Director" {
-		t.Fatalf("scalar fields were not filled in route order: summary=%q director=%q", got.Summary, got.Director)
+	if got.Title != first.Title || got.Summary != "Preferred summary" || got.Director != "Director" {
+		t.Fatalf("scalar fields were not filled in route order: title=%q summary=%q director=%q", got.Title, got.Summary, got.Director)
 	}
 	if got.Runtime != 120 {
 		t.Fatalf("runtime=%d want first non-zero route value 120", got.Runtime)
