@@ -1,5 +1,5 @@
 diff --git a/provider/theporndb/actor.go b/provider/theporndb/actor.go
-index 7cf8c03..aa5e335 100644
+index 7cf8c03..a68457f 100644
 --- a/provider/theporndb/actor.go
 +++ b/provider/theporndb/actor.go
 @@ -20,6 +20,7 @@ import (
@@ -10,7 +10,7 @@ index 7cf8c03..aa5e335 100644
  )
  
  const (
-@@ -43,9 +44,13 @@ func NewThePornDBActor() *ThePornDBActor {
+@@ -43,9 +44,16 @@ func NewThePornDBActor() *ThePornDBActor {
  	}
  }
  
@@ -18,6 +18,9 @@ index 7cf8c03..aa5e335 100644
 -	if accessToken, ok := config["ACCESS_TOKEN"]; ok {
 -		s.accessToken = accessToken
 +func (s *ThePornDBActor) SetConfig(config provider.Config) error {
++	if err := s.Scraper.SetConfig(config); err != nil {
++		return fmt.Errorf("theporndb: configure actor transport: %w", err)
++	}
 +	token, err := accessTokenFromConfig(config)
 +	if err != nil {
 +		return fmt.Errorf("theporndb: read actor access token: %w", err)
@@ -29,10 +32,10 @@ index 7cf8c03..aa5e335 100644
  }
 diff --git a/provider/theporndb/config_test.go b/provider/theporndb/config_test.go
 new file mode 100644
-index 0000000..bbb84df
+index 0000000..d22fe60
 --- /dev/null
 +++ b/provider/theporndb/config_test.go
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,107 @@
 +package theporndb
 +
 +import (
@@ -112,6 +115,18 @@ index 0000000..bbb84df
 +	}
 +}
 +
++func TestThePornDBSetConfigAppliesTransportCookies(t *testing.T) {
++	actor := NewThePornDBActor()
++	if err := actor.SetConfig(configTestValues{"cookies": "not-a-cookie"}); err == nil {
++		t.Fatal("actor SetConfig() accepted malformed cookies")
++	}
++
++	movie := NewThePornDBMovie()
++	if err := movie.SetConfig(configTestValues{"cookie": "not-a-cookie"}); err == nil {
++		t.Fatal("movie SetConfig() accepted malformed cookies")
++	}
++}
++
 +func TestThePornDBSetConfigPreservesTokenWhenAbsent(t *testing.T) {
 +	actor := NewThePornDBActor()
 +	actor.accessToken = "existing"
@@ -166,7 +181,7 @@ index c225dc1..52451f1 100644
 +	return "", nil
 +}
 diff --git a/provider/theporndb/video.go b/provider/theporndb/video.go
-index f6b1c69..2ba5c95 100644
+index f6b1c69..8aa0c3a 100644
 --- a/provider/theporndb/video.go
 +++ b/provider/theporndb/video.go
 @@ -20,6 +20,7 @@ import (
@@ -177,7 +192,7 @@ index f6b1c69..2ba5c95 100644
  )
  
  const (
-@@ -97,10 +98,13 @@ func NewThePornDBMovie() *ThePornDBVideo {
+@@ -97,10 +98,16 @@ func NewThePornDBMovie() *ThePornDBVideo {
  	return new(MovieProviderName, movieBaseURL, moviePageURL, apiGetMovieURL, apiSearchMovieURL)
  }
  
@@ -186,6 +201,9 @@ index f6b1c69..2ba5c95 100644
 -		fmt.Println(s.Name(), "set token")
 -		s.accessToken = accessToken
 +func (s *ThePornDBVideo) SetConfig(config provider.Config) error {
++	if err := s.Scraper.SetConfig(config); err != nil {
++		return fmt.Errorf("theporndb: configure movie transport: %w", err)
++	}
 +	token, err := accessTokenFromConfig(config)
 +	if err != nil {
 +		return fmt.Errorf("theporndb: read movie access token: %w", err)
