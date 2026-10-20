@@ -176,3 +176,11 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Documented response shape, merge rules, and the distinction between normalized provider metadata and raw HTTP/site payloads in `docs/METADATA_AGGREGATION.md`.
 - [ ] **Not verified yet:** the integration script has not been executed against the pinned SDK checkout; Go tests, gofmt, full server build, endpoint-level JSON tests, and live-site checks have not run. No GitHub Actions workflow was dispatched.
 - [ ] Next: apply locally to the pinned SDK, correct any compile/integration errors, add endpoint contract coverage for `sources` and `aggregate=false`, then validate the expanded Amane-style category classifier and its route behavior.
+
+
+### Aggregated detail API contract coverage (2026-10-20)
+- [x] Added SDK-route contract tests asserting the default movie detail response keeps the selected provider + ID and original MovieInfo fields at the top level while adding `category` and one independent `sources[].metadata` record.
+- [x] Added an `aggregate=false` contract test asserting the stock detail response omits the additive `category` and `sources` fields.
+- [x] Confirmed the integration script already copies the API test file into the pinned SDK checkout.
+- [ ] These SDK endpoint tests have not been executed: the local environment cannot resolve GitHub to obtain the pinned SDK checkout; the installed Go toolchain is 1.23 while the metaX module declares Go 1.26. Do not treat source inspection or the independent number-normalization smoke test as SDK integration verification.
+- [ ] Next verification step when the SDK checkout/toolchain is available: run gofmt, the focused aggregation and API contract tests, the classifier/routing tests, and the server build. Keep raw HTTP/site payload capture separate from the current independent structured `MovieInfo` source records.
