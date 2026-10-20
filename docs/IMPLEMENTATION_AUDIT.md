@@ -124,15 +124,24 @@ Limitations to carry forward:
 | Actor profile/image aggregation | Separate Amane subsystem | Separate SDK actor interfaces | Separate workstream; do not mix into movie aggregation |
 | Source failure/provenance reporting | `failed_sites`, `sites_queried`, `field_sources`, raw payloads | Logs/errors and SDK API models | Decide what is necessary without changing the public plugin contract |
 
-### Recommended next implementation task
+### Implemented first pass: detail aggregation plus source records
 
-Design and implement **metadata enrichment at the detail boundary**, not by merging search cards:
-1. Establish a stable identity gate (same normalized catalog number and compatible work identity); do not merge merely because titles look similar.
-2. Preserve the selected provider's result as the baseline and fill only missing fields from eligible supplemental providers. Never overwrite a populated field with empty data.
-3. Define explicit policies for scalar fields, list fields, image roles, actor-name normalization, release/runtime conflicts, and scores from different rating scales.
-4. Keep provider + ID as the public detail identity and preserve the existing SDK response model.
-5. Add deterministic tests for missing fields, conflicting values, identity mismatch, provider failure/partial success, duplicate list values, and cache interaction before widening provider coverage.
-6. Only add field-level provenance or a two-phase partial-result protocol if the existing SDK model and real provider requirements justify it.
+The project owner has chosen to include Amane-style detail aggregation. The first integration pass is implemented in `.github/overlays/metatube-sdk-go/engine/metax_aggregate.go` and wired into the SDK detail route by `.github/scripts/integrate-category-routing.sh`.
+
+- The existing detail response keeps the original `MovieInfo` fields and adds `category` and `sources` to the same `data` object. `?aggregate=false` opts out and returns the stock detail response.
+- The selected provider + ID remain the top-level public identity. Supplemental records are accepted only after a normalized catalog-number match.
+- Scalar fields use route-order first-non-empty semantics; list fields are stably deduplicated; scores are not averaged across unlike provider scales.
+- Each source record keeps the provider name, ID, status, diagnostic error where relevant, and that provider's independent structured SDK metadata. This is not raw HTML/HTTP/API wire data; the existing `MovieProvider` interface does not expose those payloads.
+- Unknown/ambiguous categories do not trigger speculative fan-out. The selected provider record is returned with a `baseline_only` source status and an explanation.
+- Regression tests were added to the SDK overlay, but the integration script, tests, formatter, and build have **not yet been run** after this change. Do not treat compilation or runtime compatibility as verified.
+
+### Remaining aggregation work
+
+1. Apply the overlay to the pinned SDK checkout and fix any compile/test issues without triggering GitHub Actions.
+2. Add endpoint-level contract tests for the additive `sources` response and `aggregate=false` compatibility path.
+3. Expand automatic classification only where source evidence supports a high-confidence category; keep ambiguous IDs on the safe baseline-only path.
+4. Consider Amane's per-field preference configuration and two-phase partial-source protocol only after the basic integration builds and deterministic tests pass.
+5. If raw source-site HTML/JSON is required, design a separate provider result contract; do not mislabel normalized `MovieInfo` as wire-level raw data.
 
 ## 5. Existing documentation to consult before repeating work
 
