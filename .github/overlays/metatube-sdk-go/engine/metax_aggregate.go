@@ -44,18 +44,21 @@ func (e *Engine) GetAggregatedMovieInfoByProviderID(pid providerid.ProviderID, l
 		return nil, err
 	}
 
-	category, ok := routing.InferCategory(baseline.Number)
-	if !ok {
-		// Some source IDs are not catalog-number-shaped: ThePornDB uses
-		// studio/title slugs, while Getchu and FC2 marketplaces may use numeric IDs.
-		switch strings.ToLower(strings.TrimSpace(baseline.Provider)) {
-		case "theporndb":
-			category, ok = routing.CategoryWestern, true
-		case "getchu":
-			category, ok = routing.CategoryHentai, true
-		case "fc2", "fc2ppvdb":
-			category, ok = routing.CategoryFC2, true
-		}
+	var (
+		category routing.Category
+		ok       bool
+	)
+	// These providers represent category-specific catalogues whose identifiers
+	// may be slugs or numeric product IDs rather than standard catalog numbers.
+	switch strings.ToLower(strings.TrimSpace(baseline.Provider)) {
+	case "theporndb":
+		category, ok = routing.CategoryWestern, true
+	case "getchu":
+		category, ok = routing.CategoryHentai, true
+	case "fc2", "fc2ppvdb":
+		category, ok = routing.CategoryFC2, true
+	default:
+		category, ok = routing.InferCategory(baseline.Number)
 	}
 	if !ok {
 		return &AggregatedMovieInfo{
