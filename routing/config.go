@@ -16,6 +16,9 @@ const (
 	// EnvRoutes contains an inline JSON route table and takes precedence over
 	// EnvRoutesFile when both are set.
 	EnvRoutes = "METAX_ROUTES"
+	// EnvRoutesFingerprint pins the expected Config.FingerprintHash value. It
+	// lets multi-instance deployments fail fast when route tables drift.
+	EnvRoutesFingerprint = "METAX_ROUTES_FINGERPRINT"
 )
 
 // ActiveConfig is the process-wide route table used by the stock MetaTube
@@ -55,7 +58,17 @@ func InitActiveConfigFromEnv() error {
 	if err != nil {
 		return err
 	}
+	if expected := normalizeFingerprint(os.Getenv(EnvRoutesFingerprint)); expected != "" {
+		if actual := config.FingerprintHash(); expected != actual {
+			return fmt.Errorf("routing config fingerprint mismatch: expected %s, got %s", expected, actual)
+		}
+	}
 	return SetActiveConfig(config)
+}
+
+func normalizeFingerprint(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return strings.TrimPrefix(value, "sha256:")
 }
 
 // LoadConfigFromEnv reads the route table selected by EnvRoutes or

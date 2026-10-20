@@ -95,6 +95,7 @@ func TestLoadConfigFromEnvPrefersInlineJSONThenFileThenDefault(t *testing.T) {
 
 func TestInitActiveConfigFromEnvKeepsPreviousConfigOnError(t *testing.T) {
 	t.Cleanup(func() { _ = SetActiveConfig(DefaultConfig()) })
+	t.Setenv(EnvRoutesFingerprint, "")
 	previous := Config{Routes: map[Category][]string{
 		CategoryCensored: {"PreviousProvider"},
 	}}
@@ -116,6 +117,32 @@ func TestInitActiveConfigFromEnvKeepsPreviousConfigOnError(t *testing.T) {
 	}
 	if got := ActiveConfig().Routes[CategoryCensored]; len(got) != 1 || got[0] != "LoadedProvider" {
 		t.Fatalf("active route = %v, want [LoadedProvider]", got)
+	}
+}
+
+func TestInitActiveConfigFromEnvHonorsFingerprintPin(t *testing.T) {
+	t.Cleanup(func() { _ = SetActiveConfig(DefaultConfig()) })
+	t.Setenv(EnvRoutesFile, "")
+	t.Setenv(EnvRoutes, `{"routes":{"censored":["JavDB"]}}`)
+	t.Setenv(EnvRoutesFingerprint, "")
+
+	config, err := ParseConfig([]byte(`{"routes":{"censored":["JavDB"]}}`))
+	if err != nil {
+		t.Fatalf("ParseConfig() error = %v", err)
+	}
+	t.Setenv(EnvRoutesFingerprint, "sha256:"+config.FingerprintHash())
+	if err := InitActiveConfigFromEnv(); err != nil {
+		t.Fatalf("InitActiveConfigFromEnv() with matching pin error = %v", err)
+	}
+
+	previous := ActiveConfig()
+	t.Setenv(EnvRoutesFingerprint, "deadbeef")
+	err = InitActiveConfigFromEnv()
+	if err == nil || !strings.Contains(err.Error(), "fingerprint mismatch") {
+		t.Fatalf("InitActiveConfigFromEnv() error = %v, want fingerprint mismatch", err)
+	}
+	if got := ActiveConfig().FingerprintHash(); got != previous.FingerprintHash() {
+		t.Fatalf("active config changed after fingerprint mismatch: %q, want %q", got, previous.FingerprintHash())
 	}
 }
 

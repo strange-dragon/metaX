@@ -4,6 +4,8 @@
 package routing
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -73,7 +75,9 @@ var (
 // providerAliases bridges Amane source names to equivalent registered MetaTube
 // providers without changing Amane's canonical route configuration.
 var providerAliases = map[string][]string{
-	"dmm": {"FANZA"},
+	"dmm":       {"FANZA"},
+	"mgstage":   {"MGS"},
+	"theporndb": {"ThePornDBMovie", "ThePornDBScene"},
 }
 
 // Config maps each Amane content category to providers in preferred execution order.
@@ -101,6 +105,94 @@ func (c Config) Fingerprint() string {
 		builder.WriteByte(';')
 	}
 	return builder.String()
+}
+
+// FingerprintHash returns a stable SHA-256 digest of Fingerprint. It is short
+// enough for startup logs and can be pinned across instances with
+// METAX_ROUTES_FINGERPRINT to detect configuration drift.
+func (c Config) FingerprintHash() string {
+	sum := sha256.Sum256([]byte(c.Fingerprint()))
+	return hex.EncodeToString(sum[:])
+}
+
+// ProviderGap lists configured providers that are not registered in this
+// build. Missing entries are reported in configured order.
+type ProviderGap struct {
+	Category Category
+	Missing  []string
+}
+
+// ProviderCoverage summarizes how a concrete provider inventory maps onto the
+// route table. Gaps are informational because a route may intentionally list a
+// provider that is not compiled in; Empty categories are fatal because the
+// category cannot serve any request.
+type ProviderCoverage struct {
+	Gaps  []ProviderGap
+	Empty []Category
+}
+
+// ProviderCoverage resolves every configured provider against registered
+// names, including the DMM-to-FANZA alias. Results are ordered deterministically
+// by category so startup logs are stable.
+func (c Config) ProviderCoverage(registered []string) ProviderCoverage {
+	canonical := make(map[string]struct{}, len(registered))
+	for _, name := range registered {
+		if key := normalize(name); key != "" {
+			canonical[key] = struct{}{}
+		}
+	}
+
+	categories := make([]string, 0, len(c.Routes))
+	for category := range c.Routes {
+		categories = append(categories, string(category))
+	}
+	sort.Strings(categories)
+
+	coverage := ProviderCoverage{}
+	for _, rawCategory := range categories {
+		category := Category(rawCategory)
+		available := false
+		var missing []string
+		for _, provider := range c.Routes[category] {
+			if providerRegistered(provider, canonical) {
+				available = true
+				continue
+			}
+			missing = append(missing, provider)
+		}
+		if len(missing) > 0 {
+			coverage.Gaps = append(coverage.Gaps, ProviderGap{Category: category, Missing: missing})
+		}
+		if !available {
+			coverage.Empty = append(coverage.Empty, category)
+		}
+	}
+	return coverage
+}
+
+// ValidateRegisteredProviders rejects route tables where a category has no
+// registered provider. Individual gaps remain allowed for optional providers
+// such as Amane's deferred "Official" studio router.
+func (c Config) ValidateRegisteredProviders(registered []string) error {
+	coverage := c.ProviderCoverage(registered)
+	if len(coverage.Empty) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(coverage.Empty))
+	for _, category := range coverage.Empty {
+		names = append(names, string(category))
+	}
+	return fmt.Errorf("%w: %s", ErrNoAvailableProvider, strings.Join(names, ", "))
+}
+
+func providerRegistered(provider string, registered map[string]struct{}) bool {
+	candidates := append([]string{provider}, providerAliases[normalize(provider)]...)
+	for _, candidate := range candidates {
+		if _, ok := registered[normalize(candidate)]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultConfig mirrors Amane's ordered content routes where the SDK has an equivalent.

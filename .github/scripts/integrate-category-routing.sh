@@ -31,6 +31,7 @@ cp "$overlay/engine/metax_fanout_test.go" "$sdk_root/engine/metax_fanout_test.go
 cp "$overlay/route/metax_category_api_test.go" "$sdk_root/route/metax_category_api_test.go"
 cp "$overlay/route/metax_test_helpers_test.go" "$sdk_root/route/metax_test_helpers_test.go"
 cp "$overlay/route/metax_category_fanout_test.go" "$sdk_root/route/metax_category_fanout_test.go"
+cp "$overlay/route/metax_search_merge_test.go" "$sdk_root/route/metax_search_merge_test.go"
 cp "$overlay/route/metax_aggregate_endpoint_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go"
 
 python3 - "$sdk_root/route/search.go" <<'PY'
@@ -74,6 +75,10 @@ if '"strings"' not in source:
         'import (\n\tstderrors "errors"\n\t"net/http"\n\tpkgurl "net/url"\n\t"strings"\n',
         1,
     )
+
+import_marker = 'import (\n\tstderrors "errors"\n\t"net/http"\n\tpkgurl "net/url"\n\t"strings"\n'
+if '"time"' not in source and import_marker in source:
+    source = source.replace(import_marker, import_marker + '\t"time"\n', 1)
 
 if "func getSearchWithConfig(" not in source:
     source = source.replace(
@@ -151,24 +156,97 @@ func searchMovieProvidersAggregated(app *engine.Engine, keyword string, provider
 \treturn prependAggregatedCandidate(results), nil
 }
 
-func prependAggregatedCandidate(results []*model.MovieSearchResult) []*model.MovieSearchResult {
-\tif len(results) == 0 || results[0] == nil || strings.TrimSpace(results[0].Number) == "" {
-\t\treturn results
-\t}
-\tmerged := *results[0]
-\tmerged.Provider = engine.AggregatedProviderName
-\tmerged.ID = merged.Number
-\tout := make([]*model.MovieSearchResult, 0, len(results)+1)
-\tout = append(out, &merged)
-\treturn append(out, results...)
-}
-
 '''
     anchor = 'func getSearchWithConfig('
     index = source.find(anchor)
     if index < 0:
         raise SystemExit("getSearchWithConfig declaration not found")
     source = source[:index] + helper + source[index:]
+
+prepend_helper = '''func prependAggregatedCandidate(results []*model.MovieSearchResult) []*model.MovieSearchResult {
+\tvar base *model.MovieSearchResult
+\tfor _, result := range results {
+\t\tif result != nil && strings.TrimSpace(result.Number) != "" {
+\t\t\tbase = result
+\t\t\tbreak
+\t\t}
+\t}
+\tif base == nil {
+\t\treturn results
+\t}
+\tmerged := *base
+\tmerged.Provider = engine.AggregatedProviderName
+\tmerged.ID = merged.Number
+\tmerged.Actors = append(merged.Actors[:0:0], merged.Actors...)
+\tfor _, result := range results {
+\t\tif result == nil || result == base {
+\t\t\tcontinue
+\t\t}
+\t\tif strings.TrimSpace(merged.Title) == "" {
+\t\t\tmerged.Title = result.Title
+\t\t}
+\t\tif strings.TrimSpace(merged.Homepage) == "" {
+\t\t\tmerged.Homepage = result.Homepage
+\t\t}
+\t\tif strings.TrimSpace(merged.ThumbURL) == "" {
+\t\t\tmerged.ThumbURL = result.ThumbURL
+\t\t}
+\t\tif strings.TrimSpace(merged.CoverURL) == "" {
+\t\t\tmerged.CoverURL = result.CoverURL
+\t\t}
+\t\tif merged.Score == 0 {
+\t\t\tmerged.Score = result.Score
+\t\t}
+\t\tif time.Time(merged.ReleaseDate).IsZero() {
+\t\t\tmerged.ReleaseDate = result.ReleaseDate
+\t\t}
+\t\tfor _, actor := range result.Actors {
+\t\t\tactor = strings.TrimSpace(actor)
+\t\t\tif actor == "" || containsFold(merged.Actors, actor) {
+\t\t\t\tcontinue
+\t\t\t}
+\t\t\tmerged.Actors = append(merged.Actors, actor)
+\t\t}
+\t}
+\tout := make([]*model.MovieSearchResult, 0, len(results)+1)
+\tout = append(out, &merged)
+\treturn append(out, results...)
+}
+
+func containsFold(values []string, target string) bool {
+\tfor _, value := range values {
+\t\tif strings.EqualFold(value, target) {
+\t\t\treturn true
+\t\t}
+\t}
+\treturn false
+}
+'''
+if 'func prependAggregatedCandidate(' in source:
+    import re
+    # Remove helper definitions written by older integration runs before
+    # replacing the candidate builder, so reruns stay idempotent.
+    source = re.sub(
+        r'\nfunc containsFold\(values \[\]string, target string\) bool \{.*?\n\}\n',
+        '\n',
+        source,
+        flags=re.S,
+    )
+    source, replaced = re.subn(
+        r'func prependAggregatedCandidate\(results \[\]\*model\.MovieSearchResult\) \[\]\*model\.MovieSearchResult \{.*?\n\}\n',
+        prepend_helper + '\n',
+        source,
+        count=1,
+        flags=re.S,
+    )
+    if replaced != 1:
+        raise SystemExit("could not migrate prependAggregatedCandidate")
+else:
+    anchor = 'func getSearchWithConfig('
+    index = source.find(anchor)
+    if index < 0:
+        raise SystemExit("getSearchWithConfig declaration not found")
+    source = source[:index] + prepend_helper + '\n' + source[index:]
 
 source = source.replace(
     'abortWithError(c, errors.FromCode(http.StatusNotFound))',
@@ -458,9 +536,49 @@ if 'MetAX routing config' not in source:
         1,
     )
 
+init_block = '''\tif err := routing.InitActiveConfigFromEnv(); err != nil {
+\t\tlog.Fatal(err)
+\t}
+'''
+if 'metaX routing fingerprint' not in source:
+    if init_block not in source:
+        raise SystemExit("routing init block not found; cannot add fingerprint log")
+    source = source.replace(
+        init_block,
+        init_block +
+        '\t// metaX routing fingerprint: stable across identical route tables.\n'
+        '\troutingConfig := routing.ActiveConfig()\n'
+        '\tlog.Printf("metaX routing: categories=%d fingerprint=%s", len(routingConfig.Routes), routingConfig.FingerprintHash())\n',
+        1,
+    )
+
+app_marker = '\tapp := engine.New(db, opts...)\n'
+coverage_block = '''\t// metaX provider coverage: reject categories that cannot serve any request
+\t// and log optional providers that are absent from this build.
+\t{
+\t\tregistered := make([]string, 0, len(app.GetMovieProviders()))
+\t\tfor name := range app.GetMovieProviders() {
+\t\t\tregistered = append(registered, name)
+\t\t}
+\t\tcoverage := routing.ActiveConfig().ProviderCoverage(registered)
+\t\tif err := routing.ActiveConfig().ValidateRegisteredProviders(registered); err != nil {
+\t\t\tlog.Fatal(err)
+\t\t}
+\t\tfor _, gap := range coverage.Gaps {
+\t\t\tlog.Printf("metaX routing: category %s has unavailable providers: %v", gap.Category, gap.Missing)
+\t\t}
+\t}
+'''
+if 'metaX provider coverage' not in source:
+    if app_marker not in source:
+        raise SystemExit("engine.New call not found; cannot add provider coverage validation")
+    source = source.replace(app_marker, app_marker + coverage_block, 1)
+
 required = [
     '"github.com/metatube-community/metatube-sdk-go/routing"',
     'routing.InitActiveConfigFromEnv()',
+    'metaX routing fingerprint',
+    'metaX provider coverage',
 ]
 missing = [item for item in required if item not in source]
 if missing:
@@ -475,6 +593,7 @@ gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/
   "$sdk_root/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_db_test.go" \
   "$sdk_root/engine/metax_fanout_test.go" \
   "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/search.go" "$sdk_root/route/metax_category_api_test.go" \
-  "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go" \
+  "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" \
+  "$sdk_root/route/metax_search_merge_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go" \
   "$sdk_root/cmd/cmd.go"
 echo "Integrated Amane category routes, FC2/uncensored merging, field-level movie aggregation, and source records."

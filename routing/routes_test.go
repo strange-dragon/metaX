@@ -3,6 +3,7 @@ package routing
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -50,7 +51,7 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 	// Official entry is a studio-aware routing layer, not a registered scraper.
 	registered := []string{
 		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
-		"FC2", "Airav", "IQQTV", "MGStage", "ThePornDB", "Getchu",
+		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "Getchu",
 	}
 	tests := []struct {
 		category Category
@@ -59,8 +60,8 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 		{CategoryCensored, []string{"FANZA", "JavDB", "JavBus"}},
 		{CategoryUncensored, []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}},
 		{CategoryChinese, []string{"IQQTV", "JavDB", "Airav", "Freejavbt"}},
-		{CategoryAmateur, []string{"MGStage", "FANZA", "JavDB", "JavBus"}},
-		{CategoryWestern, []string{"ThePornDB", "JavDB", "Freejavbt"}},
+		{CategoryAmateur, []string{"MGS", "FANZA", "JavDB", "JavBus"}},
+		{CategoryWestern, []string{"ThePornDBMovie", "JavDB", "Freejavbt"}},
 		{CategoryHentai, []string{"Getchu", "FANZA", "JavDB"}},
 	}
 	config := DefaultConfig()
@@ -237,6 +238,82 @@ func TestConfigFingerprintIsDeterministicAndOrderSensitive(t *testing.T) {
 
 	if first.Fingerprint() == DefaultConfig().Fingerprint() {
 		t.Fatal("different route tables must not share a fingerprint")
+	}
+}
+
+func TestDefaultRoutesOnlyReportDeferredOfficialGap(t *testing.T) {
+	registered := []string{
+		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
+		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "Getchu",
+	}
+	coverage := DefaultConfig().ProviderCoverage(registered)
+	want := ProviderCoverage{
+		Gaps: []ProviderGap{
+			{Category: CategoryCensored, Missing: []string{"Official"}},
+		},
+	}
+	if !reflect.DeepEqual(coverage, want) {
+		t.Fatalf("DefaultConfig().ProviderCoverage() = %#v, want %#v", coverage, want)
+	}
+	if err := DefaultConfig().ValidateRegisteredProviders(registered); err != nil {
+		t.Fatalf("ValidateRegisteredProviders() error = %v, want nil", err)
+	}
+}
+
+func TestProviderCoverageResolvesAliasesAndReportsIntentionalGaps(t *testing.T) {
+	config := Config{Routes: map[Category][]string{
+		CategoryCensored:   {"DMM", "JavDB", "Official"},
+		CategoryUncensored: {"FC2", "Airav"},
+	}}
+	coverage := config.ProviderCoverage([]string{"FANZA", "JavDB", "Airav"})
+	want := ProviderCoverage{
+		Gaps: []ProviderGap{
+			{Category: CategoryCensored, Missing: []string{"Official"}},
+			{Category: CategoryUncensored, Missing: []string{"FC2"}},
+		},
+	}
+	if !reflect.DeepEqual(coverage, want) {
+		t.Fatalf("ProviderCoverage() = %#v, want %#v", coverage, want)
+	}
+	if err := config.ValidateRegisteredProviders([]string{"FANZA", "JavDB", "Airav"}); err != nil {
+		t.Fatalf("ValidateRegisteredProviders() error = %v, want nil", err)
+	}
+}
+
+func TestValidateRegisteredProvidersRejectsEmptyCategory(t *testing.T) {
+	config := Config{Routes: map[Category][]string{
+		CategoryWestern: {"ThePornDB"},
+	}}
+	err := config.ValidateRegisteredProviders([]string{"JavDB"})
+	if !errors.Is(err, ErrNoAvailableProvider) {
+		t.Fatalf("ValidateRegisteredProviders() error = %v, want ErrNoAvailableProvider", err)
+	}
+	if !strings.Contains(err.Error(), "western") {
+		t.Fatalf("ValidateRegisteredProviders() error = %q, want western category", err)
+	}
+}
+
+func TestConfigFingerprintHashIsStableAndOrderSensitive(t *testing.T) {
+	first := Config{Routes: map[Category][]string{
+		CategoryCensored:   {"JavDB", "DMM"},
+		CategoryUncensored: {"JavDB", "FC2"},
+	}}
+	second := Config{Routes: map[Category][]string{
+		CategoryUncensored: {"JavDB", "FC2"},
+		CategoryCensored:   {"JavDB", "DMM"},
+	}}
+	if got := first.FingerprintHash(); len(got) != 64 {
+		t.Fatalf("FingerprintHash() length = %d, want 64: %q", len(got), got)
+	}
+	if first.FingerprintHash() != second.FingerprintHash() {
+		t.Fatal("map insertion order changed the fingerprint hash")
+	}
+	reordered := Config{Routes: map[Category][]string{
+		CategoryCensored:   {"DMM", "JavDB"},
+		CategoryUncensored: {"JavDB", "FC2"},
+	}}
+	if first.FingerprintHash() == reordered.FingerprintHash() {
+		t.Fatal("provider order must affect the fingerprint hash")
 	}
 }
 
