@@ -150,7 +150,7 @@ Live limitations observed on the same date:
 - Kin8 sample `KIN8-1234`, Chinese sample `MD-1234`, and Western sample `KIN8-1234` returned 404/empty. The samples may not be valid catalog entries; they do not establish provider failure.
 - No Jellyfin runtime or plugin-side scrape was exercised here.
 
-The live results are evidence for the tested numbers only. Deterministic tests remain the regression baseline.
+The same smoke script passed in CI on commit `61f345f` in [run 39395605130](https://github.com/strange-dragon/metaX/actions/runs/39395605130), after the pinned-SDK patch/full-regression/build job passed in [run 39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056). The live results are evidence for the tested numbers only. Deterministic tests remain the regression baseline.
 
 ## Current limits
 

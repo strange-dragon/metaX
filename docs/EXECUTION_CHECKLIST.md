@@ -280,7 +280,7 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Wired coverage/fingerprint checks into the generated `cmd.Router` integration and covered both in deterministic tests.
 - [x] Verified the default integrated build logs only the intentional gaps (`Official`, token-gated `ThePornDB`) instead of the previous false `MGStage`/`ThePornDB` name gaps.
 - [x] Verification: `go test ./routing -count=1` in metaX; `go test ./routing ./engine ./route -count=1` in the integrated SDK; `go build -o /tmp/metatube-server-metax ./cmd/server`; live startup log and fingerprint mismatch both observed.
-- [ ] Full SDK regression remains environment-blocked locally (`engine/dbengine` needs Docker; `imageutil` differs under Go 1.27); CI pins Go 1.26.x.
+- [x] CI on Go 1.26.x passed patch application, focused tests, full pinned-SDK regression, formatting, and server build in [run 39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056). Local full regression remains environment-blocked (`engine/dbengine` needs Docker; `imageutil` differs under Go 1.27).
 
 ### Task: search-stage merged candidate (2026-10-20)
 
@@ -300,5 +300,5 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Recorded provider-specific limits in `docs/COMPATIBILITY_MATRIX.md`: JavDB FC2 detail login redirect; FANZA region/age gate; Freejavbt 503; FC2PPVDB/FALENO/MGS 403; Kin8/Chinese/Western samples 404 or empty.
 - [x] Updated the Faleno matrix entry to reflect the existing exact REST metadata/search patches (`0013`, `0014`) and their deterministic tests; live Faleno remains blocked by HTTP 403.
 - [x] Fixed the trailing blank line in patch `0013` that failed the CI gofmt gate.
-- [ ] CI validation and the new manual live workflow still need to run on the pushed commit; local live results are point-in-time evidence only.
+- [x] CI validation passed on commit `61f345f`: SDK patch/full-regression/build [39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056), integrated live MetaX API smoke [39395605130](https://github.com/strange-dragon/metaX/actions/runs/39395605130), existing live FC2/uncensored smoke [39395605027](https://github.com/strange-dragon/metaX/actions/runs/39395605027), Go tests [39395605111](https://github.com/strange-dragon/metaX/actions/runs/39395605111), and formatting [39395604984](https://github.com/strange-dragon/metaX/actions/runs/39395604984). Local live results remain point-in-time evidence.
 - [ ] Still deferred: Official manufacturer router, Prestige, R18Dev offline PostgreSQL, fuzzy Getchu catalog search, JavDB login/cookie support, and Wikipedia/Wikidata actor biographies.
