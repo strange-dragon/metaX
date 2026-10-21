@@ -134,7 +134,6 @@ This file is the durable handoff for small, independently reviewable work units.
 - [x] Delegated per-provider cache fallback to the SDK's existing `searchMovie(keyword, provider, fallback)` path, preserving provider-specific keyword normalization and the SDK's live-result/cache merge semantics; removed the duplicate category-level database fallback query.
 - [ ] Full SDK integration/build tests intentionally not run in this task per user direction. Source-level checks only; no workflow was manually dispatched.
 
- 
 ### JavDB actor name normalization follow-up (2026-10-20)
 
 - [x] Compared Amane's JavDB actor name parser with the native Go actor provider.
@@ -304,7 +303,7 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Updated the Faleno matrix entry to reflect the existing exact REST metadata/search patches (`0013`, `0014`) and their deterministic tests; live Faleno remains blocked by HTTP 403.
 - [x] Fixed the trailing blank line in patch `0013` that failed the CI gofmt gate.
 - [x] CI validation passed on commit `61f345f`: SDK patch/full-regression/build [39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056), integrated live MetaX API smoke [39395605130](https://github.com/strange-dragon/metaX/actions/runs/39395605130), existing live FC2/uncensored smoke [39395605027](https://github.com/strange-dragon/metaX/actions/runs/39395605027), Go tests [39395605111](https://github.com/strange-dragon/metaX/actions/runs/39395605111), and formatting [39395604984](https://github.com/strange-dragon/metaX/actions/runs/39395604984). Local live results remain point-in-time evidence.
-- [ ] Still deferred or not planned: Official manufacturer router (withdrawn in favor of category fan-out), Prestige, R18Dev offline PostgreSQL, fuzzy Getchu catalog search, and Wikipedia/Wikidata actor biographies.
+- [ ] Still deferred or not planned: Official manufacturer router (withdrawn in favor of category fan-out), Prestige (blocked on fixtures), R18Dev offline PostgreSQL (out of scope 2026-10-21), fuzzy Getchu catalog search, and Wikipedia/Wikidata actor biographies.
 
 ### Task: provider access configuration (2026-10-20)
 
@@ -472,5 +471,29 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] CI passed on `9e7191e`:
   [Go tests 39541866177](https://github.com/strange-dragon/metaX/actions/runs/39541866177),
   [SDK patch 39541866361](https://github.com/strange-dragon/metaX/actions/runs/39541866361).
-- Next: **5.1** R18Dev architecture decision — optional local PostgreSQL source
-  vs external service vs out of scope.
+
+### Task: R18Dev decision and release-readiness audit (2026-10-21)
+
+- [x] **R18Dev decision.** Out of scope. Amane's R18Dev is an offline
+  PostgreSQL mirror, not an HTTP provider, and it is absent from Amane's
+  default content routes. metaX will not add a PostgreSQL dependency, dump
+  importer, SQLite conversion, or separate Amane service for it.
+- [x] **8.1 Matrix refresh.** Updated the R18Dev and Official rows and removed
+  the stale R18Dev "next decision" from the project plan. Prestige and fuzzy
+  Getchu remain blocked on real responses/fixtures.
+- [x] **8.2 Evidence.** In metaX: `GOTOOLCHAIN=local go test ./... -count=1`,
+  `GOTOOLCHAIN=local go vet ./...`, and `go mod tidy -diff` passed. On a clean
+  pinned SDK checkout (`c6258467`): all maintained patches applied, the focused
+  engine/route/provider suite passed, gofmt passed, and `go build ./cmd/server`
+  succeeded. The full local regression was attempted; only the known
+  environment cases failed: `engine/dbengine` (no Docker daemon) and
+  `imageutil/TestJPEGDecode` (Go 1.27 behavior; CI pins Go 1.26.x). CI remains
+  the full-regression gate.
+- [x] **8.3 Diff review.** No new module requirement (`go mod tidy -diff` is
+  empty), `go vet` is clean, and no secret values were added. `git diff --check`
+  is clean for maintained sources/docs; patch files retain upstream context
+  whitespace by design. Route/API contract tests continue to cover the
+  Jellyfin-facing response shape.
+- [ ] **8.4 Merge.** Not merged to `main`; explicit user approval is required.
+- Next: **4** Prestige or **6** Getchu only with real fixtures; otherwise the
+  backend release gate is CI plus the documented runtime limits.

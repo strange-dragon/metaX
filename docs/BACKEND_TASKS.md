@@ -180,27 +180,29 @@ required before claiming support.
 **BLOCKED**: no permitted-region response or reliable fixture is currently
 recorded; live access is reported as CloudFront 403/region-restricted.
 
-## Big Task 5 — R18Dev offline database source
+## Big Task 5 — R18Dev offline database source (NOT PLANNED)
 
-Goal: decide whether metaX should support an optional local PostgreSQL mirror.
+Decision (2026-10-21): **do not implement R18Dev.** Amane's source is not an
+HTTP scraper; it reads a user-supplied offline PostgreSQL mirror. r18.dev
+publishes a PostgreSQL-specific dump, not a per-title HTTP API. Supporting it
+would add an optional external database, import workflow, and schema-coupling
+contract that the category-route model does not require. R18Dev is also absent
+from Amane's default content routes. Revisit only if a concrete product
+requirement or a stable HTTP source appears.
 
-Amane's `r18dev.py` + `r18dev/repository.py` are the reference: short-circuit
-when no database is configured, normalize `content_id` candidates (five-digit
-padding, preserved padding, plain digits), query `derived_video` by exact
-`dvd_id` or `content_id`, then load named entities, people, categories, and
-trailer. Database errors degrade to a miss; they are not HTTP errors. The
-schema/query behavior can be reused, but the Python/SQLAlchemy implementation
-cannot simply be dropped into Go.
+The original comparison remains as evidence: Amane's `r18dev.py` +
+`r18dev/repository.py` normalize `content_id` candidates (five-digit padding,
+preserved padding, plain digits), query `derived_video` by exact `dvd_id` or
+`content_id`, then load named entities, people, categories, and trailer.
+Database errors degrade to a miss; they are not HTTP errors.
 
-- [ ] **5.1 Architecture decision.** A local database is not a normal HTTP
-  `MovieProvider`. Decide whether to add a separate optional metadata source
-  interface, keep it out of scope, or expose it as an external service.
-- [ ] **5.2 Repository contract.** If approved, define schema/query boundaries,
-  failure degradation, and configuration.
-- [ ] **5.3 Tests.** Deterministic database tests without requiring a live
-  mirror; document the operational dependency.
+- [x] **5.1 Architecture decision.** Out of scope. Do not add a PostgreSQL
+  dependency, import job, SQLite conversion, or separate Amane service for
+  R18Dev.
+- [ ] **5.2 Repository contract.** Not planned.
+- [ ] **5.3 Tests.** Not planned.
 
-**BLOCKED** by 5.1. Do not disguise a database adapter as a website provider.
+**OUT OF SCOPE.** Do not disguise a database adapter as a website provider.
 
 ## Big Task 6 — Getchu fuzzy catalog search
 
@@ -267,23 +269,26 @@ server build are the release gate for this task.
 
 ## Big Task 8 — Release readiness
 
-- [ ] **8.1 Refresh compatibility/access matrices** after each completed task.
-- [ ] **8.2 Consolidate focused/full CI evidence** and document environment-only
-  failures.
-- [ ] **8.3 Review the final diff for API compatibility, dependency growth,
-  duplicated helpers, and unrelated changes.**
+- [x] **8.1 Refresh compatibility/access matrices** after completed tasks.
+  Updated `Official` to withdrawn and `R18Dev` to out of scope.
+- [x] **8.2 Consolidate focused/full CI evidence** and document environment-only
+  failures. Local metaX tests/vet/tidy pass; clean pinned-SDK focused tests,
+  formatting, and server build pass. Full local regression is limited to the
+  known Docker and Go-version cases; CI is the full-regression gate.
+- [x] **8.3 Review the final diff for API compatibility, dependency growth,
+  duplicated helpers, and unrelated changes.** No module drift, no vet errors,
+  no added secrets, and the Jellyfin-facing route/API tests pass.
 - [ ] **8.4 Do not merge to `main` without explicit user approval.**
 
 ## Recommended execution order
 
-1. **5.1** R18Dev architecture decision — local PostgreSQL source vs optional
-   external source vs out of scope.
+1. **Big Task 8** release-readiness checks — unblocked and next.
 2. **4** Prestige and **6** Getchu only after real responses/fixtures exist.
-3. Big Task 8 release-readiness checks after the remaining provider work.
 
-Small Tasks 3A and 3B are complete: the manifest/cookie boundary is in place,
-and candidate ordering follows the Amane category route with `MetaX` first. The
-Jellyfin plugin still needs its client-side cookie-filtering implementation.
+R18Dev is out of scope. Small Tasks 3A and 3B are complete: the manifest/cookie
+boundary is in place, and candidate ordering follows the Amane category route
+with `MetaX` first. The Jellyfin plugin still needs its client-side
+cookie-filtering implementation.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.

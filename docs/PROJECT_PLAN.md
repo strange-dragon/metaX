@@ -1,6 +1,6 @@
 # metaX Project Plan and Handoff
 
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 Working branch: `feat/amane-provider-migration`
 
 This document is the durable project-level plan and handoff for future work. Read it together with `docs/EXECUTION_CHECKLIST.md`, `docs/IMPLEMENTATION_AUDIT.md`, `docs/INTEGRATION.md`, `docs/COMPATIBILITY_MATRIX.md`, and `docs/METADATA_AGGREGATION.md` before making changes.
@@ -84,17 +84,20 @@ Remaining work is maintained as small, independently verifiable tasks in
 The backend model is **library category -> category provider list -> concurrent
 provider fan-out -> merged candidates**, followed by the user's Jellyfin
 selection. There is no Amane `official_routes`/manufacturer-routing layer and no
-manufacturer priority. Small Task 3A is complete: `/v1/metax/status` exposes
-`route_providers`, and category-routed requests ignore out-of-category cookie
-entries. The next decision is:
+manufacturer priority. Small Tasks 3A and 3B are complete:
+`/v1/metax/status` exposes `route_providers`, category-routed requests ignore
+out-of-category cookie entries, and candidates follow the Amane category route
+with the merged `MetaX` candidate first.
 
-1. R18Dev architecture: optional local PostgreSQL source vs external service vs
-   out of scope.
+R18Dev is **out of scope** (decision 2026-10-21). Its data source is an offline
+PostgreSQL mirror, not an HTTP provider; metaX will not add a PostgreSQL
+dependency, import workflow, SQLite conversion, or separate Amane service for
+it. Prestige and fuzzy Getchu remain blocked on permitted-region
+responses/fixtures. Amane is the behavioral reference for those tasks, but its
+GPL-3.0 code and fixtures must not be copied into this Apache-2.0 workspace
+without a license decision.
 
-Prestige, R18Dev, and fuzzy Getchu remain blocked on permitted-region
-responses/fixtures or an explicit data-source architecture decision. Amane is
-the behavioral reference for these tasks, but its GPL-3.0 code and fixtures
-must not be copied into this Apache-2.0 workspace without a license decision.
+The next unblocked task is Big Task 8 release readiness.
 
 At each task boundary, update `docs/EXECUTION_CHECKLIST.md` with the commit,
 commands actually run, pass/fail outcomes, and the next small task. Stop after

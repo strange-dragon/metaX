@@ -91,7 +91,8 @@ are point-in-time network evidence, not parser tests.
 | FALENO | Home page 200, search/work paths 403 from XSERVER WAF | Proxy/cookies | Use a proxy. Browser TLS profiles still returned 403 on work pages. |
 | Kin8 | HTTP 404 for the sample | Same miss semantics | The sample may be invalid or removed; verify with a known current catalog entry before changing the provider. |
 | Official | Not planned under the category fan-out model | Amane's manufacturer router | No `official_routes` or manufacturer priority; add a manufacturer only as a normal provider if needed. |
-| Prestige / R18Dev | Not implemented | Prestige API / offline PostgreSQL | Prestige needs permitted-region evidence; R18Dev needs an explicit local-database architecture decision. |
+| Prestige | Not implemented | Prestige JSON API | Needs permitted-region responses or reliable fixtures before implementation. |
+| R18Dev | Out of scope (2026-10-21) | Offline PostgreSQL mirror | r18.dev publishes a PostgreSQL dump, not a per-title HTTP API; metaX will not add an optional PostgreSQL/import contract for a source absent from the default routes. |
 | Getchu fuzzy search | Exact `GETCHU-<digits>` fallback works; fuzzy catalog search deferred | Amane uses the first search result | Do not copy the weaker first-result behavior; add an exact identity check first. |
 | Wikipedia/Wikidata actor biography | Implemented as `WikipediaActor` | Wikidata entity filtering + Wikipedia extraction | Exact label/alias identity, AV occupation/description filtering, and deterministic API fixtures are covered locally; live-site verification remains pending. |
 
