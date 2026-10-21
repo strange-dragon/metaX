@@ -119,6 +119,12 @@ category, while keeping the backend safe if a caller sends a wider dictionary.
   out-of-category provider that lacks a `ConfigSetter`. The plugin plan now
   documents `route_providers`, library-category mapping, and client-side cookie
   filtering. Plugin implementation remains deferred.
+- **Evidence (2026-10-21).** Clean pinned SDK after patches + provider overlay:
+  `GOTOOLCHAIN=local go test ./route ./routing -count=1` passed. MetaX:
+  `GOTOOLCHAIN=local go test ./... -count=1` passed. CI on commit `717974d`:
+  [SDK integration/build 39539784711](https://github.com/strange-dragon/metaX/actions/runs/39539784711),
+  [Go tests 39539784696](https://github.com/strange-dragon/metaX/actions/runs/39539784696),
+  [format 39539784702](https://github.com/strange-dragon/metaX/actions/runs/39539784702).
 
 ## Provider tasks 4–6: Amane reference policy
 

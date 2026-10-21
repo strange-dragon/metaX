@@ -418,6 +418,31 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [ ] Not run: race detector, Jellyfin end-to-end runtime, and a targeted live
   retry/`Retry-After` exercise. Local live regression failures are recorded
   above; they are not evidence of retry success.
-- Next: **Small Task 3A** — expose the category provider manifest and enforce
-  category-scoped cookie filtering. The Official manufacturer router is not
-  planned under the category fan-out model.
+
+### Task: category provider manifest and cookie scope (2026-10-21)
+
+- [x] Added `data.route_providers` to `GET /v1/metax/status`: category ->
+  registered provider names, with route aliases resolved and unavailable
+  providers omitted. The manifest contains no cookies, tokens, proxies, URLs,
+  or provider configuration.
+- [x] Added category-scoped cookie filtering in `requestEngine`. Category
+  requests keep only cookies for resolved providers; explicit `provider`
+  overrides win; requests without either keep the dictionary. The filter is
+  applied before `WithRequestCookies`, so an out-of-category provider without
+  a `ConfigSetter` cannot fail the request.
+- [x] Added deterministic tests for manifest contents, category filtering,
+  explicit-provider override, route aliases, unscoped requests, and the
+  out-of-category unsupported-provider case.
+- [x] Local verification on the clean pinned SDK after patches and provider
+  overlay: `GOTOOLCHAIN=local go test ./route ./routing -count=1` passed.
+  MetaX: `GOTOOLCHAIN=local go test ./... -count=1` passed; `gofmt -l` was
+  empty.
+- [x] CI on commit `717974d` passed: SDK patch/integration/full regression/build
+  in [39539784711](https://github.com/strange-dragon/metaX/actions/runs/39539784711),
+  Go tests in [39539784696](https://github.com/strange-dragon/metaX/actions/runs/39539784696),
+  and formatting in [39539784702](https://github.com/strange-dragon/metaX/actions/runs/39539784702).
+- [ ] Not run for this change: Jellyfin plugin implementation. The plugin
+  remains deferred; its plan now documents library-category mapping and
+  client-side `route_providers` filtering.
+- Next: **5.1** R18Dev architecture decision — optional local PostgreSQL source
+  vs external service vs out of scope.

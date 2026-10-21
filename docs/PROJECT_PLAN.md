@@ -84,9 +84,12 @@ Remaining work is maintained as small, independently verifiable tasks in
 The backend model is **library category -> category provider list -> concurrent
 provider fan-out -> merged candidates**, followed by the user's Jellyfin
 selection. There is no Amane `official_routes`/manufacturer-routing layer and no
-manufacturer priority. The next unblocked task is:
+manufacturer priority. Small Task 3A is complete: `/v1/metax/status` exposes
+`route_providers`, and category-routed requests ignore out-of-category cookie
+entries. The next decision is:
 
-1. category provider manifest and category-scoped cookie filtering.
+1. R18Dev architecture: optional local PostgreSQL source vs external service vs
+   out of scope.
 
 Prestige, R18Dev, and fuzzy Getchu remain blocked on permitted-region
 responses/fixtures or an explicit data-source architecture decision. Amane is
