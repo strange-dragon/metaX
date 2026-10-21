@@ -291,7 +291,8 @@ server build are the release gate for this task.
 - [x] **8.2 Consolidate focused/full CI evidence** and document environment-only
   failures. Local metaX tests/vet/tidy pass; clean pinned-SDK focused tests,
   formatting, and server build pass. Full local regression is limited to the
-  known Docker and Go-version cases; CI is the full-regression gate.
+  known Docker and Go-version cases; the pinned-SDK build script is the
+  documented local regression/build gate. GitHub Actions workflows are removed.
 - [x] **8.3 Review the final diff for API compatibility, dependency growth,
   duplicated helpers, and unrelated changes.** No module drift, no vet errors,
   no added secrets, and the Jellyfin-facing route/API tests pass.
@@ -312,5 +313,5 @@ R18Dev and the Amane manufacturer router remain out of scope. Small Tasks 3A and
 3B are complete: the manifest/cookie boundary is in place, and candidate
 ordering follows the Amane category route with `MetaX` first.
 
-Each item should be its own small commit with focused tests, a checklist entry,
-and CI evidence. Do not start a second item until the current one is verified.
+Each item should be its own small commit with focused tests and a checklist
+entry. Do not start a second item until the current one is verified.
