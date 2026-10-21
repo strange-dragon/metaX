@@ -1,0 +1,10 @@
+name: Pinned SDK patch regression
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "temporary file to clear stale workflow registration"
