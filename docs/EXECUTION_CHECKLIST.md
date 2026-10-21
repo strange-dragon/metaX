@@ -399,8 +399,14 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
   provider tests blocked by region/anti-bot responses (including FANZA, FALENO,
   FC2HUB, FC2PPVDB, MGS, SOD, Getchu, KIN8, Gfriends, and JAVFREE). This is not
   a regression pass and does not establish live-site behavior.
-- [ ] Not run: race detector, live-site retry behavior, Jellyfin end-to-end
-  runtime, and GitHub Actions verification for these commits (CI results to be
-  appended after push).
+- [x] CI on commit `2f1805d` passed: SDK patch application, focused integration,
+  full pinned-SDK regression, formatting, and server build in [run 39534885960](https://github.com/strange-dragon/metaX/actions/runs/39534885960);
+  Go tests in [39534885829](https://github.com/strange-dragon/metaX/actions/runs/39534885829);
+  formatting in [39534885871](https://github.com/strange-dragon/metaX/actions/runs/39534885871);
+  live FC2/uncensored smoke in [39534885817](https://github.com/strange-dragon/metaX/actions/runs/39534885817);
+  and live MOON-023 smoke in [39534885875](https://github.com/strange-dragon/metaX/actions/runs/39534885875).
+- [ ] Not run: race detector, Jellyfin end-to-end runtime, and a targeted live
+  retry/`Retry-After` exercise. Local live regression failures are recorded
+  above; they are not evidence of retry success.
 - Next: **Big Task 3.1** — design the Official manufacturer-router contract
   before implementation.

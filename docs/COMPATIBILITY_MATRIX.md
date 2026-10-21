@@ -584,3 +584,9 @@ surface without changing the MetaTube/Jellyfin provider contract.
   `go build ./cmd/server` succeeds. The status endpoint test is included in the
   same focused run. Full pinned-SDK live regression remains subject to the
   regional and anti-bot limits recorded above and is not claimed as a pass.
+  CI on commit `2f1805d` passed the SDK integration/build job in
+  [run 39534885960](https://github.com/strange-dragon/metaX/actions/runs/39534885960),
+  Go tests in [39534885829](https://github.com/strange-dragon/metaX/actions/runs/39534885829),
+  and formatting in [39534885871](https://github.com/strange-dragon/metaX/actions/runs/39534885871).
+  The live FC2 and MOON-023 smoke jobs also passed; they do not exercise retry
+  behavior or blocked sources.
