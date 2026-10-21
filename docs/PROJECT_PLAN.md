@@ -68,8 +68,8 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
   cancellation is not propagated through provider interfaces; that limitation
   is recorded rather than hidden behind a partial context setter.
 - Remaining backend coverage and hardening are tracked as big/small tasks in
-  `docs/BACKEND_TASKS.md`; plugin-side work is recorded but intentionally
-  deferred in `docs/JELLYFIN_PLUGIN.md`.
+  `docs/BACKEND_TASKS.md`; plugin-side work is intentionally out of scope for
+  this backend repository.
 
 **Integration status (2026-10-21).** Focused SDK integration is verified on a clean checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `routing`, `engine`, `route`, `provider/httpretry`, and the thirteen native provider package test targets pass, and `go build ./cmd/server` succeeds. A full pinned-SDK regression was also attempted; it did not pass because upstream live provider tests hit the documented regional and anti-bot blocks (for example FANZA/FALENO/FC2HUB/FC2PPVDB/MGS/SOD). The existing `engine/dbengine` Docker requirement and Go-version-sensitive `imageutil` check remain environment caveats. CI pins Go 1.26.x and sets `GITHUB_ACTIONS=true` to skip live provider tests. Do not claim a full live regression pass, and do not re-run live-site tests as the only evidence.
 
@@ -134,4 +134,3 @@ Stop after reporting the result and wait for test/integration/build outcomes bef
 - `docs/COMPATIBILITY_MATRIX.md` — provider and behavior comparisons.
 - `docs/METADATA_AGGREGATION.md` — aggregation response and merge contract.
 - `docs/BACKEND_TASKS.md` — big/small backend task breakdown and blockers.
-- `docs/JELLYFIN_PLUGIN.md` — deferred plugin configuration and transport plan.

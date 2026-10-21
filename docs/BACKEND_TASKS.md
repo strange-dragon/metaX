@@ -3,8 +3,8 @@
 Last updated: 2026-10-21
 Branch: `feat/amane-provider-migration`
 
-This is the working breakdown for the remaining backend work. It is deliberately
-separate from the Jellyfin plugin plan in `docs/JELLYFIN_PLUGIN.md`.
+This is the working breakdown for the remaining backend work. Plugin-side work
+is out of scope for this repository.
 
 Status legend:
 
