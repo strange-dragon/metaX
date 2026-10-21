@@ -540,3 +540,47 @@ pages. The Go runtime now exposes equivalent configuration:
 See [Provider access, cookies, and proxy configuration](PROVIDER_ACCESS.md) for
 the failure-by-failure matrix and environment examples. This is configuration
 parity, not evidence that a blocked source now succeeds from this network.
+
+## Request resilience and observability (2026-10-21)
+
+Big Task 7 adds bounded retry behavior and a non-secret operational status
+surface without changing the MetaTube/Jellyfin provider contract.
+
+- **Shared retry transport.** `provider/httpretry` wraps native provider
+  `net/http` transports. It retries only idempotent `GET`/`HEAD`/`OPTIONS`
+  requests whose bodies can be replayed, and only for HTTP 408, 429, 503, 504
+  or transient network errors. The policy is capped at three attempts, uses
+  200 ms exponential base delay with a 2 s cap and ±20% jitter, and honors
+  numeric or HTTP-date `Retry-After` within the same cap. Permanent 4xx
+  responses and unsafe methods are returned immediately.
+- **Per-provider isolation.** Each provider transport has its own retry policy
+  and backoff state. There is no global retry mutex, token bucket, or
+  cross-provider queue; one provider waiting for `Retry-After` does not block
+  another provider. The existing `METAX_AGGREGATE_FANOUT` bound remains
+  request-scoped. This is a deliberate limit definition rather than a global
+  rate limiter, because provider quotas are not known and serializing unrelated
+  providers would regress the fan-out contract.
+- **Documented gaps.** JavLibrary's actual fetch path uses a separate
+  browser-fingerprint `fhttp` client with 403/406 profile rotation and a
+  one-second pause; the shared transport is not applied there. AVSOX's search
+  POST is not retried because it is not an idempotent HTTP method. Upstream
+  scraper providers use their own transport and are not wrapped by this
+  package. These are explicit limits, not evidence that those paths are
+  resilient.
+- **Status endpoint.** `GET /v1/metax/status` returns registered movie/actor
+  provider counts, route category count and fingerprint, route provider gaps,
+  and cookie-transport version `1`. It does not return cookies, tokens, proxy
+  credentials, provider configuration values, or URLs. The endpoint is in the
+  existing unauthenticated `/v1` system group, like `/v1/providers`.
+- **Cancellation decision.** Gin request cancellation is not propagated into
+  provider calls because the provider interfaces do not accept
+  `context.Context`. Adding a setter would require request-scoped provider
+  cloning and an interface change; it was evaluated and deferred. Per-client
+  timeouts remain the outer bound, and the retry transport stops when its own
+  request context is canceled.
+- **Verification.** Local metaX `go test ./... -count=1` and formatting pass.
+  On a clean pinned SDK checkout, the focused `engine`, `route`,
+  `provider/httpretry`, and all thirteen native provider tests pass, and
+  `go build ./cmd/server` succeeds. The status endpoint test is included in the
+  same focused run. Full pinned-SDK live regression remains subject to the
+  regional and anti-bot limits recorded above and is not claimed as a pass.

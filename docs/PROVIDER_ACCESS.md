@@ -24,6 +24,14 @@ supports per-provider proxy and timeout configuration; this branch adds
 per-provider Cookie configuration for the native JavDB and Freejavbt providers
 and for scraper-based SDK providers.
 
+This branch also adds bounded retries (408/429/503/504 and transient network
+errors, at most three attempts, 2 s cap, `Retry-After` support) for native
+provider `net/http` clients. Retries do not change authentication or regional
+access: JavLibrary's browser-fingerprint path, AVSOX's POST search, and
+upstream scraper providers are not covered by the shared retry transport. A
+retry cannot make a permanently blocked site succeed and must not be treated as
+a substitute for cookies, a permitted-region proxy, or valid identifiers.
+
 ## Configuration
 
 Provider settings use the MetaTube environment convention:

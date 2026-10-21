@@ -356,3 +356,51 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Verification: all patches applied cleanly to the pinned SDK; `GOTOOLCHAIN=local GITHUB_ACTIONS=true go test ./provider/theporndb -count=1` passed; `gofmt -l provider/theporndb` was empty; `git diff --check` passed; `GOTOOLCHAIN=local go test ./... -count=1` passed in metaX.
 - [x] CI on commit `e46be39` passed SDK patch application/focused tests/full pinned-SDK regression/formatting/server build in [run 39420345234](https://github.com/strange-dragon/metaX/actions/runs/39420345234), Go tests in [39420345245](https://github.com/strange-dragon/metaX/actions/runs/39420345245), and formatting in [39420345331](https://github.com/strange-dragon/metaX/actions/runs/39420345331). The live FC2/uncensored smoke job on the preceding code commit `cd6442e` passed in [39419659171](https://github.com/strange-dragon/metaX/actions/runs/39419659171); it does not exercise ThePornDB.
 - [ ] No live ThePornDB API call was made; token acceptance and live actor metadata remain unverified. The next unblocked task is **7.3 health/status surface**.
+
+## Big Task 7 — Request resilience and observability (2026-10-21)
+
+- [x] Added `GET /v1/metax/status` with registered movie/actor provider counts,
+  route category count/fingerprint, route provider gaps, and cookie-transport
+  version `1`; no cookies, tokens, proxies, credentials, or URLs are returned.
+  Commit `f56da89`.
+- [x] Added `provider/httpretry`, a bounded retry transport for idempotent
+  `GET`/`HEAD`/`OPTIONS` requests. It retries 408/429/503/504 and transient
+  network errors, caps attempts at three, uses 200 ms exponential base delay,
+  a 2 s cap, ±20% jitter, and bounded numeric/HTTP-date `Retry-After`; permanent
+  4xx, unsafe methods, and unreplayable bodies are not retried. Commit
+  `c9b6c56`.
+- [x] Wired the shared transport into all thirteen native provider `net/http`
+  clients and the Minnano actor client. Documented exceptions: JavLibrary's
+  actual browser-fingerprint `fhttp` path, AVSOX's POST search, and upstream
+  scraper providers.
+- [x] Defined rate-limit behavior as per-provider retry/backoff state with no
+  global retry mutex or token bucket. Added a deterministic test proving one
+  provider's backoff does not block another. The existing request-scoped
+  `METAX_AGGREGATE_FANOUT` bound is unchanged.
+- [x] Evaluated Gin request-context propagation. It is not implemented because
+  provider interfaces do not accept `context.Context`; a context setter would
+  require request-scoped provider cloning and an interface change. Per-client
+  timeouts and retry-context cancellation remain the documented bounds.
+- [x] Added deterministic tests for retry status boundaries, permanent 4xx,
+  unsafe/unreplayable requests, attempt exhaustion, numeric and HTTP-date
+  `Retry-After`, transient/permanent network errors, cancellation before and
+  during backoff, provider isolation, status JSON, route gaps, cookie transport
+  version, and no secret fields.
+- [x] Local verification: `GOTOOLCHAIN=local go test ./... -count=1` in metaX
+  passes; `gofmt -l .` is empty.
+- [x] Clean pinned-SDK focused verification: `go test ./engine ./route
+  ./provider/httpretry ./provider/avbaseactor ./provider/airav
+  ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga
+  ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary
+  ./provider/minnano ./provider/wikipediaactor ./provider/xcity -count=1`
+  passes, including the status endpoint test; `go build -o
+  /private/var/folders/.../metatube-server ./cmd/server` succeeds.
+- [x] Full pinned-SDK regression was attempted and failed on upstream live
+  provider tests blocked by region/anti-bot responses (including FANZA, FALENO,
+  FC2HUB, FC2PPVDB, MGS, SOD, Getchu, KIN8, Gfriends, and JAVFREE). This is not
+  a regression pass and does not establish live-site behavior.
+- [ ] Not run: race detector, live-site retry behavior, Jellyfin end-to-end
+  runtime, and GitHub Actions verification for these commits (CI results to be
+  appended after push).
+- Next: **Big Task 3.1** — design the Official manufacturer-router contract
+  before implementation.

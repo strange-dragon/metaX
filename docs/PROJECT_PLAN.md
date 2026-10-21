@@ -60,22 +60,28 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
   verified; it is not a missing provider. The stock ThePornDB actor provider was
   audited and its config plumbing fixed so `ACCESS_TOKEN`/`api_token` reaches
   the provider; actor-profile aggregation remains intentionally unimplemented.
+- Big Task 7 adds a bounded shared retry transport for native providers and a
+  non-secret `GET /v1/metax/status` surface. Retry attempts, delays, jitter, and
+  `Retry-After` are per provider; there is no global retry serialization.
+  JavLibrary's browser-fingerprint `fhttp` path, AVSOX's POST search, and
+  upstream scraper providers remain documented exceptions. Gin request
+  cancellation is not propagated through provider interfaces; that limitation
+  is recorded rather than hidden behind a partial context setter.
 - Remaining backend coverage and hardening are tracked as big/small tasks in
   `docs/BACKEND_TASKS.md`; plugin-side work is recorded but intentionally
   deferred in `docs/JELLYFIN_PLUGIN.md`.
 
-**Integration status (2026-10-20).** Focused SDK integration is verified on a clean checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `routing`, `engine`, `route`, and 12 provider package test targets pass, and `go build ./cmd/server` succeeds. Full SDK regression still encounters two environment-only failures: `engine/dbengine` requires a Docker daemon, and `imageutil` expects Go 1.26 JPEG behavior. CI pins Go 1.26.x and sets `GITHUB_ACTIONS=true` to skip live provider tests. Do not treat unresolved full-regression environment checks as product failures, and do not re-run live-site tests as the only evidence.
+**Integration status (2026-10-21).** Focused SDK integration is verified on a clean checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `routing`, `engine`, `route`, `provider/httpretry`, and the thirteen native provider package test targets pass, and `go build ./cmd/server` succeeds. A full pinned-SDK regression was also attempted; it did not pass because upstream live provider tests hit the documented regional and anti-bot blocks (for example FANZA/FALENO/FC2HUB/FC2PPVDB/MGS/SOD). The existing `engine/dbengine` Docker requirement and Go-version-sensitive `imageutil` check remain environment caveats. CI pins Go 1.26.x and sets `GITHUB_ACTIONS=true` to skip live provider tests. Do not claim a full live regression pass, and do not re-run live-site tests as the only evidence.
 
 ## 5. Current execution plan
 
-The environment and core-backend blockers are settled. The route-alias cookie
-work and the ThePornDB actor audit are complete; actor-profile aggregation was
-deliberately deferred. Remaining work is maintained as small, independently
-verifiable tasks in `docs/BACKEND_TASKS.md`. The recommended unblocked order is:
+The environment and core-backend blockers are settled. Request-scoped cookies,
+the ThePornDB actor audit, and Big Task 7 (status, bounded retry, per-provider
+backoff, cancellation evaluation, and deterministic tests) are complete.
+Remaining work is maintained as small, independently verifiable tasks in
+`docs/BACKEND_TASKS.md`. The next unblocked task is:
 
-1. a non-secret provider/health status surface;
-2. a shared retry/backoff policy for transient provider failures;
-3. the Official manufacturer-router contract, which must be designed before it
+1. the Official manufacturer-router contract, which must be designed before it
    is implemented.
 
 Prestige, R18Dev, and fuzzy Getchu work remain blocked on permitted-region

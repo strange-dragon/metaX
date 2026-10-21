@@ -152,21 +152,41 @@ identity validation.
 
 Goal: make transient failures and operational state visible and bounded.
 
-- [ ] **7.1 Shared retry policy.** Retry idempotent requests on 408/429/503/504
-  with capped attempts, exponential backoff, jitter, and `Retry-After` support;
-  do not retry permanent 4xx. Start with native providers, then assess scraper
-  providers.
-- [ ] **7.2 Rate-limit behavior.** Define per-provider limits/backoff without
-  serializing unrelated providers.
-- [ ] **7.3 Health/status surface.** Expose provider counts, route fingerprint,
-  registered gaps, and cookie-transport version without exposing secrets.
-- [ ] **7.4 Request cancellation.** Evaluate passing Gin request context into
-  provider HTTP calls; preserve existing provider interfaces where possible.
-- [ ] **7.5 Tests.** HTTP fixture tests for retry boundaries, cancellation,
-  status output, and no secret leakage.
+- [x] **7.1 Shared retry policy.** `provider/httpretry` retries idempotent
+  `GET`/`HEAD`/`OPTIONS` requests on 408/429/503/504 and transient network
+  errors. It uses at most three attempts, 200 ms exponential base delay, a 2 s
+  cap, ±20% jitter, and bounded `Retry-After` seconds/date handling. Permanent
+  4xx responses, unsafe methods, and unreplayable request bodies are never
+  retried. All thirteen native provider `net/http` transports use it.
+  Documented exceptions: JavLibrary's separate browser-fingerprint `fhttp`
+  rotation path, AVSOX's POST search, and upstream scraper providers are not
+  wrapped by this shared transport.
+- [x] **7.2 Rate-limit behavior.** Each provider transport owns its own retry
+  policy and backoff state; there is no global retry mutex or token bucket, so
+  a retrying provider cannot serialize unrelated providers. The bounded engine
+  fan-out (`METAX_AGGREGATE_FANOUT`, default 16) remains request-scoped. A
+  deterministic test proves one provider's backoff does not block another.
+- [x] **7.3 Health/status surface.** `GET /v1/metax/status` exposes registered
+  movie/actor provider counts, the route-table fingerprint and category count,
+  route provider gaps, and cookie-transport version `1`. It never exposes
+  cookies, tokens, proxy credentials, or provider configuration values.
+- [x] **7.4 Request cancellation.** Evaluated and deliberately deferred. The
+  provider interfaces do not accept `context.Context`; adding a context setter
+  would require request-scoped provider cloning and an interface change. Gin
+  request cancellation therefore does not reach upstream provider HTTP calls.
+  Existing bounds are per-client timeouts and retry attempts that stop when the
+  transport request context is canceled. Revisit only with a measured need and
+  an interface-preserving design.
+- [x] **7.5 Tests.** Deterministic tests cover retry status boundaries,
+  permanent 4xx, unsafe/unreplayable requests, attempt exhaustion, numeric and
+  HTTP-date `Retry-After`, transient/permanent network errors, context
+  cancellation before and during backoff, per-provider isolation, status JSON,
+  route gaps, cookie-transport version, and absence of secret fields.
 
-Acceptance: no unbounded retries, no secret values in status/logs, and all
-behavior deterministic under test.
+Acceptance: no unbounded retries, no secret values in status, and retry/status
+behavior deterministic under test. Full pinned-SDK live regression remains
+subject to the documented regional and anti-bot limits; focused integration and
+server build are the release gate for this task.
 
 ## Big Task 8 — Release readiness
 
@@ -179,12 +199,10 @@ behavior deterministic under test.
 
 ## Recommended execution order
 
-1. **7.3** health/status surface — useful for operations without touching
-   metadata semantics.
-2. **7.1** shared retry policy — highest-value resilience work.
-3. **3.1** Official router contract — large, but the only remaining
+1. **3.1** Official router contract — large, but the only remaining
    high-impact provider gap that can be designed without live scraping.
-4. Blocked tasks 4–6 only after evidence or an explicit architecture decision.
+2. Blocked tasks 4–6 only after evidence or an explicit architecture decision.
+3. Big Task 8 release-readiness checks after the remaining provider work.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.
