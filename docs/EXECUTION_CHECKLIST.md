@@ -386,14 +386,19 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
   `Retry-After`, transient/permanent network errors, cancellation before and
   during backoff, provider isolation, status JSON, route gaps, cookie transport
   version, and no secret fields.
+- [x] Closed the log-leak path: the upstream proxy override log redacts URL
+  userinfo and query data, `SetProxy` failures no longer echo the raw value, and
+  malformed scraper cookie settings no longer include configured cookie text.
+  Added deterministic tests for these cases.
 - [x] Local verification: `GOTOOLCHAIN=local go test ./... -count=1` in metaX
   passes; `gofmt -l .` is empty.
 - [x] Clean pinned-SDK focused verification: `go test ./engine ./route
   ./provider/httpretry ./provider/avbaseactor ./provider/airav
   ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga
   ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary
-  ./provider/minnano ./provider/wikipediaactor ./provider/xcity -count=1`
-  passes, including the status endpoint test; `go build -o
+  ./provider/minnano ./provider/wikipediaactor ./provider/xcity
+  ./provider/internal/scraper -count=1` passes, including the status endpoint
+  and log-redaction tests; `go build -o
   /private/var/folders/.../metatube-server ./cmd/server` succeeds.
 - [x] Full pinned-SDK regression was attempted and failed on upstream live
   provider tests blocked by region/anti-bot responses (including FANZA, FALENO,

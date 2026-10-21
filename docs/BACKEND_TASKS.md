@@ -181,7 +181,9 @@ Goal: make transient failures and operational state visible and bounded.
   permanent 4xx, unsafe/unreplayable requests, attempt exhaustion, numeric and
   HTTP-date `Retry-After`, transient/permanent network errors, context
   cancellation before and during backoff, per-provider isolation, status JSON,
-  route gaps, cookie-transport version, and absence of secret fields.
+  route gaps, cookie-transport version, and absence of secret fields. Log
+  redaction tests cover proxy credentials, query tokens, malformed proxy
+  values, and malformed cookie settings.
 
 Acceptance: no unbounded retries, no secret values in status, and retry/status
 behavior deterministic under test. Full pinned-SDK live regression remains

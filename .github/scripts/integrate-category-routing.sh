@@ -24,6 +24,8 @@ cp "$overlay/engine/metax_aggregate_cache.go" "$sdk_root/engine/metax_aggregate_
 cp "$overlay/engine/metax_aggregate_db.go" "$sdk_root/engine/metax_aggregate_db.go"
 cp "$overlay/engine/metax_fanout.go" "$sdk_root/engine/metax_fanout.go"
 cp "$overlay/engine/metax_request_cookies.go" "$sdk_root/engine/metax_request_cookies.go"
+cp "$overlay/engine/metax_secret_redaction.go" "$sdk_root/engine/metax_secret_redaction.go"
+cp "$overlay/engine/metax_secret_redaction_test.go" "$sdk_root/engine/metax_secret_redaction_test.go"
 cp "$overlay/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_test.go"
 cp "$overlay/engine/metax_aggregate_fanout_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go"
 cp "$overlay/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_cache_test.go"
@@ -623,6 +625,24 @@ for raw_path in sys.argv[1:]:
     path.write_text(source)
 PY
 
+python3 - "$sdk_root/engine/init.go" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+old_fatal = """e.logger.Fatalf("Set proxy for %s provider '%s' error: %v", providerType, provider.Name(), v)"""
+new_fatal = """e.logger.Fatalf("Set proxy for %s provider '%s' error: %v", providerType, provider.Name(), err)"""
+old_log = """e.logger.Printf("Override %s provider proxy: %s=%s", providerType, provider.Name(), v)"""
+new_log = """e.logger.Printf("Override %s provider proxy: %s=%s", providerType, provider.Name(), redactProxyForLog(v))"""
+if new_log not in source:
+    if old_log not in source or old_fatal not in source:
+        raise SystemExit("engine/init.go proxy logging markers not found")
+    source = source.replace(old_log, new_log, 1)
+    source = source.replace(old_fatal, new_fatal, 1)
+path.write_text(source)
+PY
+
 python3 - "$sdk_root/route/route.go" <<'PY'
 from pathlib import Path
 import sys
@@ -644,6 +664,7 @@ PY
 gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/engine/metax_aggregate.go" \
   "$sdk_root/engine/metax_aggregate_cache.go" "$sdk_root/engine/metax_aggregate_db.go" \
   "$sdk_root/engine/metax_fanout.go" "$sdk_root/engine/metax_request_cookies.go" \
+  "$sdk_root/engine/init.go" "$sdk_root/engine/metax_secret_redaction.go" "$sdk_root/engine/metax_secret_redaction_test.go" \
   "$sdk_root/engine/metax_aggregate_test.go" "$sdk_root/engine/metax_aggregate_fanout_test.go" \
   "$sdk_root/engine/metax_aggregate_cache_test.go" "$sdk_root/engine/metax_aggregate_db_test.go" \
   "$sdk_root/engine/metax_fanout_test.go" "$sdk_root/engine/metax_request_cookies_test.go" \

@@ -572,6 +572,12 @@ surface without changing the MetaTube/Jellyfin provider contract.
   and cookie-transport version `1`. It does not return cookies, tokens, proxy
   credentials, provider configuration values, or URLs. The endpoint is in the
   existing unauthenticated `/v1` system group, like `/v1/providers`.
+- **Log redaction.** The upstream `engine/init.go` proxy log now removes URL
+  userinfo and query data before logging, and `SetProxy` failures no longer
+  echo the raw proxy value. Malformed scraper cookie settings no longer include
+  the configured cookie text in the returned error. Deterministic tests cover
+  credential/query redaction, invalid proxy values, and cookie-value
+  non-disclosure.
 - **Cancellation decision.** Gin request cancellation is not propagated into
   provider calls because the provider interfaces do not accept
   `context.Context`. Adding a setter would require request-scoped provider

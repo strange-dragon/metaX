@@ -78,7 +78,7 @@ index 6f489df..2da795b 100644
 +		name, value, ok := strings.Cut(part, "=")
 +		name = strings.TrimSpace(name)
 +		if !ok || name == "" {
-+			return nil, fmt.Errorf("invalid cookie setting %q", part)
++			return nil, fmt.Errorf("invalid cookie setting")
 +		}
 +		if strings.ContainsAny(name+value, "\r\n") {
 +			return nil, fmt.Errorf("cookie setting must not contain CR or LF")
@@ -92,7 +92,7 @@ new file mode 100644
 index 0000000..cba33ff
 --- /dev/null
 +++ b/provider/internal/scraper/scraper_test.go
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,72 @@
 +package scraper
 +
 +import (
@@ -148,8 +148,12 @@ index 0000000..cba33ff
 +
 +func TestSetConfigCookieValidation(t *testing.T) {
 +	s := NewDefaultScraper("Test", "https://example.test", 1, language.English)
-+	if err := s.SetConfig(testConfig{"cookie": "not-a-cookie"}); err == nil {
++	err := s.SetConfig(testConfig{"cookie": "not-a-cookie"})
++	if err == nil {
 +		t.Fatal("expected invalid cookie error")
++	}
++	if strings.Contains(err.Error(), "not-a-cookie") {
++		t.Fatalf("cookie validation error leaked the configured value: %v", err)
 +	}
 +	if err := s.SetConfig(testConfig{"cookies": "a=1\r\nX-Injected: yes"}); err == nil {
 +		t.Fatal("expected header injection error")
