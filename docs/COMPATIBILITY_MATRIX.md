@@ -595,4 +595,7 @@ surface without changing the MetaTube/Jellyfin provider contract.
   Go tests in [39534885829](https://github.com/strange-dragon/metaX/actions/runs/39534885829),
   and formatting in [39534885871](https://github.com/strange-dragon/metaX/actions/runs/39534885871).
   The live FC2 and MOON-023 smoke jobs also passed; they do not exercise retry
-  behavior or blocked sources.
+  behavior or blocked sources. Follow-up log-redaction commit `1060ccc` passed
+  SDK integration/build in [39536369716](https://github.com/strange-dragon/metaX/actions/runs/39536369716),
+  Go tests in [39536369702](https://github.com/strange-dragon/metaX/actions/runs/39536369702),
+  and formatting in [39536369734](https://github.com/strange-dragon/metaX/actions/runs/39536369734).

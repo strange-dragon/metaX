@@ -410,6 +410,11 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
   formatting in [39534885871](https://github.com/strange-dragon/metaX/actions/runs/39534885871);
   live FC2/uncensored smoke in [39534885817](https://github.com/strange-dragon/metaX/actions/runs/39534885817);
   and live MOON-023 smoke in [39534885875](https://github.com/strange-dragon/metaX/actions/runs/39534885875).
+- [x] Follow-up log-redaction commit `1060ccc` passed CI: SDK integration/build
+  in [39536369716](https://github.com/strange-dragon/metaX/actions/runs/39536369716),
+  Go tests in [39536369702](https://github.com/strange-dragon/metaX/actions/runs/39536369702),
+  formatting in [39536369734](https://github.com/strange-dragon/metaX/actions/runs/39536369734),
+  and live FC2/uncensored smoke in [39536369761](https://github.com/strange-dragon/metaX/actions/runs/39536369761).
 - [ ] Not run: race detector, Jellyfin end-to-end runtime, and a targeted live
   retry/`Retry-After` exercise. Local live regression failures are recorded
   above; they are not evidence of retry success.
