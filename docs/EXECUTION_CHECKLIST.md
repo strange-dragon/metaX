@@ -518,3 +518,4 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Temporarily retargeted `sdk-patch-validation.yml` to `main`, then removed it with the rest of the workflows at user request.
 - [x] Made the live FC2, MetaX API, and MOON-023 smoke checks manual, then removed their workflow wrappers. The scripts remain under `.github/scripts/` for manual runs.
 - [x] All `.github/workflows/*.yml` files have been deleted. Validation is now local: `go test ./...`, `gofmt -l .`, the build script, and optional live smoke scripts.
+- [x] Cleared five historical workflow registrations that survived earlier file deletion (`Go CI`, `Pinned SDK patch regression`, and three temporary one-off verifications) by briefly re-registering their exact paths on `main` and deleting them again. The Actions API now reports `total_count: 0`.
