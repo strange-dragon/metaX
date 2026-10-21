@@ -28,6 +28,7 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/common/parser"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 
 const (
@@ -271,7 +272,7 @@ func (p *JavDB) rebuildClientLocked() {
 		timeout = defaultTimeout
 	}
 	p.client = &http.Client{
-		Transport: transport,
+		Transport: httpretry.WrapTransport(transport),
 		Timeout:   timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {

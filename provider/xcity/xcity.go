@@ -25,6 +25,7 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/common/parser"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 
 const (
@@ -203,7 +204,7 @@ func (p *XCity) rebuildClientLocked() {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{Transport: tr, Timeout: timeout, CheckRedirect: p.checkRedirect}
+	p.client = &http.Client{Transport: httpretry.WrapTransport(tr), Timeout: timeout, CheckRedirect: p.checkRedirect}
 }
 func (p *XCity) httpClient() *http.Client {
 	p.clientMu.RLock()

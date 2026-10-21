@@ -28,6 +28,7 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/common/parser"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 
 const (
@@ -214,7 +215,7 @@ func (p *AVSOX) rebuildClientLocked() {
 		timeout = defaultTimeout
 	}
 	jar, _ := cookiejar.New(nil)
-	p.client = &http.Client{Transport: tr, Timeout: timeout, Jar: jar, CheckRedirect: p.checkRedirect}
+	p.client = &http.Client{Transport: httpretry.WrapTransport(tr), Timeout: timeout, Jar: jar, CheckRedirect: p.checkRedirect}
 }
 func (p *AVSOX) httpClient() *http.Client {
 	p.clientMu.RLock()

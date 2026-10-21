@@ -7,6 +7,7 @@ on:
       - feat/amane-provider-migration
     paths:
       - "patches/metatube-sdk-go/**"
+      - "provider/httpretry/**"
       - "provider/jav321/**"
       - "provider/avbaseactor/**"
       - "provider/airav/**"

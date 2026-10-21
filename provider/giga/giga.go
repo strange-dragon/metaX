@@ -27,6 +27,7 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/common/parser"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 
 const (
@@ -230,9 +231,9 @@ func (p *Giga) rebuildClientLocked() {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{Transport: transport, Timeout: timeout, Jar: p.jar, CheckRedirect: p.checkRedirect}
+	p.client = &http.Client{Transport: httpretry.WrapTransport(transport), Timeout: timeout, Jar: p.jar, CheckRedirect: p.checkRedirect}
 	p.ageClient = &http.Client{
-		Transport: transport, Timeout: timeout, Jar: p.jar,
+		Transport: httpretry.WrapTransport(transport), Timeout: timeout, Jar: p.jar,
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
 	}
 }

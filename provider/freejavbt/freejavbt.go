@@ -26,6 +26,7 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/common/parser"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 
 const (
@@ -243,7 +244,7 @@ func (p *Freejavbt) rebuildClientLocked() {
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{Transport: transport, Timeout: timeout}
+	p.client = &http.Client{Transport: httpretry.WrapTransport(transport), Timeout: timeout}
 }
 
 func (p *Freejavbt) httpClient() *http.Client {

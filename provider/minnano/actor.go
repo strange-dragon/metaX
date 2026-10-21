@@ -24,6 +24,7 @@ import (
 	"github.com/metatube-community/metatube-sdk-go/common/parser"
 	"github.com/metatube-community/metatube-sdk-go/model"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 
 const (
@@ -60,7 +61,8 @@ func NewActor() *Actor {
 
 func newHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 20 * time.Second,
+		Transport: httpretry.WrapTransport(nil),
+		Timeout:   20 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return fmt.Errorf("minnano actor: stopped after 10 redirects")
