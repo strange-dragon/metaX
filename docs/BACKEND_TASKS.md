@@ -1,6 +1,6 @@
 # metaX backend task breakdown
 
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 Branch: `feat/amane-provider-migration`
 
 This is the working breakdown for the remaining backend work. It is deliberately
@@ -59,18 +59,26 @@ into fake profiles.
   Gfriends images into Japanese actor profiles in `engine/actor.go`; Gfriends is
   not a missing provider and does not need to be modeled as a profile source.
   This corrects the older deferred note in `COMPATIBILITY_MATRIX.md`.
-- [ ] **2.2 ThePornDB actor audit.** Compare the pinned SDK actor provider with
-  Amane's actor source, focusing on URL parsing, token requirements, and field
-  mapping. Add a deterministic patch/test only if a concrete gap exists.
-- [ ] **2.3 Decide whether actor profile aggregation is required.** The movie
-  path has a reserved `MetaX` provider; the actor path does not. Do not add a
-  second aggregation contract until the plugin needs it and identity/merge rules
-  are specified.
-- [ ] **2.4 Live actor checks.** Optional and point-in-time only; deterministic
-  tests must remain the regression coverage.
+- [x] **2.2 ThePornDB actor audit.** Compared the pinned SDK actor provider with
+  Amane's actor source. The concrete gap was config plumbing: both ThePornDB
+  actor and scene/movie providers declared `SetConfig(map[string]string)`, which
+  does not satisfy `provider.ConfigSetter`, so the engine never applied the
+  configured access token. Patch `0016` switches both providers to
+  `provider.Config`, reads `ACCESS_TOKEN` or `api_token`, delegates cookie
+  transport settings to the shared scraper, and adds compile-time and
+  deterministic tests. The GraphQL-vs-REST architecture and field differences
+  remain documented rather than rewritten.
+- [x] **2.3 Decide whether actor profile aggregation is required.** Decision:
+  do not add actor aggregation now. The plugin has no actor-detail aggregation
+  contract, and identity/merge rules for profile, image, and biography sources
+  are not specified. Keep the movie-path `MetaX` provider as the only
+  aggregation contract until a concrete plugin requirement exists.
+- [x] **2.4 Live actor checks (optional).** Not run in this pass. No live-only
+  claim is made; deterministic provider tests remain the regression coverage.
 
-Acceptance for 2.2: a documented comparison with either "no code change" or a
-focused, tested patch. No live-only claims.
+Acceptance for 2.2 is met: the comparison is documented, the concrete config
+gap has a focused patch and deterministic tests, and no live-only claim is
+made. Big Task 2 is complete for required work; 2.4 remains optional.
 
 ## Big Task 3 — Official manufacturer router
 
@@ -171,13 +179,12 @@ behavior deterministic under test.
 
 ## Recommended execution order
 
-1. **2.2** ThePornDB actor audit — deterministic and unblocked.
-2. **7.3** health/status surface — useful for operations without touching
+1. **7.3** health/status surface — useful for operations without touching
    metadata semantics.
-3. **7.1** shared retry policy — highest-value resilience work.
-4. **3.1** Official router contract — large, but the only remaining
+2. **7.1** shared retry policy — highest-value resilience work.
+3. **3.1** Official router contract — large, but the only remaining
    high-impact provider gap that can be designed without live scraping.
-5. Blocked tasks 4–6 only after evidence or an explicit architecture decision.
+4. Blocked tasks 4–6 only after evidence or an explicit architecture decision.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.

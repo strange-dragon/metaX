@@ -57,7 +57,9 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
   runtime configuration endpoint was removed.
 - Native actor providers for JavDB, Minnano, AVBase, and Wikipedia/Wikidata.
   The stock SDK's Gfriends image injection for Japanese actor profiles was
-  verified; it is not a missing provider.
+  verified; it is not a missing provider. The stock ThePornDB actor provider was
+  audited and its config plumbing fixed so `ACCESS_TOKEN`/`api_token` reaches
+  the provider; actor-profile aggregation remains intentionally unimplemented.
 - Remaining backend coverage and hardening are tracked as big/small tasks in
   `docs/BACKEND_TASKS.md`; plugin-side work is recorded but intentionally
   deferred in `docs/JELLYFIN_PLUGIN.md`.
@@ -66,15 +68,14 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
 
 ## 5. Current execution plan
 
-The environment and core-backend blockers are settled. Remaining work is
-maintained as small, independently verifiable tasks in
-`docs/BACKEND_TASKS.md`. The recommended unblocked order is:
+The environment and core-backend blockers are settled. The route-alias cookie
+work and the ThePornDB actor audit are complete; actor-profile aggregation was
+deliberately deferred. Remaining work is maintained as small, independently
+verifiable tasks in `docs/BACKEND_TASKS.md`. The recommended unblocked order is:
 
-1. route aliases in the request-cookie dictionary;
-2. the ThePornDB actor comparison;
-3. a non-secret provider/health status surface;
-4. a shared retry/backoff policy for transient provider failures;
-5. the Official manufacturer-router contract, which must be designed before it
+1. a non-secret provider/health status surface;
+2. a shared retry/backoff policy for transient provider failures;
+3. the Official manufacturer-router contract, which must be designed before it
    is implemented.
 
 Prestige, R18Dev, and fuzzy Getchu work remain blocked on permitted-region

@@ -39,6 +39,11 @@ export MT_MOVIE_PROVIDER_FC2PPVDB__COOKIES='...'
 # Per-provider proxy (HTTP(S) or SOCKS5, depending on the provider client)
 export MT_MOVIE_PROVIDER_FALENO__PROXY='http://127.0.0.1:8080'
 export MT_MOVIE_PROVIDER_MGSTAGE__PROXY='socks5://127.0.0.1:1080'
+
+# ThePornDB API token (patch 0016; API_TOKEN is accepted as an alias)
+export MT_ACTOR_PROVIDER_THEPORNDBACTOR__ACCESS_TOKEN='...'
+export MT_MOVIE_PROVIDER_THEPORNDBSCENE__ACCESS_TOKEN='...'
+export MT_MOVIE_PROVIDER_THEPORNDBMOVIE__ACCESS_TOKEN='...'
 ```
 
 `COOKIE` is accepted as an alias for `COOKIES`. CR/LF characters are rejected
@@ -54,8 +59,13 @@ Coverage details:
 - SDK scraper providers such as `FALENO`, `MGSTAGE`, and `FC2PPVDB`: patch
   `0015-scraper-provider-cookies.patch` installs the header for the provider's
   base URL through the shared `Scraper.SetConfig`.
-- Providers that override `SetConfig` with their own signature, or that do not
-  use the SDK `Scraper`, are not covered by patch `0015`; configure them
+- ThePornDB scene/movie/actor providers: patch `0016` replaces the obsolete
+  `SetConfig(map[string]string)` signature with `provider.ConfigSetter`, applies
+  `ACCESS_TOKEN` (or `API_TOKEN`), and delegates cookie transport settings to
+  the shared scraper. API authentication still depends on the token; a cookie
+  alone does not enable the provider.
+- Providers that override `SetConfig` with an incompatible signature, or that
+  do not use the SDK `Scraper`, are not covered by these patches; configure them
   individually if support is added later.
 
 ## Failure-by-failure status
