@@ -61,10 +61,38 @@ Suggested UI behavior:
 
 No migration of existing users is required because the fields are additive.
 
+### 2.1 Library category and cookie scope
+
+The plugin must also maintain the Jellyfin-library-to-category mapping used for
+scraping:
+
+```text
+LibraryCategories: map<Jellyfin library id, category>
+```
+
+The supported category values are `censored`, `uncensored`, `chinese`,
+`amateur`, `western`, and `hentai`; `fc2` is accepted as an input alias for
+`uncensored`. For each scrape, the plugin:
+
+1. resolves the item's Jellyfin library to a category;
+2. reads the category -> available-provider list from the backend manifest;
+3. builds `X-MetaX-Provider-Cookies` with only the configured cookies whose
+   provider is in that list;
+4. sends the category in the existing `category` query parameter.
+
+The plugin must not send every configured cookie with every request. If the
+manifest is unavailable, omit the cookie header rather than sending unrelated
+provider cookies, and surface a configuration warning. The backend should also
+defensively ignore cookie entries outside the resolved category for
+category-routed movie requests.
+
+The manifest is non-secret: provider names and category membership only. It
+must never contain cookie values, tokens, proxies, or provider configuration.
+
 ## 3. Transport
 
 Every plugin API request that can fetch provider metadata or images should
-carry the dictionary in one header:
+carry the dictionary for the resolved library category in one header:
 
 ```http
 X-MetaX-Provider-Cookies: {"JavDB":"session=...; cf_clearance=..."}
@@ -137,9 +165,12 @@ X-MetaX-Provider-Cookies: {"JavDB":"session=abc; cf_clearance=def"}
 
 ## 7. Plugin implementation checklist (future)
 
-- [ ] Add `ProviderCookies` to plugin configuration and settings UI.
+- [ ] Add `ProviderCookies` and `LibraryCategories` to plugin configuration and
+      settings UI.
 - [ ] Load provider names from `/v1/providers` and render per-provider fields.
-- [ ] Serialize the non-empty dictionary as JSON.
+- [ ] Load the non-secret category -> provider manifest and filter cookies by
+      the current library category before serializing.
+- [ ] Serialize the non-empty category-scoped dictionary as JSON.
 - [ ] Add the header to every MetaTube API/image request.
 - [ ] Enforce the 16 KiB limit client-side with a clear error.
 - [ ] Mask values in logs, exceptions, and diagnostics.

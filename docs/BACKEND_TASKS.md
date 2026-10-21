@@ -14,10 +14,11 @@ Status legend:
 - **BLOCKED** — needs evidence, a configuration decision, or live access before
   implementation would be honest.
 
-The backend already provides the core MetaTube contract: category routing,
-concurrent search fan-out, merged search candidates, field-level detail
-aggregation, source records, bounded fan-out, startup coverage/fingerprint
-checks, native providers, actor providers, and request-scoped provider cookies.
+The backend already provides the core MetaTube contract: category -> provider
+selection, concurrent search fan-out, merged search candidates, field-level
+detail aggregation, source records, bounded fan-out, startup
+coverage/fingerprint checks, native providers, actor providers, and
+request-scoped provider cookies.
 
 ## Big Task 1 — Request-scoped provider cookies
 
@@ -80,31 +81,57 @@ Acceptance for 2.2 is met: the comparison is documented, the concrete config
 gap has a focused patch and deterministic tests, and no live-only claim is
 made. Big Task 2 is complete for required work; 2.4 remains optional.
 
-## Big Task 3 — Official manufacturer router
+## Big Task 3 — Official manufacturer router (NOT PLANNED)
 
-Goal: reproduce Amane's official-studio fallback without hard-coding a partial
-provider.
+Decision (2026-10-21): metaX follows the plugin/library model instead:
+a Jellyfin library maps to one content category, that category maps to a list
+of providers, and the backend queries all of them concurrently and merges the
+results. The user then chooses a candidate in Jellyfin.
 
-- [ ] **3.1 Contract decision.** Define how per-user `official_routes` and
-  previous-provider studio metadata reach a router. The stock
-  `MovieSearcher.SearchMovie(keyword)` signature has no studio context.
-- [ ] **3.2 Route/alias table.** Implement deterministic manufacturer and
-  series-prefix resolution in project configuration or code, with tests for
-  explicit routes, series prefixes, aliases, and ambiguity.
-- [ ] **3.3 Manufacturer adapter.** Implement the shared Works-like extraction
-  only after the route contract exists; preserve origin, redirect, size, and
-  timeout rules.
-- [ ] **3.4 Integration and coverage.** Register the router, verify startup
-  coverage logs, and add deterministic route/parser tests.
-- [ ] **3.5 Documentation.** Record the configuration schema, priority order,
-  and known manufacturer gaps.
+This model does **not** need Amane's `official_routes`, series-prefix routing,
+studio-alias fallback, or manufacturer priority. Those mechanisms solve a
+different problem: choosing one manufacturer site before scraping. They are
+source-comparison evidence only and must not be reintroduced as a hidden
+provider. If a manufacturer site is wanted later, add it as a normal provider
+in the relevant category.
 
-Blocked by 3.1. Do not implement a static `Official` provider that silently
-loses explicit-route and studio-context precedence.
+The former 3.1–3.5 checklist is therefore withdrawn. The only routing
+configuration is category -> provider list.
+
+## Small Task 3A — Category provider manifest and cookie scope
+
+Goal: let the plugin send only cookies for providers in the current library
+category, while keeping the backend safe if a caller sends a wider dictionary.
+
+- [ ] **3A.1 Manifest.** Expose the non-secret category -> available provider
+  list (extend `GET /v1/metax/status` or add a read-only endpoint) so the
+  plugin can filter its cookie dictionary. Do not expose cookies, tokens,
+  proxies, or provider configuration values.
+- [ ] **3A.2 Backend defensive scope.** On category-routed movie requests,
+  ignore cookie entries for providers outside the resolved category. An
+  explicit `provider` override keeps that provider's cookie. Actor/review/image
+  behavior must be documented explicitly.
+- [ ] **3A.3 Tests and docs.** Cover category filtering, explicit-provider
+  override, unknown/alias names, and absent manifests. Update the plugin plan
+  so Jellyfin sends only the current category's provider cookies.
+
+## Provider tasks 4–6: Amane reference policy
+
+Amane is pinned at `a2d45880e83df7047d461452965919692701e8c9` and is GPL-3.0.
+The SDK/metaX side is Apache-2.0. We may reuse **behavior, algorithms, schema
+knowledge, and test scenarios**, but do not copy Amane source code or captured
+fixtures into this repository without an explicit license decision. Implement
+clean-room Go code with independent deterministic tests.
 
 ## Big Task 4 — Prestige provider
 
 Goal: exact SKU lookup through the JSON API.
+
+Amane's `prestige.py` is the behavioral reference: try dashed, compact, GOOE
+dashed, and GOOE compact SKUs against `/api/sku/item/{sku}`, follow
+`parentProduct.uuid` to `/api/product/{uuid}`, and never use fuzzy
+`/api/search`. The algorithm can be reimplemented; real responses are still
+required before claiming support.
 
 - [ ] **4.1 Obtain test evidence.** Permitted-region responses or stable,
   independently sourced API fixtures for SKU, parent product, and product.
@@ -122,6 +149,14 @@ recorded; live access is reported as CloudFront 403/region-restricted.
 
 Goal: decide whether metaX should support an optional local PostgreSQL mirror.
 
+Amane's `r18dev.py` + `r18dev/repository.py` are the reference: short-circuit
+when no database is configured, normalize `content_id` candidates (five-digit
+padding, preserved padding, plain digits), query `derived_video` by exact
+`dvd_id` or `content_id`, then load named entities, people, categories, and
+trailer. Database errors degrade to a miss; they are not HTTP errors. The
+schema/query behavior can be reused, but the Python/SQLAlchemy implementation
+cannot simply be dropped into Go.
+
 - [ ] **5.1 Architecture decision.** A local database is not a normal HTTP
   `MovieProvider`. Decide whether to add a separate optional metadata source
   interface, keep it out of scope, or expose it as an external service.
@@ -136,6 +171,11 @@ Goal: decide whether metaX should support an optional local PostgreSQL mirror.
 
 Goal: support the legacy `www.getchu.com` catalog search only with exact
 identity validation.
+
+Amane's `getchu.py` is the reference for the legacy search URL/cookie flow and
+result HTML shape, but its first-`soft.phtml`-result behavior must not be
+reused. The implementation must add a normalized catalog-identity gate and
+keep the existing `dl.getchu.com` detail provider separate.
 
 - [ ] **6.1 Evidence.** Obtain current catalog HTML/JSON and identify stable
   number/ID markers.
@@ -201,10 +241,12 @@ server build are the release gate for this task.
 
 ## Recommended execution order
 
-1. **3.1** Official router contract — large, but the only remaining
-   high-impact provider gap that can be designed without live scraping.
-2. Blocked tasks 4–6 only after evidence or an explicit architecture decision.
-3. Big Task 8 release-readiness checks after the remaining provider work.
+1. **3A** Category provider manifest and cookie scope — needed to make the
+   plugin/library model precise and avoid sending unrelated cookies.
+2. **5.1** R18Dev architecture decision — local PostgreSQL source vs optional
+   external source vs out of scope.
+3. **4** Prestige and **6** Getchu only after real responses/fixtures exist.
+4. Big Task 8 release-readiness checks after the remaining provider work.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.

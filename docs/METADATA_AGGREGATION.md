@@ -97,14 +97,20 @@ For multi-instance deployments, the in-process cache is intentionally not a dist
 
 ## Route configuration
 
-The server route table is configurable at startup:
+The server route table is a category -> provider list. It is not Amane's
+Official manufacturer table, and provider-list order is used only for
+deterministic merge/tie-breaking, not for manufacturer routing. The current SDK
+provider `Priority()` value still influences candidate sorting; it is not used
+to choose a category or manufacturer.
+
+The table is configurable at startup:
 
 - `METAX_ROUTES` contains inline JSON and takes precedence over `METAX_ROUTES_FILE`, which points at a JSON file. With neither set, `routing.DefaultConfig()` is used.
 - Both `{"routes":{"censored":["DMM","JavDB"]}}` and the bare `{"censored":["DMM","JavDB"]}` shape are accepted.
 - Category keys must be canonical: `censored`, `uncensored`, `chinese`, `amateur`, `western`, or `hentai`. Legacy aliases (`fc2`, `chinese_subtitles`, `animation`) are rejected in configuration so they cannot silently shadow the canonical route; query values still canonicalize through `Category.Canonical()`.
 - Unknown categories, empty routes, empty or duplicate provider names, malformed JSON, and extra top-level fields abort server startup with a nonzero exit.
 - `METAX_ROUTES_FINGERPRINT` optionally pins the expected `Config.FingerprintHash()` value (SHA-256 of the canonical route table; a `sha256:` prefix is accepted). A mismatch aborts startup before the database is opened. The startup log prints the actual fingerprint.
-- Provider availability is resolved against the providers registered in the running binary. Amane route names that differ from SDK package names are bridged explicitly: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails if any configured category has zero available providers; individual gaps are logged because some entries are intentionally deferred (currently `Official` and token-gated `ThePornDB`).
+- Provider availability is resolved against the providers registered in the running binary. Amane route names that differ from SDK package names are bridged explicitly: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails if any configured category has zero available providers; individual gaps are logged because some entries are intentionally deferred (currently token-gated `ThePornDB`). `Official` is not part of the category fan-out model.
 - A route whose providers are all unavailable returns HTTP 400 (`ErrNoAvailableProvider`), and unregistered entries are skipped.
 - The stock search/detail wrappers read `routing.ActiveConfig()`; explicit `...WithConfig` engine methods remain available for tests and embedders. The cache key includes the route fingerprint, so changing the active table never reuses results from a previous table.
 

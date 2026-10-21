@@ -16,7 +16,7 @@ The current architecture uses a metaX repository containing native provider impl
 1. **Amane is the behavioral reference for catalog identity, classification, source routing, and aggregation semantics.** MetaTube SDK behavior is the compatibility reference for its provider interface, HTTP API, response envelope, provider + ID identity, and cache semantics.
 2. Never flatten away meaningful catalog identity. In particular, `101926_01` must not normalize to `10192601`. Case, spaces, and hyphens may be normalized conservatively where justified; underscores remain significant.
 3. Route automatically from Amane-derived catalog-number families and provider-specific identity hints. Do not require users to configure a manual mapping for every category. Explicit provider selection wins; explicit category is honored; URL/detail requests retain the existing detail path; ambiguous terms preserve broad-search compatibility.
-4. Search fan-out is concurrent but output ordering is deterministic according to configured route priority. One provider failure must not discard successful results from other providers. Reuse SDK provider-specific search/cache fallback instead of duplicating it.
+4. Search fan-out is concurrent and the configured category provider-list order is used only for deterministic tie-breaking and merge order; it is not Amane manufacturer routing priority. One provider failure must not discard successful results from other providers. Reuse SDK provider-specific search/cache fallback instead of duplicating it.
 5. Keep detail identity stable. Real-provider requests keep their `provider + id`; the merged view uses the reserved `MetaX` provider with the catalog number as its ID, so later refreshes continue to resolve through aggregation. Cross-provider metadata enrichment requires conservative catalog-number identity validation; never merge works solely because their titles look alike.
 6. Category search returns every provider's original candidate plus one merged candidate under the reserved `MetaX` provider. Real-provider detail defaults to the stock response; `?aggregate=true` adds `category` plus `sources[]`; `MetaX` detail resolves the catalog number through the category route and returns the merged view with `category` and `sources[]`. Each source record identifies provider, provider ID when known, status/error, and that provider's independent structured `MovieInfo` metadata.
 7. Be precise about “raw source data”: current `sources[].metadata` preserves provider-normalized structured `MovieInfo`, **not** the original HTML, JSON response body, or raw HTTP payload. Do not claim raw payload capture exists unless separately implemented and tested.
@@ -79,14 +79,19 @@ The environment and core-backend blockers are settled. Request-scoped cookies,
 the ThePornDB actor audit, and Big Task 7 (status, bounded retry, per-provider
 backoff, cancellation evaluation, and deterministic tests) are complete.
 Remaining work is maintained as small, independently verifiable tasks in
-`docs/BACKEND_TASKS.md`. The next unblocked task is:
+`docs/BACKEND_TASKS.md`.
 
-1. the Official manufacturer-router contract, which must be designed before it
-   is implemented.
+The backend model is **library category -> category provider list -> concurrent
+provider fan-out -> merged candidates**, followed by the user's Jellyfin
+selection. There is no Amane `official_routes`/manufacturer-routing layer and no
+manufacturer priority. The next unblocked task is:
 
-Prestige, R18Dev, and fuzzy Getchu work remain blocked on permitted-region
-responses/fixtures or an explicit data-source architecture decision. Do not
-claim any blocked source works from configuration alone.
+1. category provider manifest and category-scoped cookie filtering.
+
+Prestige, R18Dev, and fuzzy Getchu remain blocked on permitted-region
+responses/fixtures or an explicit data-source architecture decision. Amane is
+the behavioral reference for these tasks, but its GPL-3.0 code and fixtures
+must not be copied into this Apache-2.0 workspace without a license decision.
 
 At each task boundary, update `docs/EXECUTION_CHECKLIST.md` with the commit,
 commands actually run, pass/fail outcomes, and the next small task. Stop after

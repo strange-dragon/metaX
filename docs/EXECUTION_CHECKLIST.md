@@ -301,7 +301,7 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Updated the Faleno matrix entry to reflect the existing exact REST metadata/search patches (`0013`, `0014`) and their deterministic tests; live Faleno remains blocked by HTTP 403.
 - [x] Fixed the trailing blank line in patch `0013` that failed the CI gofmt gate.
 - [x] CI validation passed on commit `61f345f`: SDK patch/full-regression/build [39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056), integrated live MetaX API smoke [39395605130](https://github.com/strange-dragon/metaX/actions/runs/39395605130), existing live FC2/uncensored smoke [39395605027](https://github.com/strange-dragon/metaX/actions/runs/39395605027), Go tests [39395605111](https://github.com/strange-dragon/metaX/actions/runs/39395605111), and formatting [39395604984](https://github.com/strange-dragon/metaX/actions/runs/39395604984). Local live results remain point-in-time evidence.
-- [ ] Still deferred: Official manufacturer router, Prestige, R18Dev offline PostgreSQL, fuzzy Getchu catalog search, and Wikipedia/Wikidata actor biographies.
+- [ ] Still deferred or not planned: Official manufacturer router (withdrawn in favor of category fan-out), Prestige, R18Dev offline PostgreSQL, fuzzy Getchu catalog search, and Wikipedia/Wikidata actor biographies.
 
 ### Task: provider access configuration (2026-10-20)
 
@@ -418,5 +418,6 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [ ] Not run: race detector, Jellyfin end-to-end runtime, and a targeted live
   retry/`Retry-After` exercise. Local live regression failures are recorded
   above; they are not evidence of retry success.
-- Next: **Big Task 3.1** — design the Official manufacturer-router contract
-  before implementation.
+- Next: **Small Task 3A** — expose the category provider manifest and enforce
+  category-scoped cookie filtering. The Official manufacturer router is not
+  planned under the category fan-out model.
