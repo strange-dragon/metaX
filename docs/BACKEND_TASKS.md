@@ -295,7 +295,7 @@ server build are the release gate for this task.
 - [x] **8.3 Review the final diff for API compatibility, dependency growth,
   duplicated helpers, and unrelated changes.** No module drift, no vet errors,
   no added secrets, and the Jellyfin-facing route/API tests pass.
-- [ ] **8.4 Do not merge to `main` without explicit user approval.**
+- [x] **8.4 Merge control.** Explicit user approval was received on 2026-10-21; `main` was fast-forwarded to `b54d681` and pushed without force-push. Future changes still require explicit approval.
 
 ## Recommended execution order
 

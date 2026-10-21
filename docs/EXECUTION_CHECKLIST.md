@@ -494,7 +494,7 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
   is clean for maintained sources/docs; patch files retain upstream context
   whitespace by design. Route/API contract tests continue to cover the
   Jellyfin-facing response shape.
-- [ ] **8.4 Merge.** Not merged to `main`; explicit user approval is required.
+- [x] **8.4 Merge.** Explicit user approval received 2026-10-21. `main` was fast-forwarded to `b54d681` and pushed; no force-push or history rewrite was used. Main Go tests passed in [run 39556457764](https://github.com/strange-dragon/metaX/actions/runs/39556457764).
 - Next: validate the live-unverified Prestige/Getchu implementations when
   permitted-region/access evidence exists; otherwise the backend release gate
   is CI plus the documented runtime limits.
