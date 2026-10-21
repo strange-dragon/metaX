@@ -24,7 +24,7 @@ func TestMetaXProvidersEndpointListsIntegratedProviders(t *testing.T) {
 	if !ok {
 		t.Fatalf("actor_providers missing: %v", data)
 	}
-	for _, name := range []string{"Airav", "AVSOX", "FC2Club", "Freejavbt", "GIGA", "IQQTV", "Jav321", "JavDB", "JavLibrary", "XCity"} {
+	for _, name := range []string{"Airav", "AVSOX", "FC2Club", "Freejavbt", "GIGA", "IQQTV", "Jav321", "JavDB", "JavLibrary", "Prestige", "XCity"} {
 		if _, exists := movieProviders[name]; !exists {
 			t.Errorf("GET /v1/providers did not expose movie provider %q", name)
 		}

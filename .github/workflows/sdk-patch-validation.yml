@@ -18,6 +18,7 @@ on:
       - "provider/iqqtv/**"
       - "provider/javdb/**"
       - "provider/minnano/**"
+      - "provider/prestige/**"
       - "provider/wikipediaactor/**"
       - "provider/javlibrary/**"
       - "provider/xcity/**"

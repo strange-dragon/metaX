@@ -168,17 +168,23 @@ dashed, and GOOE compact SKUs against `/api/sku/item/{sku}`, follow
 `/api/search`. The algorithm can be reimplemented; real responses are still
 required before claiming support.
 
-- [ ] **4.1 Obtain test evidence.** Permitted-region responses or stable,
+- [ ] **4.1 Obtain live test evidence.** Permitted-region responses or stable,
   independently sourced API fixtures for SKU, parent product, and product.
-- [ ] **4.2 Implement exact lookup.** Number/compact/GOOE variants; resolve
-  `parentProduct.uuid`; reject fuzzy `/api/search` matches.
-- [ ] **4.3 Map metadata.** Title, release, runtime, actresses, directors,
+  Synthetic schema fixtures are committed for deterministic tests, but they are
+  not captured site responses.
+- [x] **4.2 Implement exact lookup.** Number/compact/GOOE variants; resolve
+  `parentProduct.uuid`; reject fuzzy `/api/search` matches. Commit `pending`.
+- [x] **4.3 Map metadata.** Title, release, runtime, actresses, directors,
   genres, maker/label/series, plot, poster/package/gallery images.
-- [ ] **4.4 Harden transport and tests.** URL/origin validation, redirects,
-  response limits, and deterministic fixtures.
+- [x] **4.4 Harden transport and tests.** URL/origin validation, redirects,
+  response limits, proxy/timeout/retry support, and deterministic synthetic
+  fixtures.
 
-**BLOCKED**: no permitted-region response or reliable fixture is currently
-recorded; live access is reported as CloudFront 403/region-restricted.
+**IMPLEMENTED, LIVE-UNVERIFIED**: the native `provider/prestige` package follows
+Amane's SKU JSON flow and passes deterministic tests. Live access remains
+CloudFront 403 from this network (`x-amz-cf-pop: SIN2-P9`), so no live-site
+support is claimed. Prestige remains outside the default category routes,
+matching Amane's default route table.
 
 ## Big Task 5 — R18Dev offline database source (NOT PLANNED)
 
@@ -214,16 +220,24 @@ result HTML shape, but its first-`soft.phtml`-result behavior must not be
 reused. The implementation must add a normalized catalog-identity gate and
 keep the existing `dl.getchu.com` detail provider separate.
 
-- [ ] **6.1 Evidence.** Obtain current catalog HTML/JSON and identify stable
-  number/ID markers.
-- [ ] **6.2 Exact identity rule.** Reject first-result behavior; require a
-  normalized catalog match before returning a candidate.
-- [ ] **6.3 Implement searcher.** Keep the existing digital-download detail
-  provider and ID namespace separate.
-- [ ] **6.4 Tests and docs.** Deterministic search/detail fixtures, ambiguity
-  cases, and route coverage.
+- [ ] **6.1 Live evidence.** Obtain current catalog HTML/JSON and identify
+  stable number/ID markers. Synthetic HTML fixtures cover the documented
+  selectors but are not captured site pages.
+- [x] **6.2 Exact identity rule.** Reject first-result behavior; require a
+  normalized catalog/title match, or an exact numeric catalog ID, before
+  returning a candidate.
+- [x] **6.3 Implement searcher.** Patch `0017` adds `MovieSearcher` to the
+  pinned Getchu provider while preserving the existing `dl.getchu.com`
+  detail parser and numeric ID namespace.
+- [x] **6.4 Tests and docs.** Deterministic search/detail, near-match
+  rejection, numeric fallback, cookie propagation, and URL-origin tests were
+  added.
 
-**BLOCKED**: current live catalog behavior and reliable fixtures are missing.
+**IMPLEMENTED, LIVE-UNVERIFIED**: exact `GETCHU-<digits>` lookup and catalog
+search now exist. The legacy `www.getchu.com` search endpoint returned HTTP 403
+with an empty body from this network, so live catalog behavior and current HTML
+selectors remain unverified. The implementation never copies Amane's blind
+first-result behavior.
 
 ## Big Task 7 — Request resilience and observability
 
@@ -282,8 +296,11 @@ server build are the release gate for this task.
 
 ## Recommended execution order
 
-1. **Big Task 8** release-readiness checks — unblocked and next.
-2. **4** Prestige and **6** Getchu only after real responses/fixtures exist.
+1. **Big Task 8** release-readiness checks — complete through 8.3; 8.4 remains
+   gated on explicit merge approval.
+2. **4** Prestige and **6** Getchu are implemented as live-unverified in this
+   branch. Promote them only after permitted-region responses or current page
+   fixtures validate the parsers.
 
 R18Dev is out of scope. Small Tasks 3A and 3B are complete: the manifest/cookie
 boundary is in place, and candidate ordering follows the Amane category route

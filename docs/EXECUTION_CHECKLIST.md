@@ -495,5 +495,19 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
   whitespace by design. Route/API contract tests continue to cover the
   Jellyfin-facing response shape.
 - [ ] **8.4 Merge.** Not merged to `main`; explicit user approval is required.
-- Next: **4** Prestige or **6** Getchu only with real fixtures; otherwise the
-  backend release gate is CI plus the documented runtime limits.
+- Next: validate the live-unverified Prestige/Getchu implementations when
+  permitted-region/access evidence exists; otherwise the backend release gate
+  is CI plus the documented runtime limits.
+
+### Task: Prestige and Getchu live-unverified provider coverage (2026-10-21)
+
+- [x] Added native `provider/prestige` implementing Amane's exact SKU flow: dashed/compact/GOOE variants, `/api/sku/item/{sku}`, `parentProduct.uuid`, then `/api/product/{uuid}`. It does not use the fuzzy `/api/search` endpoint.
+- [x] Mapped Prestige title, release, runtime, actresses, directors, genres, maker/label/series, plot, poster/package/gallery images; added same-origin URL validation, response limits, retry transport, proxy/timeout support, and deterministic synthetic-schema tests.
+- [x] Added SDK patch `0017-getchu-exact-catalog-search.patch`: `www.getchu.com/php/nsearch.phtml` search with age cookies, exact numeric ID or normalized exact catalog/title identity matching, and no first-fuzzy-result fallback. The existing `dl.getchu.com` detail parser and ID namespace are preserved.
+- [x] Registered `Prestige` in the provider overlay, engine/API discovery tests, focused-test lists, format gate, and CI path filters. Added the Getchu search test to the patch format gate.
+- [x] Verification: `GOTOOLCHAIN=local go test ./... -count=1` in metaX passes; `gofmt -l .` is empty.
+- [x] Verification: clean pinned SDK overlay applied all 17 patches; focused tests for `engine`, `route`, all native providers (including `Prestige`), `getchu`, `httpretry`, and `internal/scraper` passed; the integrated server binary built successfully.
+- [ ] Full pinned SDK regression is environment-limited locally: `engine/dbengine` requires Docker and `imageutil/TestJPEGDecode` differs under Go 1.27. CI with Go 1.26.x remains the full-regression gate.
+- [ ] Live verification is still missing. Prestige returns CloudFront HTTP 403 from this network (`x-amz-cf-pop: SIN2-P9`); Getchu search returns HTTP 403 with an empty body and `Vary: User-Agent`. No live support is claimed.
+- [ ] Prestige is intentionally not in the default category routes, matching Amane's default table. Getchu remains the first hentai route provider and will now attempt exact-identity catalog search before falling back to an exact numeric detail lookup.
+- Commit and CI evidence: pending.
