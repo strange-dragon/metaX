@@ -14,6 +14,7 @@ import (
 
 	"github.com/metatube-community/metatube-sdk-go/model"
 	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/metatube-community/metatube-sdk-go/routing"
 )
 
 const (
@@ -123,6 +124,35 @@ func TestRequestProviderCookiesApplyToSearchAndDetail(t *testing.T) {
 		if title := firstTitle(body); title != "session=abc; cf_clearance=def" {
 			t.Fatalf("%s title=%q body=%v", target, title, body)
 		}
+	}
+}
+
+func TestRequestProviderCookiesDropOutOfCategoryEntries(t *testing.T) {
+	original := routing.ActiveConfig()
+	t.Cleanup(func() {
+		if err := routing.SetActiveConfig(original); err != nil {
+			t.Fatalf("restore routing config: %v", err)
+		}
+	})
+	if err := routing.SetActiveConfig(routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {requestCookieRouteName},
+	}}); err != nil {
+		t.Fatalf("set routing config: %v", err)
+	}
+
+	router := newContractRouter(t)
+	// contractMovieName is outside the censored route and has no ConfigSetter.
+	// Before category scoping this would fail with an unsupported-provider
+	// cookie error instead of being ignored.
+	header := fmt.Sprintf(`{"%s":"session=abc","%s":"session=ignored"}`,
+		requestCookieRouteName, contractMovieName)
+	status, body := requestJSONWithCookieHeader(t, router,
+		"/v1/movies/search?q=ABC-123&category=censored&fallback=false", header)
+	if status != http.StatusOK {
+		t.Fatalf("status=%d body=%v", status, body)
+	}
+	if title := firstTitle(body); title != "session=abc" {
+		t.Fatalf("title=%q body=%v", title, body)
 	}
 }
 

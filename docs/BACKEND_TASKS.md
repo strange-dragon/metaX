@@ -103,17 +103,22 @@ configuration is category -> provider list.
 Goal: let the plugin send only cookies for providers in the current library
 category, while keeping the backend safe if a caller sends a wider dictionary.
 
-- [ ] **3A.1 Manifest.** Expose the non-secret category -> available provider
-  list (extend `GET /v1/metax/status` or add a read-only endpoint) so the
-  plugin can filter its cookie dictionary. Do not expose cookies, tokens,
-  proxies, or provider configuration values.
-- [ ] **3A.2 Backend defensive scope.** On category-routed movie requests,
-  ignore cookie entries for providers outside the resolved category. An
-  explicit `provider` override keeps that provider's cookie. Actor/review/image
-  behavior must be documented explicitly.
-- [ ] **3A.3 Tests and docs.** Cover category filtering, explicit-provider
-  override, unknown/alias names, and absent manifests. Update the plugin plan
-  so Jellyfin sends only the current category's provider cookies.
+- [x] **3A.1 Manifest.** `GET /v1/metax/status` now returns
+  `data.route_providers`: category -> registered provider names, with Amane
+  route aliases resolved (`DMM` -> `FANZA`, `MGStage` -> `MGS`, `ThePornDB` ->
+  `ThePornDBMovie`). Unavailable providers are omitted. No cookie, token, proxy,
+  URL, or provider-configuration value is included.
+- [x] **3A.2 Backend defensive scope.** Category-routed movie requests keep
+  only cookies for providers in the resolved category. An explicit `provider`
+  query wins over category routing and keeps that provider's alias cookies.
+  Requests with neither a category nor an explicit provider (for example actor
+  search) preserve the dictionary because their provider set is not
+  category-routed; review/image paths follow the same rule.
+- [x] **3A.3 Tests and docs.** Tests cover category filtering, explicit
+  override, route aliases, unscoped requests, manifest contents, and an
+  out-of-category provider that lacks a `ConfigSetter`. The plugin plan now
+  documents `route_providers`, library-category mapping, and client-side cookie
+  filtering. Plugin implementation remains deferred.
 
 ## Provider tasks 4–6: Amane reference policy
 
@@ -241,12 +246,13 @@ server build are the release gate for this task.
 
 ## Recommended execution order
 
-1. **3A** Category provider manifest and cookie scope — needed to make the
-   plugin/library model precise and avoid sending unrelated cookies.
-2. **5.1** R18Dev architecture decision — local PostgreSQL source vs optional
+1. **5.1** R18Dev architecture decision — local PostgreSQL source vs optional
    external source vs out of scope.
-3. **4** Prestige and **6** Getchu only after real responses/fixtures exist.
-4. Big Task 8 release-readiness checks after the remaining provider work.
+2. **4** Prestige and **6** Getchu only after real responses/fixtures exist.
+3. Big Task 8 release-readiness checks after the remaining provider work.
+
+Small Task 3A is complete: the manifest and backend cookie boundary are in
+place; the Jellyfin plugin still needs its client-side filtering implementation.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.

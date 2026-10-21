@@ -75,7 +75,8 @@ The supported category values are `censored`, `uncensored`, `chinese`,
 `uncensored`. For each scrape, the plugin:
 
 1. resolves the item's Jellyfin library to a category;
-2. reads the category -> available-provider list from the backend manifest;
+2. reads the category -> available-provider list from
+   `GET /v1/metax/status` (`data.route_providers`);
 3. builds `X-MetaX-Provider-Cookies` with only the configured cookies whose
    provider is in that list;
 4. sends the category in the existing `category` query parameter.
@@ -88,6 +89,10 @@ category-routed movie requests.
 
 The manifest is non-secret: provider names and category membership only. It
 must never contain cookie values, tokens, proxies, or provider configuration.
+Manifest names are canonical registered provider names; the backend accepts the
+known route aliases (`DMM`, `MGStage`, `ThePornDB`) in the cookie header, so the
+plugin should map a configured alias to the corresponding manifest name before
+filtering.
 
 ## 3. Transport
 

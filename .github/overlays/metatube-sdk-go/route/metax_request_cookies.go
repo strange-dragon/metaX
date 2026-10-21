@@ -29,6 +29,10 @@ func requestEngine(c *gin.Context, app *engine.Engine) (*engine.Engine, error) {
 	if len(cookies) == 0 {
 		return app, nil
 	}
+	cookies = scopeRequestCookies(c, app, cookies)
+	if len(cookies) == 0 {
+		return app, nil
+	}
 	scoped, err := app.WithRequestCookies(cookies)
 	if err != nil {
 		// Do not echo cookie values or provider configuration in the HTTP
@@ -36,6 +40,61 @@ func requestEngine(c *gin.Context, app *engine.Engine) (*engine.Engine, error) {
 		return nil, errors.New("invalid provider cookies")
 	}
 	return scoped, nil
+}
+
+// scopeRequestCookies keeps only cookies for providers that the current request
+// can reach. The plugin is expected to send a category-scoped dictionary, but
+// the server enforces the same boundary defensively. Explicit provider
+// selection wins over category routing, matching the SDK route contract.
+//
+// Requests without a category or explicit provider (for example actor search)
+// keep the full dictionary because their provider set is not category-routed.
+func scopeRequestCookies(c *gin.Context, app *engine.Engine, cookies map[string]string) map[string]string {
+	allowed, scoped := requestProviderScope(c, app)
+	if !scoped {
+		return cookies
+	}
+	filtered := make(map[string]string, len(cookies))
+	for name, value := range cookies {
+		if _, ok := allowed[strings.ToLower(strings.TrimSpace(name))]; ok {
+			filtered[name] = value
+		}
+	}
+	return filtered
+}
+
+func requestProviderScope(c *gin.Context, app *engine.Engine) (map[string]struct{}, bool) {
+	if explicit := strings.TrimSpace(c.Query("provider")); explicit != "" {
+		allowed := make(map[string]struct{})
+		for _, name := range routing.ResolveProviderAliases(explicit) {
+			allowed[strings.ToLower(strings.TrimSpace(name))] = struct{}{}
+		}
+		return allowed, true
+	}
+
+	rawCategory := strings.TrimSpace(c.Query("category"))
+	if rawCategory == "" {
+		return nil, false
+	}
+	category, err := routing.ParseCategory(rawCategory)
+	if err != nil {
+		// The route handler returns the canonical category error; do not turn
+		// a cookie-scope problem into a different response.
+		return nil, false
+	}
+	registered := make([]string, 0, len(app.GetMovieProviders()))
+	for name := range app.GetMovieProviders() {
+		registered = append(registered, name)
+	}
+	providers, err := routing.ActiveConfig().Resolve(category, "", registered)
+	if err != nil {
+		return nil, false
+	}
+	allowed := make(map[string]struct{}, len(providers))
+	for _, name := range providers {
+		allowed[strings.ToLower(name)] = struct{}{}
+	}
+	return allowed, true
 }
 
 func requestProviderCookies(c *gin.Context) (map[string]string, error) {

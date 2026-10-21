@@ -45,6 +45,14 @@ func TestMetaXStatusReportsNonSecretState(t *testing.T) {
 	if got, ok := data["actor_providers"].(float64); !ok || got < 1 {
 		t.Errorf("actor_providers=%v want >= 1", data["actor_providers"])
 	}
+	routes, ok := data["route_providers"].(map[string]any)
+	if !ok {
+		t.Fatalf("route_providers=%v want object", data["route_providers"])
+	}
+	providers, ok := routes[string(routing.CategoryCensored)].([]any)
+	if !ok || len(providers) != 1 || providers[0] != contractMovieName {
+		t.Fatalf("route_providers[censored]=%v want [%s]", routes[string(routing.CategoryCensored)], contractMovieName)
+	}
 	gaps, ok := data["route_provider_gaps"].([]any)
 	if !ok || len(gaps) != 1 {
 		t.Fatalf("route_provider_gaps=%v want one gap", data["route_provider_gaps"])

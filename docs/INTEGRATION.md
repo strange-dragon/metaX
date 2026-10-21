@@ -18,7 +18,7 @@ This repository keeps the new Provider in a testable migration workspace. To ena
 
 3. Run `gofmt -w provider/javdb/*.go provider/jav321/*.go engine/register.go`.
 4. Run `go test ./provider/javdb ./provider/jav321` and then `go test ./...` in the SDK checkout.
-5. Build the MetaTube server and verify `/v1/providers` lists JavDB and Jav321; verify `/v1/metax/status` returns the route fingerprint, provider counts, gaps, and cookie-transport version without secrets; then use the existing Jellyfin MetaTube plugin to search and retrieve a real known title.
+5. Build the MetaTube server and verify `/v1/providers` lists JavDB and Jav321; verify `/v1/metax/status` returns the route fingerprint, provider counts, category -> provider manifest, gaps, and cookie-transport version without secrets; then use the existing Jellyfin MetaTube plugin to search and retrieve a real known title.
 
 ## Design constraints
 

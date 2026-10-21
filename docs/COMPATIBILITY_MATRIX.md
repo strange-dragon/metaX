@@ -568,10 +568,11 @@ surface without changing the MetaTube/Jellyfin provider contract.
   package. These are explicit limits, not evidence that those paths are
   resilient.
 - **Status endpoint.** `GET /v1/metax/status` returns registered movie/actor
-  provider counts, route category count and fingerprint, route provider gaps,
-  and cookie-transport version `1`. It does not return cookies, tokens, proxy
-  credentials, provider configuration values, or URLs. The endpoint is in the
-  existing unauthenticated `/v1` system group, like `/v1/providers`.
+  provider counts, route category count and fingerprint, the non-secret
+  category -> available-provider manifest (`route_providers`), route provider
+  gaps, and cookie-transport version `1`. It does not return cookies, tokens,
+  proxy credentials, provider configuration values, or URLs. The endpoint is in
+  the existing unauthenticated `/v1` system group, like `/v1/providers`.
 - **Log redaction.** The upstream `engine/init.go` proxy log now removes URL
   userinfo and query data before logging, and `SetProxy` failures no longer
   echo the raw proxy value. Malformed scraper cookie settings no longer include
