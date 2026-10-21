@@ -146,6 +146,9 @@ runtime or routing implementation.
   provider has a much lower SDK priority than the second provider; the
   route-first candidate must still come first. Existing merge tests continue to
   assert `MetaX` first.
+- [x] **3B.4 CI.** Go tests and the pinned-SDK patch/build job passed on commit
+  `9e7191e`: [Go tests 39541866177](https://github.com/strange-dragon/metaX/actions/runs/39541866177),
+  [SDK patch 39541866361](https://github.com/strange-dragon/metaX/actions/runs/39541866361).
 
 ## Provider tasks 4–6: Amane reference policy
 

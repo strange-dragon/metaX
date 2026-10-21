@@ -469,5 +469,8 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
   first.
 - [x] Local verification on the clean pinned SDK:
   `GOTOOLCHAIN=local go test ./engine ./route ./routing -count=1` passed.
+- [x] CI passed on `9e7191e`:
+  [Go tests 39541866177](https://github.com/strange-dragon/metaX/actions/runs/39541866177),
+  [SDK patch 39541866361](https://github.com/strange-dragon/metaX/actions/runs/39541866361).
 - Next: **5.1** R18Dev architecture decision — optional local PostgreSQL source
   vs external service vs out of scope.
