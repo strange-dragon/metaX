@@ -173,7 +173,7 @@ required before claiming support.
   Synthetic schema fixtures are committed for deterministic tests, but they are
   not captured site responses.
 - [x] **4.2 Implement exact lookup.** Number/compact/GOOE variants; resolve
-  `parentProduct.uuid`; reject fuzzy `/api/search` matches. Commit `pending`.
+  `parentProduct.uuid`; reject fuzzy `/api/search` matches. Commit `b242fb9`.
 - [x] **4.3 Map metadata.** Title, release, runtime, actresses, directors,
   genres, maker/label/series, plot, poster/package/gallery images.
 - [x] **4.4 Harden transport and tests.** URL/origin validation, redirects,
@@ -184,7 +184,9 @@ required before claiming support.
 Amane's SKU JSON flow and passes deterministic tests. Live access remains
 CloudFront 403 from this network (`x-amz-cf-pop: SIN2-P9`), so no live-site
 support is claimed. Prestige remains outside the default category routes,
-matching Amane's default route table.
+matching Amane's default route table. CI passed focused tests, full pinned-SDK
+regression, formatting, and server build in [run 39554383405](https://github.com/strange-dragon/metaX/actions/runs/39554383405);
+Go tests passed in [39554383379](https://github.com/strange-dragon/metaX/actions/runs/39554383379).
 
 ## Big Task 5 — R18Dev offline database source (NOT PLANNED)
 
@@ -237,7 +239,8 @@ keep the existing `dl.getchu.com` detail provider separate.
 search now exist. The legacy `www.getchu.com` search endpoint returned HTTP 403
 with an empty body from this network, so live catalog behavior and current HTML
 selectors remain unverified. The implementation never copies Amane's blind
-first-result behavior.
+first-result behavior. CI applied patch `0017`, passed focused tests, full
+pinned-SDK regression, formatting, and server build in [run 39554383405](https://github.com/strange-dragon/metaX/actions/runs/39554383405).
 
 ## Big Task 7 — Request resilience and observability
 
