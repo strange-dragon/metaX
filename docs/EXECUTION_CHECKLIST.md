@@ -278,7 +278,10 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Added aliases for Amane route names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`.
 - [x] Added `Config.FingerprintHash()` (SHA-256 of the canonical route table) and `METAX_ROUTES_FINGERPRINT`; a mismatch aborts startup before the database opens. The actual fingerprint is logged at startup.
 - [x] Wired coverage/fingerprint checks into the generated `cmd.Router` integration and covered both in deterministic tests.
-- [x] Verified the default integrated build logs only the intentional gaps (`Official`, token-gated `ThePornDB`) instead of the previous false `MGStage`/`ThePornDB` name gaps.
+- [x] Verified the default integrated build logs only the intentional gaps
+  (`Official`, token-gated `ThePornDB`) instead of the previous false
+  `MGStage`/`ThePornDB` name gaps. `Official` was later removed from the
+  default route in Small Task 3A.
 - [x] Verification: `go test ./routing -count=1` in metaX; `go test ./routing ./engine ./route -count=1` in the integrated SDK; `go build -o /tmp/metatube-server-metax ./cmd/server`; live startup log and fingerprint mismatch both observed.
 - [x] CI on Go 1.26.x passed patch application, focused tests, full pinned-SDK regression, formatting, and server build in [run 39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056). Local full regression remains environment-blocked (`engine/dbengine` needs Docker; `imageutil` differs under Go 1.27).
 
@@ -444,6 +447,13 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
   in [39539784711](https://github.com/strange-dragon/metaX/actions/runs/39539784711),
   Go tests in [39539784696](https://github.com/strange-dragon/metaX/actions/runs/39539784696),
   and formatting in [39539784702](https://github.com/strange-dragon/metaX/actions/runs/39539784702).
+- [x] Follow-up `122e4f0` (drop `Official` from the default route) passed:
+  SDK patch/integration/full regression/build in
+  [39540447925](https://github.com/strange-dragon/metaX/actions/runs/39540447925),
+  Go tests in [39540447927](https://github.com/strange-dragon/metaX/actions/runs/39540447927),
+  formatting in [39540447917](https://github.com/strange-dragon/metaX/actions/runs/39540447917),
+  and live FC2/uncensored smoke in
+  [39540447920](https://github.com/strange-dragon/metaX/actions/runs/39540447920).
 - [ ] Not run for this change: Jellyfin plugin implementation. The plugin
   remains deferred; its plan now documents library-category mapping and
   client-side `route_providers` filtering.

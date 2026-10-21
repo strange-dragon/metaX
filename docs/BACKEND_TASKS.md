@@ -125,6 +125,11 @@ category, while keeping the backend safe if a caller sends a wider dictionary.
   [SDK integration/build 39539784711](https://github.com/strange-dragon/metaX/actions/runs/39539784711),
   [Go tests 39539784696](https://github.com/strange-dragon/metaX/actions/runs/39539784696),
   [format 39539784702](https://github.com/strange-dragon/metaX/actions/runs/39539784702).
+  Follow-up route cleanup `122e4f0` passed:
+  [SDK integration/build 39540447925](https://github.com/strange-dragon/metaX/actions/runs/39540447925),
+  [Go tests 39540447927](https://github.com/strange-dragon/metaX/actions/runs/39540447927),
+  [format 39540447917](https://github.com/strange-dragon/metaX/actions/runs/39540447917),
+  [live FC2/uncensored 39540447920](https://github.com/strange-dragon/metaX/actions/runs/39540447920).
 
 ## Provider tasks 4–6: Amane reference policy
 
