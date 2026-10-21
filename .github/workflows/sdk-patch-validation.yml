@@ -4,7 +4,7 @@ name: Validate and build MetaTube server with native providers
 on:
   push:
     branches:
-      - feat/amane-provider-migration
+      - main
     paths:
       - "patches/metatube-sdk-go/**"
       - "provider/httpretry/**"

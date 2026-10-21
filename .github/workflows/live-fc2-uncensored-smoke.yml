@@ -1,14 +1,7 @@
 name: Live FC2 and uncensored scraper smoke test
 
 on:
-  push:
-    branches: ["feat/amane-provider-migration"]
-    paths:
-      - ".github/workflows/live-fc2-uncensored-smoke.yml"
-      - ".github/scripts/live-fc2-uncensored-smoke.sh"
-      - ".github/scripts/build-metatube-server.sh"
-      - "provider/**/*.go"
-      - "routing/**/*.go"
+  workflow_dispatch:
 
 permissions:
   contents: read

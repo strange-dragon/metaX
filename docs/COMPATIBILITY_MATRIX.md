@@ -505,7 +505,7 @@ Environment: local macOS, Go 1.27.3, pinned SDK `c62584675c593816cc07e7b5b977d14
 | `MetaX` image | `GET /v1/images/primary/MetaX/ABP-123?category=censored` returned HTTP 200 JPEG (359×539) | Image identity used the route-first provider |
 | FC2 search/detail | `FC2-PPV-3954834` search returned a merged candidate; `MetaX/FC2-3954834` detail merged the FC2 source with summary, genres, cover, and release date | JavDB detail redirected to login, JavBus rejected the FC2 keyword, AVSOX/Airav were not found |
 | Amateur route | `200GANA-123` search returned HTTP 200 with `MetaX` first; JavDB results followed | Explicit MGS search returned HTTP 403; MGS is registered, but live access is blocked |
-| Hentai route | `GETCHU-12345` search returned HTTP 200 with `MetaX` first, then Getchu | Exact `GETCHU-<digits>` fallback works; fuzzy catalog search remains deferred |
+| Hentai route | `GETCHU-12345` search returned HTTP 200 with `MetaX` first, then Getchu | Exact `GETCHU-<digits>` fallback works; patch `0017` adds exact-identity catalog search, but live catalog access remains unverified |
 | Actor search | `三上悠亜` returned three results, Gfriends first | Gfriends is live; `WikipediaActor` now adds biography enrichment with deterministic tests, but its live-site path has not been rechecked |
 | Error/config behavior | Unknown category returned HTTP 400; `METAX_ROUTES_FINGERPRINT=deadbeef` aborted startup with `fingerprint mismatch` | Startup coverage/fingerprint checks are active |
 
@@ -518,7 +518,7 @@ Provider-specific limits observed on the same date:
 - **MGStage/MGS:** registered and present in the amateur route, but live requests returned 403.
 - **ThePornDB:** token-gated; disabled without a configured token. Patch `0016` makes `ACCESS_TOKEN`/`api_token` reach the actor and scene/movie providers, but no live token-backed request was made in this pass. Startup coverage logs it as unavailable in a default build.
 - **Official:** withdrawn with the Amane manufacturer router. The default censored route no longer lists it.
-- **Prestige:** remains deferred until permitted-region responses or reliable fixtures exist. **R18Dev:** out of scope (2026-10-21); no PostgreSQL/import contract will be added.
+- **Prestige:** native provider implemented as live-unverified; promote only after permitted-region responses or reliable fixtures exist. **R18Dev:** out of scope (2026-10-21); no PostgreSQL/import contract will be added.
 
 The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged for optional providers such as token-gated `ThePornDB`.
 

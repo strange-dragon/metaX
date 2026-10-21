@@ -118,7 +118,7 @@ category, while keeping the backend safe if a caller sends a wider dictionary.
   override, route aliases, unscoped requests, manifest contents, and an
   out-of-category provider that lacks a `ConfigSetter`. The plugin plan now
   documents `route_providers`, library-category mapping, and client-side cookie
-  filtering. Plugin implementation remains deferred.
+  filtering. Plugin-side implementation lives in `metaX-jellyfin`.
 - **Evidence (2026-10-21).** Clean pinned SDK after patches + provider overlay:
   `GOTOOLCHAIN=local go test ./route ./routing -count=1` passed. MetaX:
   `GOTOOLCHAIN=local go test ./... -count=1` passed. CI on commit `717974d`:
@@ -299,16 +299,18 @@ server build are the release gate for this task.
 
 ## Recommended execution order
 
-1. **Big Task 8** release-readiness checks — complete through 8.3; 8.4 remains
-   gated on explicit merge approval.
-2. **4** Prestige and **6** Getchu are implemented as live-unverified in this
-   branch. Promote them only after permitted-region responses or current page
-   fixtures validate the parsers.
+No mandatory backend implementation remains as of 2026-10-21. Remaining work is
+validation or optional coverage, not a required feature branch:
 
-R18Dev is out of scope. Small Tasks 3A and 3B are complete: the manifest/cookie
-boundary is in place, and candidate ordering follows the Amane category route
-with `MetaX` first. The Jellyfin plugin still needs its client-side
-cookie-filtering implementation.
+1. Promote **4** Prestige and **6** Getchu from live-unverified only after
+   permitted-region responses or current page fixtures validate the parsers.
+2. Re-check region/login/token-gated providers when access is available; do not
+   treat blocked live checks as parser failures.
+3. Plugin-side cookie filtering and configuration live in `metaX-jellyfin`.
+
+R18Dev and the Amane manufacturer router remain out of scope. Small Tasks 3A and
+3B are complete: the manifest/cookie boundary is in place, and candidate
+ordering follows the Amane category route with `MetaX` first.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.

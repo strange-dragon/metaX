@@ -511,3 +511,10 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [ ] Live verification is still missing. Prestige returns CloudFront HTTP 403 from this network (`x-amz-cf-pop: SIN2-P9`); Getchu search returns HTTP 403 with an empty body and `Vary: User-Agent`. No live support is claimed.
 - [ ] Prestige is intentionally not in the default category routes, matching Amane's default table. Getchu remains the first hentai route provider and will now attempt exact-identity catalog search before falling back to an exact numeric detail lookup.
 - Commit: `b242fb9`. CI on that commit passed SDK patch application, focused tests, full pinned-SDK regression, formatting, and server build in [run 39554383405](https://github.com/strange-dragon/metaX/actions/runs/39554383405); metaX Go tests passed in [39554383379](https://github.com/strange-dragon/metaX/actions/runs/39554383379); formatting passed in [39554383384](https://github.com/strange-dragon/metaX/actions/runs/39554383384); live FC2/uncensored smoke passed in [39554383374](https://github.com/strange-dragon/metaX/actions/runs/39554383374).
+
+### Task: GitHub Actions workflow cleanup (2026-10-21)
+
+- [x] Removed `format-go.yml`; the `Go tests` workflow already enforces `gofmt -l .`, and the auto-commit workflow targeted the merged feature branch.
+- [x] Retargeted `sdk-patch-validation.yml` to `main`; it remains the full pinned-SDK regression and server-build gate.
+- [x] Made the live FC2, MetaX API, and MOON-023 smoke workflows manual `workflow_dispatch` only; their scripts remain available for permitted-region checks.
+- [x] Parsed all remaining workflow YAML successfully. No Go code changed.

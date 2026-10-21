@@ -2,11 +2,6 @@ name: Live MetaX API smoke test
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["feat/amane-provider-migration"]
-    paths:
-      - ".github/workflows/live-metax-api-smoke.yml"
-      - ".github/scripts/live-metax-api-smoke.sh"
 
 permissions:
   contents: read

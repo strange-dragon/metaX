@@ -1,12 +1,7 @@
 name: Live MOON-023 scraper smoke test
 
 on:
-  push:
-    branches: ["feat/amane-provider-migration"]
-    paths:
-      - ".github/workflows/live-moon023-smoke.yml"
-      - ".github/scripts/live-moon023-smoke.sh"
-      - "provider/**/*.go"
+  workflow_dispatch:
 
 permissions:
   contents: read
