@@ -433,6 +433,9 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [x] Added deterministic tests for manifest contents, category filtering,
   explicit-provider override, route aliases, unscoped requests, and the
   out-of-category unsupported-provider case.
+- [x] Removed `Official` from the default censored route. It is Amane's
+  manufacturer router, not a category provider; the default route now has no
+  deferred provider gap with the integrated provider inventory.
 - [x] Local verification on the clean pinned SDK after patches and provider
   overlay: `GOTOOLCHAIN=local go test ./route ./routing -count=1` passed.
   MetaX: `GOTOOLCHAIN=local go test ./... -count=1` passed; `gofmt -l` was

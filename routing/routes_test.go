@@ -10,7 +10,7 @@ import (
 func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 	config := DefaultConfig()
 	want := map[Category][]string{
-		CategoryCensored:   {"DMM", "JavDB", "JavBus", "Official"},
+		CategoryCensored:   {"DMM", "JavDB", "JavBus"},
 		CategoryUncensored: {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
 		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},
@@ -47,8 +47,8 @@ func TestDMMRouteResolvesToRegisteredFANZAProvider(t *testing.T) {
 
 func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 	// Mirrors the pinned SDK providers plus the native providers integrated by
-	// build-metatube-server.sh. Official is intentionally absent: Amane's
-	// Official entry is a studio-aware routing layer, not a registered scraper.
+	// build-metatube-server.sh. Amane's Official studio router is not part of
+	// the category fan-out model.
 	registered := []string{
 		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
 		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "Getchu",
@@ -241,19 +241,14 @@ func TestConfigFingerprintIsDeterministicAndOrderSensitive(t *testing.T) {
 	}
 }
 
-func TestDefaultRoutesOnlyReportDeferredOfficialGap(t *testing.T) {
+func TestDefaultRoutesHaveNoDeferredGaps(t *testing.T) {
 	registered := []string{
 		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
 		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "Getchu",
 	}
 	coverage := DefaultConfig().ProviderCoverage(registered)
-	want := ProviderCoverage{
-		Gaps: []ProviderGap{
-			{Category: CategoryCensored, Missing: []string{"Official"}},
-		},
-	}
-	if !reflect.DeepEqual(coverage, want) {
-		t.Fatalf("DefaultConfig().ProviderCoverage() = %#v, want %#v", coverage, want)
+	if len(coverage.Gaps) != 0 || len(coverage.Empty) != 0 {
+		t.Fatalf("DefaultConfig().ProviderCoverage() = %#v, want no gaps", coverage)
 	}
 	if err := DefaultConfig().ValidateRegisteredProviders(registered); err != nil {
 		t.Fatalf("ValidateRegisteredProviders() error = %v, want nil", err)
@@ -262,13 +257,13 @@ func TestDefaultRoutesOnlyReportDeferredOfficialGap(t *testing.T) {
 
 func TestProviderCoverageResolvesAliasesAndReportsIntentionalGaps(t *testing.T) {
 	config := Config{Routes: map[Category][]string{
-		CategoryCensored:   {"DMM", "JavDB", "Official"},
+		CategoryCensored:   {"DMM", "JavDB", "MissingProvider"},
 		CategoryUncensored: {"FC2", "Airav"},
 	}}
 	coverage := config.ProviderCoverage([]string{"FANZA", "JavDB", "Airav"})
 	want := ProviderCoverage{
 		Gaps: []ProviderGap{
-			{Category: CategoryCensored, Missing: []string{"Official"}},
+			{Category: CategoryCensored, Missing: []string{"MissingProvider"}},
 			{Category: CategoryUncensored, Missing: []string{"FC2"}},
 		},
 	}

@@ -517,10 +517,10 @@ Provider-specific limits observed on the same date:
 - **Kin8:** sample `KIN8-1234` returned 404. Chinese `MD-1234` and Western `KIN8-1234` route searches also returned 404/empty; the samples may be invalid catalog entries.
 - **MGStage/MGS:** registered and present in the amateur route, but live requests returned 403.
 - **ThePornDB:** token-gated; disabled without a configured token. Patch `0016` makes `ACCESS_TOKEN`/`api_token` reach the actor and scene/movie providers, but no live token-backed request was made in this pass. Startup coverage logs it as unavailable in a default build.
-- **Official:** intentionally deferred; startup coverage logs it as unavailable in the censored route.
+- **Official:** withdrawn with the Amane manufacturer router. The default censored route no longer lists it.
 - **Prestige/R18Dev:** remain deferred for the reasons recorded above.
 
-The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged because `Official` and token-gated `ThePornDB` are intentional.
+The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged for optional providers such as token-gated `ThePornDB`.
 
 ## Provider access follow-up (2026-10-20)
 

@@ -195,7 +195,7 @@ func (c Config) ProviderCoverage(registered []string) ProviderCoverage {
 
 // ValidateRegisteredProviders rejects route tables where a category has no
 // registered provider. Individual gaps remain allowed for optional providers
-// such as Amane's deferred "Official" studio router.
+// that are not compiled into a particular build.
 func (c Config) ValidateRegisteredProviders(registered []string) error {
 	coverage := c.ProviderCoverage(registered)
 	if len(coverage.Empty) == 0 {
@@ -218,11 +218,12 @@ func providerRegistered(provider string, registered map[string]struct{}) bool {
 	return false
 }
 
-// DefaultConfig mirrors Amane's ordered content routes where the SDK has an equivalent.
-// This project intentionally merges FC2 and uncensored into one shared route.
+// DefaultConfig provides category -> provider lists for the plugin/library
+// model. It intentionally merges FC2 and uncensored into one shared route and
+// does not include Amane's Official manufacturer router.
 func DefaultConfig() Config {
 	return Config{Routes: map[Category][]string{
-		CategoryCensored:   {"DMM", "JavDB", "JavBus", "Official"},
+		CategoryCensored:   {"DMM", "JavDB", "JavBus"},
 		CategoryUncensored: {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
 		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},

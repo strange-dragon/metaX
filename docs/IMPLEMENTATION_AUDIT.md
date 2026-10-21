@@ -55,7 +55,8 @@ Observed behavior:
 ### Amane default content routes
 
 The pinned `src/amane/config/manager.py` defines ordered defaults:
-- Censored: DMM → JavDB → JavBus → Official.
+- Censored: DMM → JavDB → JavBus. Amane's `Official` manufacturer router is
+  not part of the category fan-out model.
 - Uncensored: JavDB → JavBus → AVSOX → Freejavbt.
 - FC2: JavDB → FC2PPVDB → FC2 → FreeJAVBT.
 - Chinese: IQQTV → JavDB → Airav → FreeJAVBT.
@@ -104,7 +105,7 @@ Already implemented in source:
 Limitations to carry forward:
 - This is a search fan-out layer, not Amane's field-level metadata aggregation.
 - Classification remains intentionally conservative where a number or provider identity does not identify a route; such detail requests return baseline-only metadata rather than fan-out. Directory-based type overrides are unavailable at the provider-ID API boundary.
-- `Official` is a manufacturer-routing concept in Amane, not one ordinary SDK scraper. Do not assume a registered provider named `Official` exists.
+- `Official` is a manufacturer-routing concept in Amane, not one ordinary SDK scraper. It is withdrawn from the default route and must not be assumed to exist as a registered provider.
 - A category with no registered route providers and an unknown category are different failure modes; preserve the existing explicit-provider and URL lookup precedence.
 - The route overlay has source-level tests, but this audit did not run them or build the integrated SDK.
 
