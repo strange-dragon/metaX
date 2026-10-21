@@ -131,6 +131,22 @@ category, while keeping the backend safe if a caller sends a wider dictionary.
   [format 39540447917](https://github.com/strange-dragon/metaX/actions/runs/39540447917),
   [live FC2/uncensored 39540447920](https://github.com/strange-dragon/metaX/actions/runs/39540447920).
 
+## Small Task 3B — Amane route-order result sorting
+
+Goal: use the Amane content-route order that already defines each category's
+provider list as the returned-candidate priority, without importing Amane's
+runtime or routing implementation.
+
+- [x] **3B.1 Route priority.** Real-provider candidates sort by their position
+  in the category route first. Match quality orders results only within one
+  provider. The SDK numeric `Provider.Priority()` no longer controls ordering.
+- [x] **3B.2 Merged candidate.** The reserved `MetaX` merged candidate remains
+  the first result, ahead of every real-provider candidate.
+- [x] **3B.3 Tests.** Added a deterministic engine test where the route-first
+  provider has a much lower SDK priority than the second provider; the
+  route-first candidate must still come first. Existing merge tests continue to
+  assert `MetaX` first.
+
 ## Provider tasks 4–6: Amane reference policy
 
 Amane is pinned at `a2d45880e83df7047d461452965919692701e8c9` and is GPL-3.0.
@@ -262,8 +278,9 @@ server build are the release gate for this task.
 2. **4** Prestige and **6** Getchu only after real responses/fixtures exist.
 3. Big Task 8 release-readiness checks after the remaining provider work.
 
-Small Task 3A is complete: the manifest and backend cookie boundary are in
-place; the Jellyfin plugin still needs its client-side filtering implementation.
+Small Tasks 3A and 3B are complete: the manifest/cookie boundary is in place,
+and candidate ordering follows the Amane category route with `MetaX` first. The
+Jellyfin plugin still needs its client-side cookie-filtering implementation.
 
 Each item should be its own small commit with focused tests, a checklist entry,
 and CI evidence. Do not start a second item until the current one is verified.

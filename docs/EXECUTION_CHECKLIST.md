@@ -457,5 +457,17 @@ This section supersedes the earlier default-aggregation and `aggregate=false` no
 - [ ] Not run for this change: Jellyfin plugin implementation. The plugin
   remains deferred; its plan now documents library-category mapping and
   client-side `route_providers` filtering.
+
+### Task: Amane route-order result sorting (2026-10-21)
+
+- [x] Changed search ordering to category route position first, then match
+  quality within one provider. The SDK numeric `Provider.Priority()` no longer
+  controls candidate ordering.
+- [x] Kept the reserved `MetaX` merged candidate prepended as the first result.
+- [x] Added a deterministic test with a route-first provider whose SDK priority
+  is much lower than the second provider; the route-first candidate is returned
+  first.
+- [x] Local verification on the clean pinned SDK:
+  `GOTOOLCHAIN=local go test ./engine ./route ./routing -count=1` passed.
 - Next: **5.1** R18Dev architecture decision — optional local PostgreSQL source
   vs external service vs out of scope.

@@ -108,6 +108,82 @@ func fanoutTestMovieInfo(provider string) *model.MovieInfo {
 	}
 }
 
+const (
+	searchOrderFirstProvider  = "MetaXOrderTestProviderFirst"
+	searchOrderSecondProvider = "MetaXOrderTestProviderSecond"
+)
+
+type searchOrderMovieProvider struct {
+	name     string
+	priority float64
+}
+
+func (p *searchOrderMovieProvider) Name() string         { return p.name }
+func (p *searchOrderMovieProvider) Priority() float64    { return p.priority }
+func (*searchOrderMovieProvider) SetPriority(float64)    {}
+func (*searchOrderMovieProvider) Language() language.Tag { return language.English }
+func (p *searchOrderMovieProvider) URL() *url.URL {
+	u, _ := url.Parse("https://" + p.name + ".invalid")
+	return u
+}
+func (*searchOrderMovieProvider) NormalizeMovieID(id string) string { return id }
+func (*searchOrderMovieProvider) ParseMovieIDFromURL(rawURL string) (string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	return u.Path, nil
+}
+func (p *searchOrderMovieProvider) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
+	return &model.MovieInfo{
+		ID: id, Number: "ORDER-123", Title: p.name, Provider: p.name,
+		Homepage: "https://" + p.name + ".invalid/" + id,
+	}, nil
+}
+func (p *searchOrderMovieProvider) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
+	id, err := p.ParseMovieIDFromURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	return p.GetMovieInfoByID(id)
+}
+func (*searchOrderMovieProvider) NormalizeMovieKeyword(keyword string) string {
+	return keyword
+}
+func (p *searchOrderMovieProvider) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
+	info, err := p.GetMovieInfoByID(keyword)
+	if err != nil {
+		return nil, err
+	}
+	return []*model.MovieSearchResult{info.ToSearchResult()}, nil
+}
+
+func init() {
+	mt.Register(searchOrderFirstProvider, func() *searchOrderMovieProvider {
+		return &searchOrderMovieProvider{name: searchOrderFirstProvider, priority: 1}
+	})
+	mt.Register(searchOrderSecondProvider, func() *searchOrderMovieProvider {
+		return &searchOrderMovieProvider{name: searchOrderSecondProvider, priority: 100}
+	})
+}
+
+func TestSearchMovieProvidersUsesRouteOrderNotSDKPriority(t *testing.T) {
+	app := New(openAggregateTestDB(t))
+	results, err := app.SearchMovieProviders("ORDER-123", []string{
+		searchOrderFirstProvider,
+		searchOrderSecondProvider,
+	}, false)
+	if err != nil {
+		t.Fatalf("search providers: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("results = %d, want 2", len(results))
+	}
+	if results[0].Provider != searchOrderFirstProvider {
+		t.Fatalf("first provider = %q, want route-first %q", results[0].Provider, searchOrderFirstProvider)
+	}
+}
+
 func init() {
 	for _, name := range fanoutTestProviderNames {
 		name := name

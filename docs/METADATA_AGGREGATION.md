@@ -98,10 +98,11 @@ For multi-instance deployments, the in-process cache is intentionally not a dist
 ## Route configuration
 
 The server route table is a category -> provider list. It is not Amane's
-Official manufacturer table, and provider-list order is used only for
-deterministic merge/tie-breaking, not for manufacturer routing. The current SDK
-provider `Priority()` value still influences candidate sorting; it is not used
-to choose a category or manufacturer.
+Official manufacturer table, but its provider-list order is used as the
+Amane-style result priority: real-provider candidates are ordered by their
+position in the category route, then by match quality within the same provider.
+The SDK's numeric `Provider.Priority()` value does not control this ordering.
+The merged `MetaX` candidate is always prepended as the first result.
 
 The table is configurable at startup:
 

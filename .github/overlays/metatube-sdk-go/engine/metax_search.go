@@ -40,8 +40,9 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		return nil, mt.ErrProviderNotFound
 	}
 
-	// Keep the configured Amane route order available for deterministic
-	// tie-breaking after concurrent searches finish.
+	// The configured category order is the Amane content-route priority. It is
+	// the primary result order; match quality only orders results within the
+	// same provider. The SDK's numeric Provider.Priority() is not used here.
 	providerOrder := make(map[string]int, len(providers))
 	for i, provider := range providers {
 		providerOrder[provider.Name()] = i
@@ -103,17 +104,20 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		if leftErr != nil || rightErr != nil {
 			return false
 		}
-		leftScore := comparer.Compare(keyword, left.Number) * leftProvider.Priority()
-		rightScore := comparer.Compare(keyword, right.Number) * rightProvider.Priority()
-		if leftScore == rightScore {
-			leftOrder, leftOK := providerOrder[leftProvider.Name()]
-			rightOrder, rightOK := providerOrder[rightProvider.Name()]
-			if leftOK && rightOK && leftOrder != rightOrder {
-				return leftOrder < rightOrder
-			}
-			return leftProvider.Priority() > rightProvider.Priority()
+		leftOrder, leftOK := providerOrder[leftProvider.Name()]
+		rightOrder, rightOK := providerOrder[rightProvider.Name()]
+		if leftOK && rightOK && leftOrder != rightOrder {
+			return leftOrder < rightOrder
 		}
-		return leftScore > rightScore
+		if leftOK != rightOK {
+			return leftOK
+		}
+		leftScore := comparer.Compare(keyword, left.Number)
+		rightScore := comparer.Compare(keyword, right.Number)
+		if leftScore != rightScore {
+			return leftScore > rightScore
+		}
+		return leftProvider.Name() < rightProvider.Name()
 	})
 	if len(results) == 0 {
 		return nil, mt.ErrInfoNotFound
