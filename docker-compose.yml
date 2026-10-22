@@ -18,8 +18,7 @@ services:
     volumes:
       - metax-data:/data
     environment:
-      # Optional server token. The Jellyfin plugin must use the same value.
-      TOKEN: ${METAX_TOKEN:-}
+      # The API is public; no backend token is configured here.
       # Route table. Inline METAX_ROUTES wins over METAX_ROUTES_FILE.
       METAX_ROUTES: ${METAX_ROUTES:-}
       METAX_ROUTES_FILE: ${METAX_ROUTES_FILE:-}

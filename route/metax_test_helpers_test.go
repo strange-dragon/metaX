@@ -154,7 +154,7 @@ func newContractEngine(t *testing.T) *engine.Engine {
 func newContractRouter(t *testing.T) *gin.Engine {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	return sdkroute.New(newContractEngine(t), nil)
+	return sdkroute.New(newContractEngine(t))
 }
 
 func requestJSON(t *testing.T, router http.Handler, target string) (int, map[string]any) {

@@ -17,7 +17,7 @@ release.
 
 ```sh
 cp .env.example .env
-# Edit .env: at minimum set METAX_TOKEN if the backend should be token-protected.
+# Optional: edit .env for route overrides, provider cookies, or proxies.
 docker compose up -d --build
 docker compose logs -f metax
 ```
@@ -32,22 +32,21 @@ curl http://127.0.0.1:18080/v1/metax/status
 ```
 
 In Jellyfin, set the MetaX plugin server URL to the address of this container,
-for example `http://docker-host:18080` (or an HTTPS reverse-proxy URL). If
-`METAX_TOKEN` is set, enter the same token in the plugin. The plugin sends
-provider cookies per request; the `MT_*` environment variables are optional
-fallback values.
+for example `http://docker-host:18080` (or an HTTPS reverse-proxy URL). Leave
+the plugin **Token** blank. The plugin sends provider cookies per request; the
+`MT_*` environment variables are optional fallback values.
 
 ## Authentication and exposure
 
-The server itself does not terminate TLS. Do not expose port `18080` directly to
-an untrusted network. Put it behind HTTPS (a reverse proxy or a private
-network), especially when the Jellyfin plugin sends provider cookies.
+metaX has no authentication. All `/v1` routes are public by design because the
+backend only serves publicly scraped metadata. There is no backend token to
+configure.
 
-`METAX_TOKEN` is optional. When set, it is passed to the server's `--token`
-flag through the `TOKEN` environment variable. The Compose file publishes the
-port on all host interfaces by default; restrict it with firewall rules or
-change the port mapping to `127.0.0.1:${METAX_PORT:-18080}:18080` when Jellyfin
-runs on the same host.
+The server itself does not terminate TLS. Put it behind HTTPS (a reverse proxy
+or a private network) when the Jellyfin plugin sends provider cookies. The
+Compose file publishes the port on all host interfaces by default; restrict it
+with firewall rules or change the port mapping to
+`127.0.0.1:${METAX_PORT:-18080}:18080` when Jellyfin runs on the same host.
 
 ## Data and configuration
 

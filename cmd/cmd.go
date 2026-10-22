@@ -13,16 +13,14 @@ import (
 	"github.com/strange-dragon/metaX/engine"
 	"github.com/strange-dragon/metaX/internal/envconfig"
 	"github.com/strange-dragon/metaX/route"
-	"github.com/strange-dragon/metaX/route/auth"
 	"github.com/strange-dragon/metaX/routing"
 )
 
 var Config = &struct {
 	// main config
-	Bind  string
-	Port  string
-	Token string
-	DSN   string
+	Bind string
+	Port string
+	DSN  string
 
 	// engine config
 	RequestTimeout time.Duration
@@ -47,7 +45,6 @@ func init() {
 	// flag parse
 	flag.StringVar(&Config.Bind, "bind", "", "Bind address of server")
 	flag.StringVar(&Config.Port, "port", "8080", "Port number of server")
-	flag.StringVar(&Config.Token, "token", "", "Token to access server")
 	flag.StringVar(&Config.DSN, "dsn", "", "Database Service Name")
 	flag.DurationVar(&Config.RequestTimeout, "request-timeout", engine.DefaultRequestTimeout, "Timeout per request")
 	flag.IntVar(&Config.DBMaxIdleConns, "db-max-idle-conns", 0, "Database max idle connections")
@@ -125,10 +122,5 @@ func Router(names ...string) *gin.Engine {
 		log.Fatal(err)
 	}
 
-	var token auth.Validator
-	if Config.Token != "" {
-		token = auth.Token(Config.Token)
-	}
-
-	return route.New(app, token)
+	return route.New(app)
 }

@@ -7,18 +7,22 @@ existing MetaTube plugin API.
 Companion Jellyfin plugin:
 [metaX-jellyfin](https://github.com/strange-dragon/metaX-jellyfin).
 
-[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&builder=dockerfile&repository=github.com/strange-dragon/metaX&branch=main&name=metax&ports=18080;http;/&env%5BTOKEN%5D=change-me-before-deploy)
+## Authentication
+
+metaX has no authentication. All API routes are public by design because the
+backend only serves publicly scraped metadata. There is no token to configure.
+
+Provider cookies and ThePornDB access tokens are still credentials for the
+upstream sites. They are not used to protect the metaX API.
+
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&builder=dockerfile&repository=github.com/strange-dragon/metaX&branch=main&name=metax&ports=18080;http;/)
 
 ## One-click deploy on Koyeb
 
 1. Click the button above.
-2. Replace the placeholder `TOKEN` with a long random value **before**
-   clicking Deploy. This is your own backend access token, not a GitHub,
-   Koyeb, provider-cookie, or ThePornDB token. Generate one with
-   `openssl rand -hex 32`.
-3. Keep the service port at `18080`.
-4. Deploy.
-5. If you need persistent metadata, add a Koyeb volume mounted at `/data`, or
+2. Keep the service port at `18080`.
+3. Deploy.
+4. If you need persistent metadata, add a Koyeb volume mounted at `/data`, or
    configure an external PostgreSQL database with `--dsn`.
 
 After deployment, open:
@@ -43,7 +47,7 @@ git clone https://github.com/strange-dragon/metaX.git
 cd metaX
 
 cp .env.example .env
-# Edit .env and set METAX_TOKEN to a long random value.
+# Optional: edit .env for route overrides, provider cookies, or proxies.
 
 docker compose up -d --build
 docker compose logs -f metax
@@ -76,7 +80,6 @@ docker run -d \
   --restart unless-stopped \
   -p 18080:18080 \
   -v metax-data:/data \
-  -e TOKEN='replace-with-a-long-random-token' \
   metax-backend
 ```
 
@@ -94,7 +97,6 @@ docker run -d \
   --name metax \
   --restart unless-stopped \
   -p 18080:18080 \
-  -e TOKEN='replace-with-a-long-random-token' \
   metax-backend \
   --bind 0.0.0.0 \
   --port 18080 \
@@ -138,7 +140,6 @@ The most commonly used settings:
 
 | Variable or flag | Default | Description |
 | --- | --- | --- |
-| `TOKEN` / `--token` | empty | Your own backend access token for protected API routes. Generate a long random value with `openssl rand -hex 32`. This is not a provider cookie or ThePornDB token. |
 | `METAX_ROUTES` | built-in table | Inline JSON route table. Takes precedence over `METAX_ROUTES_FILE`. |
 | `METAX_ROUTES_FILE` | empty | Path to a JSON route table. |
 | `METAX_ROUTES_FINGERPRINT` | empty | Optional expected route fingerprint; startup fails on mismatch. |
@@ -152,27 +153,7 @@ The most commonly used settings:
 | `--db-auto-migrate` | false | Enable database migration. SQLite is auto-migrated automatically. |
 | `METAX_PORT` | `18080` | Docker Compose host port only. |
 
-`TOKEN` is a shared secret between the backend and the Jellyfin plugin. Clients
-send it as:
-
-```http
-Authorization: Bearer <TOKEN>
-```
-
-Generate it yourself, for example:
-
-```bash
-openssl rand -hex 32
-```
-
-Set the same value in the backend (`TOKEN`) and in the plugin (**Token**). If
-`TOKEN` is empty, protected search/detail/actor routes are unauthenticated.
-Public routes such as `/`, `/v1/providers`, `/v1/metax/status`, and image
-endpoints remain public either way.
-
-Do not confuse `TOKEN` with provider credentials. JavDB/JavBus cookies and
-ThePornDB access tokens are separate values and belong in the `MT_*` variables
-or in the plugin's per-provider cookie settings.
+All `/v1` routes are public. There is no `TOKEN` or `--token` setting.
 
 Provider credentials use the MetaTube environment convention. They are optional
 fallbacks; the Jellyfin plugin normally sends provider cookies per request.
@@ -211,7 +192,7 @@ credential list.
    http://metax:18080
    ```
 
-4. Set **Token** to the same `TOKEN` value configured on the backend.
+4. Leave **Token** blank. The metaX backend does not require authentication.
 5. Map each Jellyfin library to a category: `censored`, `uncensored`,
    `chinese`, `amateur`, `western`, or `hentai`.
 6. Enable MetaX under the library's metadata downloaders and image fetchers.
@@ -258,12 +239,10 @@ curl http://127.0.0.1:18080/v1/metax/status
 curl http://127.0.0.1:18080/v1/providers
 
 # Category search
-curl -H "Authorization: Bearer $TOKEN" \
-  'http://127.0.0.1:18080/v1/movies/search?q=SSIS-001&category=censored'
+curl 'http://127.0.0.1:18080/v1/movies/search?q=SSIS-001&category=censored'
 
 # Aggregated detail
-curl -H "Authorization: Bearer $TOKEN" \
-  'http://127.0.0.1:18080/v1/movies/MetaX/SSIS-001?category=censored'
+curl 'http://127.0.0.1:18080/v1/movies/MetaX/SSIS-001?category=censored'
 ```
 
 `MetaX` is a reserved provider name used for the merged search candidate and
@@ -288,7 +267,8 @@ git push origin v0.2.0
 
 ## Security
 
-- Set `TOKEN` on any deployment reachable outside a trusted network.
+- The API has no authentication by design. Restrict network access at the edge
+  if you do not want the backend reachable from the internet.
 - Terminate TLS in front of the backend when Jellyfin is remote.
 - Treat provider cookies and ThePornDB tokens as credentials.
 - Do not expose PostgreSQL or the SQLite data directory publicly.
@@ -301,8 +281,8 @@ git push origin v0.2.0
 - **JavDB FC2 detail fails**: the source may require a login cookie.
 - **Freejavbt, FC2PPVDB, MGS, or FALENO return login/anti-bot pages**: configure
   cookies or a proxy for that provider.
-- **Images work but metadata does not**: check `TOKEN`, the plugin Server URL,
-  and the backend logs.
+- **Images work but metadata does not**: check the plugin Server URL and the
+  backend logs.
 
 ## Documentation
 

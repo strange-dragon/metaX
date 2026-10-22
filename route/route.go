@@ -12,10 +12,9 @@ import (
 	"github.com/strange-dragon/metaX/engine"
 	"github.com/strange-dragon/metaX/errors"
 	V "github.com/strange-dragon/metaX/internal/version"
-	"github.com/strange-dragon/metaX/route/auth"
 )
 
-func New(app *engine.Engine, v auth.Validator) *gin.Engine {
+func New(app *engine.Engine) *gin.Engine {
 	r := gin.New()
 	{
 		// support CORS
@@ -55,26 +54,26 @@ func New(app *engine.Engine, v auth.Validator) *gin.Engine {
 		}
 	}
 
-	private := r.Group("/v1", authentication(v))
+	api := r.Group("/v1", cacheNoStore())
 	{
-		db := private.Group("/db")
+		db := api.Group("/db")
 		{
 			db.GET("/version", getDBVersion(app))
 		}
 
-		actors := private.Group("/actors")
+		actors := api.Group("/actors")
 		{
 			actors.GET("/:provider/:id", getInfo(app, actorInfoType))
 			actors.GET("/search", getSearch(app, actorSearchType))
 		}
 
-		movies := private.Group("/movies")
+		movies := api.Group("/movies")
 		{
 			movies.GET("/:provider/:id", getInfo(app, movieInfoType))
 			movies.GET("/search", getSearch(app, movieSearchType))
 		}
 
-		reviews := private.Group("/reviews")
+		reviews := api.Group("/reviews")
 		{
 			reviews.GET("/:provider/:id", getReview(app))
 		}

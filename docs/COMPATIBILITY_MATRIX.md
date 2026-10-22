@@ -572,7 +572,7 @@ surface without changing the MetaTube/Jellyfin provider contract.
   category -> available-provider manifest (`route_providers`), route provider
   gaps, and cookie-transport version `1`. It does not return cookies, tokens,
   proxy credentials, provider configuration values, or URLs. The endpoint is in
-  the existing unauthenticated `/v1` system group, like `/v1/providers`.
+  the public `/v1` API, like `/v1/providers`.
 - **Log redaction.** The upstream `engine/init.go` proxy log now removes URL
   userinfo and query data before logging, and `SetProxy` failures no longer
   echo the raw proxy value. Malformed scraper cookie settings no longer include
