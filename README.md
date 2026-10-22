@@ -29,6 +29,7 @@ metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subj
 - [Implementation-level Amane ↔ MetaTube audit](docs/IMPLEMENTATION_AUDIT.md)
 - [Metadata aggregation and source-record API](docs/METADATA_AGGREGATION.md)
 - [Provider access, cookies, and proxy configuration](docs/PROVIDER_ACCESS.md)
+- [Docker deployment](docs/DOCKER.md)
 - [Licensing and attribution policy](docs/LICENSING.md)
 
 ## Reproducible integrated server build
@@ -43,6 +44,23 @@ bash .github/scripts/build-metatube-server.sh ./metatube-sdk-go ./dist/metatube-
 
 The script refuses a dirty SDK checkout or a different commit. The generated binary includes eleven movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `Prestige`, `XCity`) and four actor providers (`AVBaseActor`, `JavDBActor`, `MinnanoActor`, `WikipediaActor`), plus the maintained SDK patches. The earlier eleven-package integration passed in [GitHub Actions run 39191776372](https://github.com/strange-dragon/metaX/actions/runs/39191776372). The earlier twelve-package integration, including `AVBaseActor`, passed in [run 39207291492](https://github.com/strange-dragon/metaX/actions/runs/39207291492), including provider registration, `/v1/providers` API discovery, focused tests, the full pinned SDK regression suite, and server compilation. Live API checks can be run manually with `.github/scripts/live-metax-api-smoke.sh`; they cover censored/FC2 search, `MetaX` detail plus `sources[]`, images, unknown-category errors, and fingerprint-pin startup failure. A running Jellyfin deployment remains unverified.
 
+## Docker deployment
+
+The included `Dockerfile` and `docker-compose.yml` build the same integrated
+server from the pinned SDK revision, run the integration tests, and copy the
+result into a non-root runtime image. SQLite data is persisted in a named
+volume by default.
+
+```bash
+cp .env.example .env
+# edit .env, including METAX_TOKEN if the API should be token-protected
+docker compose up -d --build
+```
+
+The service listens on port `8080` by default. See
+[Docker deployment](docs/DOCKER.md) for authentication, route configuration,
+PostgreSQL, bind-mount permissions, and operations. Put the container behind
+HTTPS before sending provider cookies from Jellyfin.
 
 ## Backend orchestration work
 
