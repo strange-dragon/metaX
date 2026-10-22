@@ -251,7 +251,7 @@ A single build entry point now applies the pinned SDK patch set, overlays the cu
 
 ```bash
 # Start from a clean checkout of metatube-sdk-go at c62584675c593816cc07e7b5b977d14c7eb505a3.
-bash .github/scripts/build-metatube-server.sh /path/to/metatube-sdk-go /path/to/output/metatube-server
+bash .github/scripts/build-metax-server.sh /path/to/metatube-sdk-go /path/to/output/metax-server
 ```
 
 The script intentionally rejects a dirty SDK checkout or a different SDK commit so that patches cannot silently apply to an unreviewed baseline. The original validated overlay covered four providers. The integration has now been expanded to all eleven native provider packages in this repository: ten movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `XCity`) and two actor providers (`JavDBActor`, `MinnanoActor`). The expanded build passed in [run 39139794806](https://github.com/strange-dragon/metaX/actions/runs/39139794806): all 13 SDK patches applied, all eleven packages were overlaid and registered, the `/v1/providers` endpoint exposed the expected movie/actor provider names, focused tests and the full pinned SDK regression suite passed, and the server binary built successfully. Artifact `metatube-server-cd8ba9f73e2409a9dce7efd73a8266fc2a295a8c` is available until 2026-10-25. This still does not establish live-site scraping or Jellyfin end-to-end behavior.

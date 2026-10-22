@@ -41,13 +41,13 @@ func TestDMMRouteResolvesToRegisteredFANZAProvider(t *testing.T) {
 	}
 	want := []string{"FANZA", "JavDB", "JavBus"}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Resolve(censored) = %#v, want Amane DMM mapped to MetaTube FANZA: %#v", got, want)
+		t.Fatalf("Resolve(censored) = %#v, want Amane DMM mapped to metaX FANZA: %#v", got, want)
 	}
 }
 
 func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 	// Mirrors the pinned SDK providers plus the native providers integrated by
-	// build-metatube-server.sh. Amane's Official studio router is not part of
+	// build-metax-server.sh. Amane's Official studio router is not part of
 	// the category fan-out model.
 	registered := []string{
 		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # The metaX repository is a Provider workspace, not a standalone server. The
-# builder applies its patches and overlays to the pinned MetaTube SDK checkout,
+# builder applies its patches and overlays to the pinned upstream SDK checkout,
 # runs the integration tests, and compiles the server binary.
 ARG GO_VERSION=1.26.0
 ARG SDK_REPOSITORY=https://github.com/metatube-community/metatube-sdk-go.git
@@ -28,9 +28,9 @@ COPY third_party ./third_party
 
 RUN git clone "$SDK_REPOSITORY" /src/metatube-sdk-go \
     && git -C /src/metatube-sdk-go checkout "$SDK_COMMIT" \
-    && METAX_SKIP_UPSTREAM_TESTS=1 bash .github/scripts/build-metatube-server.sh \
+    && METAX_SKIP_UPSTREAM_TESTS=1 bash .github/scripts/build-metax-server.sh \
         /src/metatube-sdk-go \
-        /out/metatube-server
+        /out/metax-server
 
 FROM debian:bookworm-slim AS runtime
 
@@ -42,10 +42,10 @@ RUN apt-get update \
     && mkdir -p /data \
     && chown -R metax:metax /data
 
-COPY --from=build /out/metatube-server /usr/local/bin/metatube-server
+COPY --from=build /out/metax-server /usr/local/bin/metax-server
 
 LABEL org.opencontainers.image.title="metaX backend" \
-      org.opencontainers.image.description="MetaTube-compatible server with the metaX native providers" \
+      org.opencontainers.image.description="metaX server with the native providers" \
       org.opencontainers.image.source="https://github.com/strange-dragon/metaX"
 
 ENV GIN_MODE=release
@@ -56,5 +56,5 @@ EXPOSE 18080
 VOLUME ["/data"]
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["/usr/local/bin/metatube-server"]
-CMD ["--bind", "0.0.0.0", "--port", "18080", "--dsn", "/data/metatube.db"]
+ENTRYPOINT ["/usr/local/bin/metax-server"]
+CMD ["--bind", "0.0.0.0", "--port", "18080", "--dsn", "/data/metax.db"]

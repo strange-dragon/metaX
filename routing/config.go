@@ -21,7 +21,7 @@ const (
 	EnvRoutesFingerprint = "METAX_ROUTES_FINGERPRINT"
 )
 
-// ActiveConfig is the process-wide route table used by the stock MetaTube
+// ActiveConfig is the process-wide route table used by the stock upstream
 // endpoints. It defaults to DefaultConfig and is replaced at startup by
 // InitActiveConfigFromEnv.
 var (

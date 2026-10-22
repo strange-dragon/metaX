@@ -1,7 +1,7 @@
 // Copyright 2026 metaX contributors.
 //
 // Feature-level comparison reference: https://github.com/sqzw-x/amane.
-// Native implementation for MetaTube's Provider API; no Amane source or
+// Native implementation for metaX's Provider API; no Amane source or
 // fixtures are vendored. See ../../NOTICE.md for attribution.
 package iqqtv
 

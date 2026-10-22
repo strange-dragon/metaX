@@ -82,4 +82,4 @@ gofmt -w "$sdk_root/engine/register.go" "$sdk_root/engine/metax_integration_test
 echo "Native movie/actor provider overlay applied. Validate from: $sdk_root"
 echo "Focused tests: go test ./engine ./route ./provider/httpretry ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2club ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb ./provider/javlibrary ./provider/minnano ./provider/prestige ./provider/wikipediaactor ./provider/xcity -count=1"
 echo "Full regression: go test \$(go list ./... | grep -Ev \"github.com/metatube-community/metatube-sdk-go/translate\")"
-echo "Server build: go build -o /tmp/metatube-server ./cmd/server"
+echo "Server build: go build -o /tmp/metax-server ./cmd/server"

@@ -93,7 +93,7 @@ func TestNotFoundPageAndRegistration(t *testing.T) {
 		require.Equal(t, float64(Priority), instance.Priority())
 		break
 	}
-	require.True(t, found, "Jav321 should register with MetaTube's Provider factory")
+	require.True(t, found, "Jav321 should register with metaX's Provider factory")
 }
 
 func TestFetchFollowsRedirectOutsideConfiguredOrigin(t *testing.T) {

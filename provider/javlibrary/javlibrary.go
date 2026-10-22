@@ -1,7 +1,7 @@
 // Copyright 2026 metaX contributors.
 //
 // Feature-level comparison reference: https://github.com/sqzw-x/amane.
-// Native Go implementation for the MetaTube Provider API; no Amane source
+// Native Go implementation for the metaX Provider API; no Amane source
 // files or test fixtures are vendored. See ../../NOTICE.md for attribution.
 package javlibrary
 

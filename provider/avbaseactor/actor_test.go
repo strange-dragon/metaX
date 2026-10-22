@@ -146,7 +146,7 @@ func TestRegistrationAndConfiguration(t *testing.T) {
 		}
 		return true
 	})
-	require.True(t, found, "AVBase actor provider should register with MetaTube")
+	require.True(t, found, "AVBase actor provider should register with metaX")
 
 	p := New()
 	require.Error(t, p.SetProxy("invalid"))

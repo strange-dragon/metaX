@@ -145,7 +145,7 @@ func TestRegistrationAndConfiguration(t *testing.T) {
 		require.Equal(t, float64(Priority), instance.Priority())
 		break
 	}
-	require.True(t, found, "Airav should register with MetaTube's Provider factory")
+	require.True(t, found, "Airav should register with metaX's Provider factory")
 
 	p := New()
 	require.Error(t, p.SetProxy("invalid"))

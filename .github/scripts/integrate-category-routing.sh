@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Integrate Amane-derived category routing and field-level movie aggregation
-# into the actual pinned MetaTube SDK build, not just into standalone metaX
+# into the actual pinned upstream SDK build, not just into standalone metaX
 # unit tests.
 #
 # This is the single script that patches route/search.go. Running it twice is
@@ -595,6 +595,36 @@ if missing:
 path.write_text(source)
 PY
 
+python3 - "$sdk_root/cmd/server/main.go" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source = path.read_text()
+
+# The engine name is what the root endpoint reports as "app". The stock server
+# passes engine.DefaultEngineName, which still identifies this build as
+# "metatube". Use the metaX product name instead so deployments return
+# {"data":{"app":"metaX",...}} on GET /.
+if 'router = cmd.Router("metaX")' not in source:
+    needle = 'router = cmd.Router(engine.DefaultEngineName)'
+    if needle not in source:
+        raise SystemExit("cmd.Router engine name marker not found; SDK cmd/server/main.go changed")
+    source = source.replace(needle, 'router = cmd.Router("metaX")', 1)
+
+# Drop the now-unused engine import when it is only referenced by the name.
+if 'engine.' not in source.replace('"github.com/metatube-community/metatube-sdk-go/engine"', ''):
+    source = source.replace('\t"github.com/metatube-community/metatube-sdk-go/engine"\n', '', 1)
+
+required = [
+    'router = cmd.Router("metaX")',
+]
+missing = [item for item in required if item not in source]
+if missing:
+    raise SystemExit("could not apply metaX engine name; missing expected markers: " + repr(missing))
+path.write_text(source)
+PY
+
 python3 - "$sdk_root/route/search.go" "$sdk_root/route/info.go" "$sdk_root/route/image.go" "$sdk_root/route/review.go" <<'PY'
 from pathlib import Path
 import sys
@@ -674,5 +704,5 @@ gofmt -w "$sdk_root/routing"/*.go "$sdk_root/engine/metax_search.go" "$sdk_root/
   "$sdk_root/route/metax_category_api_test.go" \
   "$sdk_root/route/metax_test_helpers_test.go" "$sdk_root/route/metax_category_fanout_test.go" \
   "$sdk_root/route/metax_search_merge_test.go" "$sdk_root/route/metax_aggregate_endpoint_test.go" \
-  "$sdk_root/cmd/cmd.go"
+  "$sdk_root/cmd/cmd.go" "$sdk_root/cmd/server/main.go"
 echo "Integrated Amane category routes, FC2/uncensored merging, field-level movie aggregation, and source records."

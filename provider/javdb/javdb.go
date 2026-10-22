@@ -2,7 +2,7 @@
 //
 /*
 Feature-level comparison reference: https://github.com/sqzw-x/amane.
-This is a native Go implementation for the MetaTube Provider API; no Amane
+This is a native Go implementation for the metaX Provider API; no Amane
 source file or test fixture is vendored. See ../../NOTICE.md for attribution.
 */
 package javdb
@@ -58,7 +58,7 @@ var (
 	_ mt.ConfigSetter         = (*JavDB)(nil)
 )
 
-// JavDB implements MetaTube's native movie Provider contract.
+// JavDB implements metaX's native movie Provider contract.
 type JavDB struct {
 	baseURL *url.URL
 

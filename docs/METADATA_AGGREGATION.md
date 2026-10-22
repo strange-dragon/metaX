@@ -176,7 +176,7 @@ go test ./... -count=1
 # -> all packages pass
 
 # 2. Apply maintained patches to the disposable SDK checkout
-#    (same ordered list as .github/scripts/build-metatube-server.sh)
+#    (same ordered list as .github/scripts/build-metax-server.sh)
 
 # 3. Provider overlay + routing/aggregation overlay
 bash .github/scripts/validate-provider-integration.sh /path/to/sdk
@@ -193,7 +193,7 @@ go test ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2c
   ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1
 # -> all 12 package test targets pass
 
-go build -o /tmp/metatube-server ./cmd/server
+go build -o /tmp/metax-server ./cmd/server
 # -> build succeeds
 ```
 

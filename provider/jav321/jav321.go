@@ -1,7 +1,7 @@
 // Copyright 2026 metaX contributors.
 //
 // Feature-level comparison reference: https://github.com/sqzw-x/amane.
-// Native implementation for MetaTube's Provider API; no Amane source file or
+// Native implementation for metaX's Provider API; no Amane source file or
 // fixture is vendored. See ../../NOTICE.md for attribution.
 package jav321
 
@@ -51,7 +51,7 @@ var (
 	_ mt.RequestTimeoutSetter = (*Jav321)(nil)
 )
 
-// Jav321 implements the MetaTube movie Provider contract for jav321.com.
+// Jav321 implements the metaX movie Provider contract for jav321.com.
 type Jav321 struct {
 	baseURL *url.URL
 

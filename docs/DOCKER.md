@@ -2,12 +2,12 @@
 
 The metaX repository is a Provider workspace, not a standalone server. The
 Docker image therefore uses the same reproducible build path as
-`.github/scripts/build-metatube-server.sh`:
+`.github/scripts/build-metax-server.sh`:
 
 1. clone the pinned `metatube-community/metatube-sdk-go` revision;
 2. apply the maintained SDK patches and native Provider overlay;
 3. run the focused metaX integration tests;
-4. build the `metatube-server` binary;
+4. build the `metax-server` binary;
 5. copy that binary into a small Debian runtime image.
 
 The build needs network access to GitHub and the Go module proxy. It is slower
@@ -29,7 +29,7 @@ docker compose logs -f metax
 ```
 
 The default service listens on port `18080` and persists SQLite data in the
-`metax-data` volume at `/data/metatube.db`.
+`metax-data` volume at `/data/metax.db`.
 
 Check the non-secret routing status:
 
@@ -59,7 +59,7 @@ runs on the same host.
 
 - `/data` is the persistent volume. Back it up if SQLite is used.
 - The default command is:
-  `--bind 0.0.0.0 --port 18080 --dsn /data/metatube.db`
+  `--bind 0.0.0.0 --port 18080 --dsn /data/metax.db`
 - To use PostgreSQL instead, override the command with a PostgreSQL DSN:
   `--dsn 'postgresql://user:password@postgres:5432/metax'`. The server
   auto-migrates SQLite; for PostgreSQL, keep `--db-auto-migrate` enabled or

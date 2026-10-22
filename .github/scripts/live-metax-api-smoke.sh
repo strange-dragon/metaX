@@ -6,7 +6,7 @@ set -euo pipefail
 # blocks, regional restrictions, and upstream site changes can make it fail.
 # It is intended for workflow_dispatch or a local manual run.
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "usage: $0 /path/to/metatube-server [port]" >&2
+  echo "usage: $0 /path/to/metax-server [port]" >&2
   exit 2
 fi
 

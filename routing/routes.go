@@ -1,5 +1,5 @@
 // Package routing defines ordered, category-based provider selection.
-// It deliberately has no dependency on MetaTube's HTTP or provider packages so
+// It deliberately has no dependency on upstream HTTP or provider packages so
 // routing behavior can be tested independently and embedded at the SDK boundary.
 package routing
 
@@ -72,7 +72,7 @@ var (
 	ErrProviderUnavailable = errors.New("explicit provider is not registered")
 )
 
-// providerAliases bridges Amane source names to equivalent registered MetaTube
+// providerAliases bridges Amane source names to equivalent registered metaX
 // providers without changing Amane's canonical route configuration.
 var providerAliases = map[string][]string{
 	"dmm":       {"FANZA"},

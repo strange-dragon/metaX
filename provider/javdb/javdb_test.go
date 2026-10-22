@@ -163,7 +163,7 @@ func TestProviderRegistered(t *testing.T) {
 		require.Equal(t, float64(Priority), provider.Priority())
 		break
 	}
-	require.True(t, found, "JavDB should register with MetaTube's Provider factory")
+	require.True(t, found, "JavDB should register with metaX's Provider factory")
 }
 
 func TestParseMovieIDFromURLRejectsForeignHost(t *testing.T) {

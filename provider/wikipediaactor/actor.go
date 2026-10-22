@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	// ActorProviderName is the provider name exposed by the MetaTube API.
+	// ActorProviderName is the provider name exposed by the metaX API.
 	ActorProviderName = "WikipediaActor"
 	// Priority places the biography source after the dedicated profile sites.
 	Priority             = 1000 - 40
@@ -412,7 +412,7 @@ func (p *Actor) get(rawURL, accept string) ([]byte, error) {
 		return nil, fmt.Errorf("wikipedia actor: create request: %w", err)
 	}
 	req.Header.Set("Accept", accept)
-	req.Header.Set("User-Agent", "metaX/1.0 (MetaTube native provider; actor biography)")
+	req.Header.Set("User-Agent", "metaX/1.0 (metaX native provider; actor biography)")
 	resp, err := p.httpClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("wikipedia actor: GET %s: %w", rawURL, err)

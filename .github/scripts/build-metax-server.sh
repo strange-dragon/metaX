@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build a reproducible MetaTube server with the maintained metaX SDK patches
+# Build a reproducible metaX server with the maintained upstream SDK patches
 # and all fourteen native provider packages currently covered by engine/API integration tests.
 # Set METAX_SKIP_UPSTREAM_TESTS=1 to skip the upstream SDK suite that includes
 # live-site tests; focused metaX integration tests still run.
@@ -87,6 +87,6 @@ else
 fi
 
 mkdir -p "$(dirname "$output_binary")"
-echo "Building MetaTube server: $output_binary"
+echo "Building metaX server: $output_binary"
 go build -o "$output_binary" ./cmd/server
 echo "Build complete: $output_binary"
