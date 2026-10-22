@@ -1,81 +1,384 @@
 # metaX
 
-metaX is a native Go Provider extension and migration workspace for bringing additional site-scraping capabilities into MetaTube, so the existing MetaTube Jellyfin plugin can use those providers through the MetaTube service.
+metaX is a MetaTube-compatible metadata backend for Jellyfin. It builds on
+[metatube-sdk-go](https://github.com/metatube-community/metatube-sdk-go) and
+adds category-aware provider routing, cross-provider metadata aggregation,
+request-scoped provider credentials, and a suite of native Go providers.
 
-**Target architecture:** Jellyfin → existing MetaTube Jellyfin plugin → MetaTube API → existing and additional native Go Providers.
+The companion Jellyfin plugin is
+[metaX-jellyfin](https://github.com/strange-dragon/metaX-jellyfin).
 
-Amane is a functional reference for capability coverage and edge cases, not a separate service that Jellyfin should call. New Go code is written for MetaTube's Provider interfaces and compared against existing SDK implementations before deciding what to keep or improve.
+```text
+Jellyfin
+  └─ metaX Jellyfin plugin
+       └─ metaX backend (MetaTube-compatible /v1 API)
+            └─ MetaTube SDK engine + native Go providers
+                 └─ source sites and APIs
+```
+
+## Features
+
+- **Native Go providers** — additional movie and actor providers implemented
+  against the MetaTube SDK Provider interfaces.
+- **Category-aware search** — requests are routed to an ordered provider list
+  for censored, uncensored, Chinese-subtitle, amateur, western, and hentai
+  content.
+- **Aggregated metadata** — a merged `MetaX` candidate combines fields from
+  multiple providers while preserving each provider's original result and
+  structured detail record in `sources[]`.
+- **Request-scoped provider credentials** — the Jellyfin plugin sends provider
+  cookies per request. The backend applies them only to that request and does
+  not persist or replay them.
+- **Operational controls** — API token, configurable route tables, route
+  fingerprints, bounded provider fan-out, in-process caching, SQLite or
+  PostgreSQL, and Docker deployment.
+- **HTTP client hardening** — bounded retries for supported native providers,
+  optional per-provider proxies, and strict URL/identity validation.
+
+### Provider coverage
+
+The integrated server contains the pinned MetaTube SDK provider set plus the
+following native metaX provider names:
+
+| Type | Native providers |
+| --- | --- |
+| Movie | Airav, AVSOX, FC2Club, FreeJAVBT, GIGA, IQQTV, Jav321, JavDB, JavLibrary, Prestige, XCity |
+| Actor | AVBaseActor, JavDBActor, MinnanoActor, WikipediaActor |
+
+`JavDB` and `JavDBActor` are registered by the same native package.
+
+The SDK also contributes providers such as FANZA, MGS, FC2, Getchu, JavBus, and
+ThePornDB. Availability depends on the build, provider credentials, region, and
+the source site's current behavior. A compiled provider is not by itself a
+claim that every live site is reachable.
+
+### Default category routes
+
+Routes are ordered provider chains. The default table is:
+
+| Category | Default route |
+| --- | --- |
+| `censored` | FANZA, JavDB, JavBus |
+| `uncensored` | JavDB, JavBus, AVSOX, Freejavbt, FC2PPVDB, FC2, Airav |
+| `chinese` | IQQTV, JavDB, Airav, Freejavbt |
+| `amateur` | MGS, FANZA, JavDB, JavBus |
+| `western` | ThePornDB (movie/scene), JavDB, Freejavbt |
+| `hentai` | Getchu, FANZA, JavDB |
+
+`fc2` is accepted as an alias for `uncensored`; `animation` is accepted as an
+alias for `hentai`. The route table can be replaced with `METAX_ROUTES` or
+`METAX_ROUTES_FILE`.
+
+## Requirements
+
+### Runtime
+
+- Jellyfin `12.x` with the
+  [metaX Jellyfin plugin](https://github.com/strange-dragon/metaX-jellyfin).
+- A reachable metaX server. The plugin and backend should communicate over
+  HTTPS, especially when provider cookies are used.
+- One of:
+  - Docker Engine with Docker Compose v2 (recommended), or
+  - a Linux host with systemd for the binary install.
+
+### Building from source
+
+- Go `1.26.0` or newer.
+- Git.
+- Python 3.
+- Network access to GitHub and the Go module proxy for the first build.
+
+The integrated build script requires a clean checkout of the pinned SDK
+revision. The Docker image uses the same build path.
+
+## Quick start with Docker
+
+The Docker image is the recommended deployment method because it pins the SDK
+revision, applies the maintained patches, runs the focused integration tests,
+and builds the server in one reproducible step. The first build downloads the
+SDK and Go modules, so it can take several minutes.
+
+```bash
+git clone https://github.com/strange-dragon/metaX.git
+cd metaX
+
+cp .env.example .env
+# Edit .env and set METAX_TOKEN to a long random value.
+
+docker compose up -d --build
+docker compose logs -f metax
+```
+
+The default service listens on port `18080` and stores SQLite data in the
+`metax-data` volume:
+
+```bash
+curl http://127.0.0.1:18080/v1/metax/status
+```
+
+The image runs as UID/GID `1000`. If you use a bind mount for `/data`, make the
+host directory writable by that UID/GID.
+
+See [docs/DOCKER.md](docs/DOCKER.md) for:
+
+- authentication and network exposure,
+- route, cookie, proxy, and ThePornDB token configuration,
+- PostgreSQL,
+- bind-mount permissions,
+- build arguments and operations.
+
+## Binary installation with systemd
+
+Use this method when Docker is not available or when the binary should run
+directly on the host.
+
+### 1. Build the server
+
+```bash
+git clone https://github.com/strange-dragon/metaX.git
+cd metaX
+
+git clone https://github.com/metatube-community/metatube-sdk-go.git ./metatube-sdk-go
+git -C ./metatube-sdk-go checkout c62584675c593816cc07e7b5b977d14c7eb505a3
+
+bash .github/scripts/build-metatube-server.sh \
+  ./metatube-sdk-go \
+  ./dist/metatube-server
+```
+
+The build script applies the maintained SDK patches, overlays the native
+providers, runs focused integration tests, and compiles the server. For a
+deterministic build environment that does not run live-site upstream tests, set
+`METAX_SKIP_UPSTREAM_TESTS=1` before invoking the script. This is the mode used
+by the Docker build.
+
+### 2. Install the binary and service account
+
+```bash
+sudo install -m 0755 ./dist/metatube-server /usr/local/bin/metatube-server
+
+sudo useradd --system --user-group \
+  --home-dir /var/lib/metax \
+  --shell /usr/sbin/nologin \
+  metax
+
+sudo install -d -o metax -g metax -m 0750 /var/lib/metax
+sudo install -d -o root -g root -m 0750 /etc/metax
+```
+
+If the `metax` user already exists, skip the `useradd` command.
+
+### 3. Configure the token
+
+Create `/etc/metax/metax.env`:
+
+```bash
+sudo tee /etc/metax/metax.env >/dev/null <<'EOF'
+TOKEN=replace-with-a-long-random-token
+# Optional route override:
+# METAX_ROUTES={"routes":{"censored":["FANZA","JavDB"],"uncensored":["JavDB","FC2","Airav"]}}
+EOF
+
+sudo chmod 0600 /etc/metax/metax.env
+```
+
+The server reads `TOKEN` from the environment and uses it as the bearer token
+for private API routes.
+
+### 4. Create the systemd unit
+
+Create `/etc/systemd/system/metax.service`:
+
+```ini
+[Unit]
+Description=metaX metadata backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=metax
+Group=metax
+WorkingDirectory=/var/lib/metax
+EnvironmentFile=-/etc/metax/metax.env
+ExecStart=/usr/local/bin/metatube-server \
+  --bind 127.0.0.1 \
+  --port 18080 \
+  --dsn /var/lib/metax/metatube.db
+Restart=on-failure
+RestartSec=5s
+StateDirectory=metax
+StateDirectoryMode=0750
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/metax
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Start and verify:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now metax
+sudo systemctl status metax
+
+curl http://127.0.0.1:18080/v1/metax/status
+```
+
+The example binds to loopback only. Put an HTTPS reverse proxy in front of it
+for Jellyfin access. If Jellyfin runs directly on the same host, loopback is
+still sufficient; if it runs on another host, terminate TLS at the proxy or
+bind to the appropriate private interface and restrict access with a firewall.
+If Jellyfin itself runs in a container on the same host, loopback is not
+reachable from that container; use a private interface or the host gateway and
+restrict access accordingly.
+
+## Jellyfin configuration
+
+1. Install and enable the
+   [metaX Jellyfin plugin](https://github.com/strange-dragon/metaX-jellyfin).
+2. Open **Dashboard → Plugins → MetaX**.
+3. Set **Server** to the backend URL, for example:
+
+   ```text
+   https://metax.example.com
+   ```
+
+   For a local Docker deployment, use `http://127.0.0.1:18080` from the host or
+   `http://metax:18080` from another container on the same Docker network.
+4. Set **Token** to the same `TOKEN` value configured on the backend.
+5. Configure provider cookies if a provider requires a login or anti-bot cookie.
+   Leave a provider blank to disable its cookie entry.
+6. Map each Jellyfin library to a metaX category.
+7. Enable MetaX in the library's metadata downloaders and image fetchers, then
+   run a library refresh.
+
+Provider cookies remain in the plugin. The backend applies the
+`X-MetaX-Provider-Cookies` header only to the request that carries it.
+
+## Configuration reference
+
+The most useful server settings are:
+
+| Setting | Purpose |
+| --- | --- |
+| `TOKEN` / `--token` | Bearer token for private API routes |
+| `METAX_ROUTES` | Inline JSON route table; takes precedence over the file |
+| `METAX_ROUTES_FILE` | Path to a JSON route table |
+| `METAX_ROUTES_FINGERPRINT` | Optional pinned route fingerprint for configuration drift detection |
+| `METAX_AGGREGATE_CACHE_TTL` | Aggregated detail/image cache TTL; default `10m` |
+| `METAX_AGGREGATE_CACHE_MAX` | Maximum cache entries per cache; default `256` |
+| `METAX_AGGREGATE_FANOUT` | Concurrent provider calls; default `16` |
+| `--request-timeout` | Per-provider HTTP deadline; default `1m` |
+| `--dsn` | SQLite path or PostgreSQL DSN |
+
+SQLite is the default database and auto-migrates on startup. For PostgreSQL,
+use a `postgresql://` DSN and enable `--db-auto-migrate` when the schema should
+be created automatically.
+
+Provider credentials use the MetaTube environment convention:
+
+```bash
+export MT_MOVIE_PROVIDER_JAVDB__COOKIES='session=...; cf_clearance=...'
+export MT_MOVIE_PROVIDER_FREEJAVBT__COOKIES='session=...'
+export MT_MOVIE_PROVIDER_FALENO__PROXY='http://proxy.example:18081'
+export MT_MOVIE_PROVIDER_MGSTAGE__PROXY='socks5://proxy.example:1080'
+export MT_MOVIE_PROVIDER_THEPORNDBSCENE__ACCESS_TOKEN='...'
+```
+
+These environment values are optional fallbacks. The Jellyfin plugin is the
+normal owner of provider cookies. See
+[docs/PROVIDER_ACCESS.md](docs/PROVIDER_ACCESS.md) for the full list and the
+live-access limitations.
+
+## API overview
+
+| Endpoint | Authentication | Description |
+| --- | --- | --- |
+| `GET /v1/metax/status` | Public | Route fingerprint, category routes, provider gaps, cookie transport version |
+| `GET /v1/providers` | Public | Registered movie and actor providers |
+| `GET /v1/movies/search?q=ABC-123&category=censored` | Bearer | Category-aware movie search |
+| `GET /v1/movies/{provider}/{id}` | Bearer | Stock provider detail |
+| `GET /v1/movies/{provider}/{id}?aggregate=true&category=censored` | Bearer | Aggregated detail for a known provider identity |
+| `GET /v1/movies/MetaX/{number}?category=censored` | Bearer | Resolve a catalog number through the category route |
+| `GET /v1/actors/search?q=...` | Bearer | Actor search |
+| `GET /v1/images/{primary,thumb,backdrop}/{provider}/{id}` | Public | Provider or aggregated images |
+
+`MetaX` is a reserved provider name, not a registered provider package. It is
+used by the merged search candidate and the number-based detail/image path.
+See [docs/METADATA_AGGREGATION.md](docs/METADATA_AGGREGATION.md) for the merge
+rules, source-record schema, error semantics, and caching behavior.
+
+## Security
+
+- Terminate TLS before exposing the backend outside a trusted network.
+- Set a strong `TOKEN`; without one, private metadata routes are unauthenticated.
+- Treat provider cookies and ThePornDB tokens as credentials. Do not commit them
+  to the repository or put them in URLs.
+- The backend does not persist provider cookies received in
+  `X-MetaX-Provider-Cookies`.
+- The Jellyfin plugin stores provider cookies in its own XML configuration in
+  plaintext. Protect the Jellyfin configuration directory and use HTTPS.
+- Restrict `METAX_ROUTES` changes to trusted operators; malformed route tables
+  abort startup rather than silently broadening provider selection.
+
+## Development and verification
+
+Repository tests:
+
+```bash
+go test ./...
+```
+
+Integrated server build:
+
+```bash
+bash .github/scripts/build-metatube-server.sh \
+  ./metatube-sdk-go \
+  ./dist/metatube-server
+```
+
+The script refuses a dirty SDK checkout or an unexpected commit. The focused
+integration tests are deterministic. The optional full upstream SDK suite makes
+live-site requests, so it can fail because of region blocks, login walls, or
+anti-bot responses unrelated to the integration. Docker builds set
+`METAX_SKIP_UPSTREAM_TESTS=1` and still run the focused tests.
+
+## Documentation
+
+- [Docker deployment](docs/DOCKER.md)
+- [Migration plan](docs/MIGRATION_PLAN.md)
+- [Compatibility matrix](docs/COMPATIBILITY_MATRIX.md)
+- [Metadata aggregation contract](docs/METADATA_AGGREGATION.md)
+- [Provider access, cookies, and proxies](docs/PROVIDER_ACCESS.md)
+- [Licensing and attribution](docs/LICENSING.md)
+- [Contributor instructions](AGENTS.md)
+
+## Status and limitations
+
+The deterministic integration suite and reproducible server build pass. Live
+site coverage is inherently dependent on region, account state, cookies,
+proxies, and upstream changes. In particular:
+
+- FANZA may redirect to a region/age-gate page.
+- JavDB FC2 detail may require a login cookie.
+- Freejavbt, FC2PPVDB, MGS, and FALENO may return login pages or anti-bot
+  responses.
+- Prestige and Getchu live catalog behavior has not been fully verified.
+
+These are access constraints, not claims that the parsers are correct for every
+site response. See the compatibility matrix and provider access notes before
+enabling a provider in production.
 
 ## License and attribution
 
-metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code, subject to the original notices. Amane is acknowledged as a functional reference; its GPL-3.0 source and fixtures are not relicensed by attribution alone. See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md), and [docs/LICENSING.md](docs/LICENSING.md).
-
-## Current status
-
-- `main` currently contains 14 native Go Provider packages: AVBaseActor, Airav, AVSOX, FC2Club, FreeJAVBT, GIGA, IQQTV, Jav321, JavDB (movie and actor), JavLibrary, Minnano (actor), Prestige, WikipediaActor, and XCity.
-- The repository maintains 17 unique SDK patches for existing-provider correctness and URL/ID validation. The reproducible build script applies the patch set and runs focused deterministic tests plus the full upstream SDK regression suite.
-- A reproducible build entry point applies all 17 maintained SDK patches, overlays native providers, verifies engine registration and `/v1/providers` discovery, runs the pinned SDK regression suite, and builds the server binary. The four-provider version passed in [run 39139447663](https://github.com/strange-dragon/metaX/actions/runs/39139447663); the earlier eleven-package build passed in [run 39139794806](https://github.com/strange-dragon/metaX/actions/runs/39139794806). The expanded twelve-package build, including `AVBaseActor`, passed in [run 39207291492](https://github.com/strange-dragon/metaX/actions/runs/39207291492). The thirteen-package build including `WikipediaActor` passed in [run 39402434294](https://github.com/strange-dragon/metaX/actions/runs/39402434294); the fourteen-package build including `Prestige` and the Getchu search patch passed in [run 39554383405](https://github.com/strange-dragon/metaX/actions/runs/39554383405).
-- These are migration-workspace packages, not yet a claim of end-to-end runtime integration: the existing MetaTube engine must import the Provider packages (or merge them into the SDK) for `init()` registration to take effect. Live-site verification remains pending, and plugin-side implementation now lives in `strange-dragon/metaX-jellyfin`.
-- A focused audit of all six Amane actor-source contracts is recorded in the compatibility matrix. The pinned SDK engine's registration mechanism is confirmed to be `engine/register.go`; native packages in this separate workspace still need to be integrated into the SDK provider tree or another supported server build path.
-- Current tracked backend scope is complete: no mandatory backend feature implementation remains. Outstanding items are validation/access constraints (region/login/token-gated sites) and optional provider-coverage extensions; this is not a live-site success claim. See [migration plan](docs/MIGRATION_PLAN.md) and [backend tasks](docs/BACKEND_TASKS.md).
-- No live-site support is claimed until current site behavior and integration are verified.
-
-## Engineering documents
-
-- [Contributor instructions](AGENTS.md)
-- [Migration plan](docs/MIGRATION_PLAN.md)
-- [Compatibility matrix](docs/COMPATIBILITY_MATRIX.md)
-- [Initial implementation comparison](docs/INITIAL_FINDINGS.md)
-- [Implementation-level Amane ↔ MetaTube audit](docs/IMPLEMENTATION_AUDIT.md)
-- [Metadata aggregation and source-record API](docs/METADATA_AGGREGATION.md)
-- [Provider access, cookies, and proxy configuration](docs/PROVIDER_ACCESS.md)
-- [Docker deployment](docs/DOCKER.md)
-- [Licensing and attribution policy](docs/LICENSING.md)
-
-## Reproducible integrated server build
-
-The repository includes a reproducible build script that applies 17 maintained SDK patches, integrates fourteen native provider packages, applies the category-search overlay, runs engine/API contract tests and upstream regression tests, then builds a MetaTube server binary. It requires a clean checkout of the pinned SDK revision.
-
-```bash
-git clone https://github.com/metatube-community/metatube-sdk-go.git ./metatube-sdk-go
-git -C ./metatube-sdk-go checkout c62584675c593816cc07e7b5b977d14c7eb505a3
-bash .github/scripts/build-metatube-server.sh ./metatube-sdk-go ./dist/metatube-server
-```
-
-The script refuses a dirty SDK checkout or a different commit. The generated binary includes eleven movie providers (`Airav`, `AVSOX`, `FC2Club`, `Freejavbt`, `GIGA`, `IQQTV`, `Jav321`, `JavDB`, `JavLibrary`, `Prestige`, `XCity`) and four actor providers (`AVBaseActor`, `JavDBActor`, `MinnanoActor`, `WikipediaActor`), plus the maintained SDK patches. The earlier eleven-package integration passed in [GitHub Actions run 39191776372](https://github.com/strange-dragon/metaX/actions/runs/39191776372). The earlier twelve-package integration, including `AVBaseActor`, passed in [run 39207291492](https://github.com/strange-dragon/metaX/actions/runs/39207291492), including provider registration, `/v1/providers` API discovery, focused tests, the full pinned SDK regression suite, and server compilation. Live API checks can be run manually with `.github/scripts/live-metax-api-smoke.sh`; they cover censored/FC2 search, `MetaX` detail plus `sources[]`, images, unknown-category errors, and fingerprint-pin startup failure. A running Jellyfin deployment remains unverified.
-
-## Docker deployment
-
-The included `Dockerfile` and `docker-compose.yml` build the same integrated
-server from the pinned SDK revision, run the integration tests, and copy the
-result into a non-root runtime image. SQLite data is persisted in a named
-volume by default.
-
-```bash
-cp .env.example .env
-# edit .env, including METAX_TOKEN if the API should be token-protected
-docker compose up -d --build
-```
-
-The service listens on port `18080` by default. See
-[Docker deployment](docs/DOCKER.md) for authentication, route configuration,
-PostgreSQL, bind-mount permissions, and operations. Put the container behind
-HTTPS before sending provider cookies from Jellyfin.
-
-## Backend orchestration work
-
-The backend orchestration layer is being implemented separately from the Jellyfin plugin.
-
-- The `routing` package defines category routes for censored, uncensored, FC2, Chinese-subtitle, amateur, western, and hentai content (`animation` remains an alias). The FC2 route includes Airav, matching Amane’s default route. It preserves explicit provider selection as a manual override and skips providers not registered in the current SDK build.
-- The SDK overlay adds an optional `category` query parameter to `/v1/movies/search`. For example, `/v1/movies/search?q=ABC-123&category=uncensored` fans out concurrently to all registered providers in that category. Omitting `category` preserves MetaTube's original all-provider behavior; specifying `provider` preserves single-provider behavior.
-- Search results keep MetaTube's existing response envelope and model. Category searches prepend one merged candidate (`provider=MetaX`, `id=<catalog number>`) that fills empty display fields from later route results, while retaining each provider's original `provider` + `id` result in route order, so the Jellyfin plugin can offer both the merged record and the original provider records. Per-provider errors and empty results do not discard successful results from other providers.
-- Real-provider detail keeps the stock MetaTube response by default; `?aggregate=true` adds `category` and `sources[]`. The reserved `MetaX` detail path resolves the catalog number through the category route and returns merged `MovieInfo` fields at the top level plus each provider’s independent structured `MovieInfo` under `data.sources`, with per-source status/error information. See [metadata aggregation contract](docs/METADATA_AGGREGATION.md).
-- Aggregation uses an exact normalized catalog-number identity gate, route-order first-non-empty scalar fields, stable list deduplication, and no cross-provider score averaging. An explicit but unknown category is rejected instead of silently broadening the search; the real-provider path still falls back to a `baseline_only` record when the number itself is ambiguous.
-- Route order is configurable at startup through `METAX_ROUTES` (inline JSON) or `METAX_ROUTES_FILE`; malformed or unknown-category tables abort startup instead of silently using the default. `METAX_ROUTES_FINGERPRINT` optionally pins the expected route hash so multi-instance deployments fail fast on configuration drift, and startup logs every configured provider that is unavailable in the current binary. Aggregated details and `MetaX` image resolution are cached in-process with `singleflight` (`METAX_AGGREGATE_CACHE_TTL`, `METAX_AGGREGATE_CACHE_MAX`), lazy number resolution consults local `movie_metadata` before live search, and category fan-out concurrency is bounded by `METAX_AGGREGATE_FANOUT` (default 16). The server's `--request-timeout` remains the per-provider HTTP deadline. See [metadata aggregation contract](docs/METADATA_AGGREGATION.md).
-- Added deterministic engine and route tests for the merged search candidate, stock detail, `aggregate=true`, the reserved `MetaX` detail path, unknown-category rejection, fill-empty behavior, route-order conflicts, list deduplication, and conservative number normalization. Focused tests and the integrated server build pass on the pinned SDK checkout; see the verification section in `docs/METADATA_AGGREGATION.md`.
-- Remaining validation/access constraints: re-check the provider-specific gaps recorded in [the compatibility matrix](docs/COMPATIBILITY_MATRIX.md) when permitted region/login/token access is available (JavDB FC2 login, FANZA region access, token-gated ThePornDB, live-unverified Prestige, and live-unverified Getchu catalog search). No mandatory backend feature task is pending. R18Dev is out of scope because it requires an offline PostgreSQL mirror rather than an HTTP Provider. Live API smoke now covers the integrated search/detail/image path; raw website HTML/HTTP payload capture remains out of scope because the current Provider contract exposes normalized `MovieInfo` records, not wire-level responses.
-- Jellyfin plugin changes are explicitly out of scope for this backend phase.
-
-### Automatic category routing
-
-The existing Jellyfin plugin does not send an Amane content type. The backend infers categories from Amane-style catalog families: ordinary censored catalog numbers, known uncensored prefixes and six-digit sequence IDs, FC2, Chinese MD/MKY families, amateur families, KIN8/Western studio-date IDs, and Getchu IDs. For non-catalog identifiers, selected source names such as ThePornDB, Getchu, and FC2 marketplaces can provide a narrow fallback hint. Ambiguous identifiers stay on the safe baseline-only detail path instead of triggering speculative aggregation. The FC2 and uncensored route remains intentionally combined.
+metaX keeps Apache-2.0 for project-authored code and MetaTube-derived code,
+subject to the original notices. The project was informed by Amane as a
+functional reference; Amane's GPL-3.0 source and fixtures are not relicensed or
+copied by attribution alone. See [LICENSE](LICENSE), [NOTICE.md](NOTICE.md),
+and [docs/LICENSING.md](docs/LICENSING.md).
