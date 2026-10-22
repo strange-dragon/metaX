@@ -1,9 +1,5 @@
 .git
 .github
-patches
-docs
-README.md
-AGENTS.md
 .env
 .env.*
 !.env.example
