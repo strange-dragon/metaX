@@ -3,6 +3,8 @@ set -euo pipefail
 
 # Build a reproducible MetaTube server with the maintained metaX SDK patches
 # and all fourteen native provider packages currently covered by engine/API integration tests.
+# Set METAX_SKIP_UPSTREAM_TESTS=1 to skip the upstream SDK suite that includes
+# live-site tests; focused metaX integration tests still run.
 if [[ $# -ne 2 ]]; then
   echo "usage: $0 /path/to/clean-metatube-sdk-go-checkout /path/to/output-binary" >&2
   exit 2
@@ -76,8 +78,13 @@ if [[ -n "$(gofmt -l $format_files)" ]]; then
   exit 1
 fi
 
-echo "Running full pinned SDK regression suite"
-go test $(go list ./... | grep -Ev "github.com/metatube-community/metatube-sdk-go/translate")
+if [[ "${METAX_SKIP_UPSTREAM_TESTS:-0}" == "1" ]]; then
+  echo "Skipping full pinned SDK regression suite (METAX_SKIP_UPSTREAM_TESTS=1)"
+  echo "Focused native-provider integration tests already passed above"
+else
+  echo "Running full pinned SDK regression suite"
+  go test $(go list ./... | grep -Ev "github.com/metatube-community/metatube-sdk-go/translate")
+fi
 
 mkdir -p "$(dirname "$output_binary")"
 echo "Building MetaTube server: $output_binary"

@@ -1,0 +1,46 @@
+name: metax
+
+services:
+  metax:
+    build:
+      context: .
+      args:
+        GO_VERSION: ${GO_VERSION:-1.26}
+        SDK_REPOSITORY: ${SDK_REPOSITORY:-https://github.com/metatube-community/metatube-sdk-go.git}
+        SDK_COMMIT: ${SDK_COMMIT:-c62584675c593816cc07e7b5b977d14c7eb505a3}
+    image: metax-backend:local
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${METAX_PORT:-8080}:8080"
+    volumes:
+      - metax-data:/data
+    environment:
+      # Optional server token. The Jellyfin plugin must use the same value.
+      TOKEN: ${METAX_TOKEN:-}
+      # Route table. Inline METAX_ROUTES wins over METAX_ROUTES_FILE.
+      METAX_ROUTES: ${METAX_ROUTES:-}
+      METAX_ROUTES_FILE: ${METAX_ROUTES_FILE:-}
+      METAX_ROUTES_FINGERPRINT: ${METAX_ROUTES_FINGERPRINT:-}
+      METAX_AGGREGATE_CACHE_TTL: ${METAX_AGGREGATE_CACHE_TTL:-10m}
+      METAX_AGGREGATE_CACHE_MAX: ${METAX_AGGREGATE_CACHE_MAX:-256}
+      METAX_AGGREGATE_FANOUT: ${METAX_AGGREGATE_FANOUT:-16}
+      # Optional environment-cookie fallback. The Jellyfin plugin normally
+      # sends cookies per request; leave these blank unless needed.
+      MT_MOVIE_PROVIDER_JAVDB__COOKIES: ${MT_MOVIE_PROVIDER_JAVDB__COOKIES:-}
+      MT_MOVIE_PROVIDER_FREEJAVBT__COOKIES: ${MT_MOVIE_PROVIDER_FREEJAVBT__COOKIES:-}
+      MT_MOVIE_PROVIDER_FALENO__COOKIES: ${MT_MOVIE_PROVIDER_FALENO__COOKIES:-}
+      MT_MOVIE_PROVIDER_MGSTAGE__COOKIES: ${MT_MOVIE_PROVIDER_MGSTAGE__COOKIES:-}
+      MT_MOVIE_PROVIDER_FC2PPVDB__COOKIES: ${MT_MOVIE_PROVIDER_FC2PPVDB__COOKIES:-}
+      # Optional per-provider proxies (HTTP or SOCKS5).
+      MT_MOVIE_PROVIDER_FALENO__PROXY: ${MT_MOVIE_PROVIDER_FALENO__PROXY:-}
+      MT_MOVIE_PROVIDER_MGSTAGE__PROXY: ${MT_MOVIE_PROVIDER_MGSTAGE__PROXY:-}
+      # Optional ThePornDB token(s).
+      MT_ACTOR_PROVIDER_THEPORNDBACTOR__ACCESS_TOKEN: ${MT_ACTOR_PROVIDER_THEPORNDBACTOR__ACCESS_TOKEN:-}
+      MT_MOVIE_PROVIDER_THEPORNDBSCENE__ACCESS_TOKEN: ${MT_MOVIE_PROVIDER_THEPORNDBSCENE__ACCESS_TOKEN:-}
+      MT_MOVIE_PROVIDER_THEPORNDBMOVIE__ACCESS_TOKEN: ${MT_MOVIE_PROVIDER_THEPORNDBMOVIE__ACCESS_TOKEN:-}
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  metax-data:

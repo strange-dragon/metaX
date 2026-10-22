@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+dist
+*.log
+.DS_Store
+docs
+README.md
+AGENTS.md
+NOTICE.md
+LICENSE
+go.mod
+go.sum
+Dockerfile
+docker-compose.yml
