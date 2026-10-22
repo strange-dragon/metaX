@@ -11,6 +11,8 @@ FROM golang:${GO_VERSION}-bookworm AS build
 
 ARG SDK_REPOSITORY
 ARG SDK_COMMIT
+ARG METAX_VERSION=0.1.0
+ARG METAX_COMMIT=
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git python3 \
@@ -28,7 +30,8 @@ COPY third_party ./third_party
 
 RUN git clone "$SDK_REPOSITORY" /src/metatube-sdk-go \
     && git -C /src/metatube-sdk-go checkout "$SDK_COMMIT" \
-    && METAX_SKIP_UPSTREAM_TESTS=1 bash .github/scripts/build-metax-server.sh \
+    && METAX_VERSION="$METAX_VERSION" METAX_COMMIT="$METAX_COMMIT" \
+        METAX_SKIP_UPSTREAM_TESTS=1 bash .github/scripts/build-metax-server.sh \
         /src/metatube-sdk-go \
         /out/metax-server
 
@@ -45,6 +48,7 @@ RUN apt-get update \
 COPY --from=build /out/metax-server /usr/local/bin/metax-server
 
 LABEL org.opencontainers.image.title="metaX backend" \
+      org.opencontainers.image.version="${METAX_VERSION}" \
       org.opencontainers.image.description="metaX server with the native providers" \
       org.opencontainers.image.source="https://github.com/strange-dragon/metaX"
 

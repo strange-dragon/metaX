@@ -87,6 +87,18 @@ else
 fi
 
 mkdir -p "$(dirname "$output_binary")"
-echo "Building metaX server: $output_binary"
-go build -o "$output_binary" ./cmd/server
+
+# Stamp the product version into the server's version package. Without this the
+# root endpoint reports "unknown" because the pinned SDK only knows its own
+# module version when built as a dependency.
+metax_version="${METAX_VERSION:-0.1.0}"
+metax_commit="${METAX_COMMIT:-}"
+version_pkg="github.com/metatube-community/metatube-sdk-go/internal/version"
+ldflags="-X ${version_pkg}.Version=${metax_version}"
+if [[ -n "$metax_commit" ]]; then
+  ldflags+=" -X ${version_pkg}.GitCommit=${metax_commit}"
+fi
+
+echo "Building metaX server: $output_binary (version $metax_version${metax_commit:+, commit $metax_commit})"
+go build -ldflags "$ldflags" -o "$output_binary" ./cmd/server
 echo "Build complete: $output_binary"
