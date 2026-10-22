@@ -1,5 +1,8 @@
 # Amane ↔ MetaTube implementation audit
 
+> Historical document. Overlay and patch paths below have been merged into the
+> in-tree server. See [INTEGRATION.md](INTEGRATION.md) for the current layout.
+
 Audit date: 2026-10-20
 
 This document is the durable handoff for the implementation-level comparison. Read it before repeating repository exploration or designing the next aggregation task. It complements (rather than replaces) the source-by-source records in `COMPATIBILITY_MATRIX.md`.

@@ -14,8 +14,8 @@ import (
 	"github.com/lib/pq"
 	"golang.org/x/text/language"
 
-	"github.com/metatube-community/metatube-sdk-go/model"
-	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/model"
+	mt "github.com/strange-dragon/metaX/provider"
 )
 
 const ActorProviderName = "JavDBActor"

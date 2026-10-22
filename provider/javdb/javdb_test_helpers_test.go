@@ -1,6 +1,6 @@
 package javdb
 
-import "github.com/metatube-community/metatube-sdk-go/model"
+import "github.com/strange-dragon/metaX/model"
 
 func selectNumberIndexFromNumbers(numbers []string, query string) int {
 	results := make([]*model.MovieSearchResult, 0, len(numbers))

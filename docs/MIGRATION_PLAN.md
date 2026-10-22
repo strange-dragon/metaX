@@ -1,5 +1,9 @@
 # Amane → MetaTube Provider migration plan
 
+> Historical document. The project is now a self-contained server; build-time
+> SDK checkout and patch instructions below are no longer used. See
+> [INTEGRATION.md](INTEGRATION.md) for the current architecture.
+
 ## Goal
 
 Make MetaTube the single scraping backend used by the existing `metatube-jellyfin` plugin, by bringing selected Amane scraping capabilities into the native `metatube-sdk-go` Provider ecosystem.

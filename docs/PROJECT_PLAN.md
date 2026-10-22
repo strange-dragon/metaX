@@ -1,7 +1,7 @@
 # metaX Project Plan and Handoff
 
-Last updated: 2026-10-21
-Working branch: `feat/amane-provider-migration`
+Last updated: 2026-10-22
+Working branch: `main`
 
 This document is the durable project-level plan and handoff for future work. Read it together with `docs/EXECUTION_CHECKLIST.md`, `docs/IMPLEMENTATION_AUDIT.md`, `docs/INTEGRATION.md`, `docs/COMPATIBILITY_MATRIX.md`, and `docs/METADATA_AGGREGATION.md` before making changes.
 
@@ -9,7 +9,7 @@ This document is the durable project-level plan and handoff for future work. Rea
 
 Integrate Amane-inspired scraping, category classification, routing, and metadata aggregation into the MetaTube ecosystem so that the existing `metatube-jellyfin` plugin/API workflow can use the added functionality. The goal is not to make users operate Amane separately and not to require manual provider mapping.
 
-The current architecture uses a metaX repository containing native provider implementations and an integration overlay applied to a pinned upstream `metatube-sdk-go` checkout. It is **not currently a fully independent rewrite of the SDK**. The upstream SDK supplies provider contracts, models, engine behavior, HTTP routes, response envelopes, cache behavior, and other base functionality; metaX owns its routing and aggregation extensions plus selected native providers. This dependency boundary must remain explicit in documentation and tests.
+The current architecture is a self-contained Go server. The metaX repository contains the server entrypoint, engine, routes, routing configuration, and both native and upstream-derived providers. The base server code is derived from `metatube-sdk-go` and lives in-tree; it is not cloned or patched during the build. metaX owns its routing and aggregation extensions plus the native providers. Upstream provenance and Apache-2.0 attribution remain explicit in documentation and tests.
 
 ## 2. Non-negotiable design rules
 
@@ -28,17 +28,16 @@ The current architecture uses a metaX repository containing native provider impl
 ## 3. Architecture and ownership
 
 ### metaX repository-owned code
+- `cmd/metax-server/main.go`: server entrypoint and version flag.
+- `engine/`: engine, provider registry, category search fan-out, and aggregation.
+- `route/`: MetaTube-compatible `/v1` API and metaX-specific endpoints.
 - `routing/routes.go`: catalog category definitions, number-family inference, and ordered provider route configuration.
-- `provider/*`: native provider implementations owned by metaX (current inventory must be checked against the latest tree; historical checklist records JavDB, Jav321, Airav, and AVSOX work).
-- `.github/overlays/metatube-sdk-go/engine/metax_search.go`: SDK engine search fan-out extension.
-- `.github/overlays/metatube-sdk-go/engine/metax_aggregate.go`: cross-provider detail lookup, identity validation, source records, and field merge.
-- `.github/overlays/metatube-sdk-go/route/*_test.go`: SDK route contract tests and helpers injected into the SDK checkout.
-- `.github/scripts/integrate-category-routing.sh`: applies metaX routing/engine/route changes to a specific SDK checkout and formats touched Go files.
-- `patches/metatube-sdk-go/*.patch`: targeted fixes to upstream provider behavior where needed.
-- `docs/*`: compatibility findings, integration instructions, aggregation contract, and progress handoff.
+- `provider/*`: native and upstream-derived provider implementations. `engine/register.go` is the single registration point.
+- `patches/metatube-sdk-go/*.patch`: historical provenance of changes now merged into the source tree; not applied at build time.
+- `docs/*`: architecture, compatibility findings, aggregation contract, and progress handoff.
 
-### Pinned upstream dependency
-The integration audit records MetaTube SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`. Do not silently upgrade it. Any SDK revision change requires re-auditing patch applicability, API behavior, tests, and build compatibility. The integration script modifies files inside the checkout; validate it against a clean checkout at exactly the pinned revision.
+### Upstream provenance
+The base server code is derived from MetaTube SDK commit `c62584675c593816cc07e7b5b977d14c7eb505a3`. The source is maintained in-tree and may be updated deliberately; there is no build-time checkout or patch step. Any upstream sync requires re-auditing the merged changes, API behavior, tests, and license attribution.
 
 ## 4. Current implementation status
 
@@ -71,7 +70,7 @@ Source-level work already recorded in `docs/EXECUTION_CHECKLIST.md` and `docs/IM
   `docs/BACKEND_TASKS.md`; plugin-side work is intentionally out of scope for
   this backend repository.
 
-**Integration status (2026-10-21).** Focused SDK integration is verified on a clean checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3` with Go 1.27.3: `routing`, `engine`, `route`, `provider/httpretry`, and the thirteen native provider package test targets pass, and `go build ./cmd/server` succeeds. A full pinned-SDK regression was also attempted; it did not pass because upstream live provider tests hit the documented regional and anti-bot blocks (for example FANZA/FALENO/FC2HUB/FC2PPVDB/MGS/SOD). The existing `engine/dbengine` Docker requirement and Go-version-sensitive `imageutil` check remain environment caveats. CI pins Go 1.26.x and sets `GITHUB_ACTIONS=true` to skip live provider tests. Do not claim a full live regression pass, and do not re-run live-site tests as the only evidence.
+**Integration status (2026-10-22).** The repository is self-contained and builds with `bash scripts/build-server.sh ./dist/metax-server`. The deterministic `routing`, `engine`, `route`, `provider/httpretry`, and native provider package tests pass. A full `go test ./...` still includes upstream live-site provider tests that can fail because of the documented regional and anti-bot blocks (for example FANZA/FALENO/FC2HUB/FC2PPVDB/MGS/SOD). Use the focused deterministic suites for CI; do not claim a full live regression pass, and do not re-run live-site tests as the only evidence.
 
 ## 5. Current execution plan
 

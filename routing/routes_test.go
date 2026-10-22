@@ -46,9 +46,8 @@ func TestDMMRouteResolvesToRegisteredFANZAProvider(t *testing.T) {
 }
 
 func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
-	// Mirrors the pinned SDK providers plus the native providers integrated by
-	// build-metax-server.sh. Amane's Official studio router is not part of
-	// the category fan-out model.
+	// Mirrors the in-tree provider inventory registered by engine/register.go.
+	// Amane's Official studio router is not part of the category fan-out model.
 	registered := []string{
 		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
 		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "Getchu",

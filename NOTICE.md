@@ -2,7 +2,7 @@
 
 ## MetaTube SDK
 
-metaX is designed to integrate with the [MetaTube SDK Go](https://github.com/metatube-community/metatube-sdk-go), which is licensed under the Apache License 2.0. Any MetaTube SDK source reused here retains the applicable upstream copyright and license notices.
+metaX includes server, engine, route, and provider source derived from the [MetaTube SDK Go](https://github.com/metatube-community/metatube-sdk-go), which is licensed under the Apache License 2.0. The derived source was taken from commit `c62584675c593816cc07e7b5b977d14c7eb505a3` and is maintained in this repository. All applicable upstream copyright and license notices are retained; see `LICENSE`.
 
 ## Amane
 

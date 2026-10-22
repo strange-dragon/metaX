@@ -21,9 +21,9 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/metatube-community/metatube-sdk-go/common/parser"
-	"github.com/metatube-community/metatube-sdk-go/model"
-	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	"github.com/strange-dragon/metaX/common/parser"
+	"github.com/strange-dragon/metaX/model"
+	mt "github.com/strange-dragon/metaX/provider"
 	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 

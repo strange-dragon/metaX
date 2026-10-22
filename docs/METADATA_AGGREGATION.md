@@ -132,10 +132,10 @@ The current MetaTube `MovieProvider` contract returns `model.MovieInfo`, after e
 
 ## Live verification (2026-10-20)
 
-A local macOS run with Go 1.27.3, the pinned SDK checkout, and public network access built the integrated server and ran:
+A local macOS run with Go 1.27.3, the in-tree server source, and public network access built the server and ran:
 
 ```bash
-bash .github/scripts/live-metax-api-smoke.sh /tmp/metatube-server-metax 18086
+bash .github/scripts/live-metax-api-smoke.sh /tmp/metax-server 18086
 # -> OK: censored-search, censored-detail, censored image, fc2-search, fingerprint pin
 # -> LIVE_API_SMOKE_OK
 ```
@@ -157,46 +157,38 @@ Live limitations observed on the same date:
 - Kin8 sample `KIN8-1234`, Chinese sample `MD-1234`, and Western sample `KIN8-1234` returned 404/empty. The samples may not be valid catalog entries; they do not establish provider failure.
 - No Jellyfin runtime or plugin-side scrape was exercised here.
 
-The same smoke script passed in CI on commit `61f345f` in [run 39395605130](https://github.com/strange-dragon/metaX/actions/runs/39395605130), after the pinned-SDK patch/full-regression/build job passed in [run 39395605056](https://github.com/strange-dragon/metaX/actions/runs/39395605056). The live results are evidence for the tested numbers only. Deterministic tests remain the regression baseline.
+Live results are evidence for the tested numbers only. Deterministic tests remain the regression baseline.
 
 ## Current limits
 
 - Automatic classification follows the Amane-style number families implemented in metaX (censored catalog numbers, known uncensored prefixes and six-digit sequence IDs, FC2, Chinese MD/MKY, amateur prefixes, KIN8/Western studio-date IDs, and Getchu identifiers). For non-catalog identifiers, a small number of source-specific hints are used (ThePornDB, Getchu, FC2 marketplaces). Directory-only overrides and ambiguous identifiers are not guessed; the selected record is returned with a `baseline_only` source status.
 - Field-level preferences per individual metadata field, source/language variants, Amane's two-phase partial-source protocol, actor aggregation, and persistent raw HTTP payload capture are not implemented by this first pass.
-- This is an integration overlay for the pinned MetaTube SDK, not a standalone Amane service. The SDK integration script applies the engine methods, search/detail/image-route wiring, and deterministic tests.
-- Tests and integrated build must be run in a local SDK checkout after applying the overlay; this documentation alone is not verification.
+- The aggregation engine is part of this standalone server, not a separate Amane service.
+- The deterministic tests and server build run directly from this repository; this documentation alone is not verification.
 
-## Verification (2026-10-20)
+## Verification
 
-Run from this repository with Go 1.27.3 and a clean SDK checkout at `c62584675c593816cc07e7b5b977d14c7eb505a3`:
+Run from the repository root with Go 1.26+:
 
 ```bash
-# 1. Repository unit tests
-go test ./... -count=1
-# -> all packages pass
-
-# 2. Apply maintained patches to the disposable SDK checkout
-#    (same ordered list as .github/scripts/build-metax-server.sh)
-
-# 3. Provider overlay + routing/aggregation overlay
-bash .github/scripts/validate-provider-integration.sh /path/to/sdk
-bash .github/scripts/integrate-category-routing.sh /path/to/sdk
-
-# 4. Focused integration tests
-cd /path/to/sdk
-go get github.com/bogdanfinn/tls-client@v1.14.0
+# 1. Deterministic engine, route, and routing tests
 go test ./routing ./engine ./route -count=1
 # -> ok routing, ok engine, ok route
 
+# 2. Native provider tests
 go test ./provider/avbaseactor ./provider/airav ./provider/avsox ./provider/fc2club \
   ./provider/freejavbt ./provider/giga ./provider/iqqtv ./provider/jav321 ./provider/javdb \
-  ./provider/javlibrary ./provider/minnano ./provider/xcity -count=1
-# -> all 12 package test targets pass
+  ./provider/javlibrary ./provider/minnano ./provider/prestige ./provider/wikipediaactor \
+  ./provider/xcity -count=1
 
-go build -o /tmp/metax-server ./cmd/server
+# 3. Build the self-contained server with automatic versioning
+bash scripts/build-server.sh /tmp/metax-server
 # -> build succeeds
 ```
 
-The latest run on 2026-10-20 added endpoint coverage for the merged search candidate, default stock detail, `aggregate=true`, the reserved `MetaX` detail path, and rejection of explicit unknown categories. The image route is built and its `MetaX` resolution path is covered by the engine resolver tests; it is not exercised with live image bytes.
+The test suite covers the merged search candidate, default stock detail,
+`aggregate=true`, the reserved `MetaX` detail path, and rejection of explicit
+unknown categories. The image route is built and its `MetaX` resolution path is
+covered by the engine resolver tests; it is not exercised with live image bytes.
 
-Full SDK regression (`go test $(go list ./... | grep -Ev .../translate)`) had two pre-existing environment failures only: `engine/dbengine` requires a Docker daemon, and `imageutil` expects Go 1.26 JPEG behavior while this run used Go 1.27.3. CI sets `GITHUB_ACTIONS=true` to skip live provider tests and pins Go 1.26.x.
+A full `go test ./...` includes upstream live-site provider tests and can fail because of region blocks, login walls, or anti-bot responses. `engine/dbengine` also requires a Docker daemon. Use the deterministic suites above for CI, and set `GITHUB_ACTIONS=true` when a run should skip live provider tests.

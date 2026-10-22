@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	mt "github.com/metatube-community/metatube-sdk-go/provider"
+	mt "github.com/strange-dragon/metaX/provider"
 	"github.com/stretchr/testify/require"
 )
 

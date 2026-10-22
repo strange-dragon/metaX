@@ -1,23 +1,17 @@
 # Docker deployment
 
-The metaX repository is a Provider workspace, not a standalone server. The
-Docker image therefore uses the same reproducible build path as
-`.github/scripts/build-metax-server.sh`:
+metaX is a standalone Go server. The Docker image builds only from this
+repository:
 
-1. clone the pinned `metatube-community/metatube-sdk-go` revision;
-2. apply the maintained SDK patches and native Provider overlay;
-3. run the focused metaX integration tests;
-4. build the `metax-server` binary;
-5. copy that binary into a small Debian runtime image.
+1. copy the source and download Go modules;
+2. derive the version and commit with `scripts/version.sh`;
+3. build the `metax-server` binary with `scripts/build-server.sh`;
+4. copy that binary into a small Debian runtime image.
 
-The build needs network access to GitHub and the Go module proxy. It is slower
-than a normal application image because it builds and validates the integrated
-MetaTube server.
-
-The Docker build sets `METAX_SKIP_UPSTREAM_TESTS=1` for the build script. That
-keeps image builds deterministic: focused metaX integration tests still run,
-while the upstream SDK suite that makes live-site requests is skipped. A normal
-source build without that variable still runs the full upstream suite.
+The build needs network access to the Go module proxy. No upstream SDK checkout
+is cloned and no patches are applied at build time. Image builds do not run
+live-site provider tests; run the deterministic suites separately before a
+release.
 
 ## Quick start
 
@@ -81,25 +75,28 @@ sudo chown -R 1000:1000 ./metax-data
 
 ## Build arguments
 
-The defaults pin the SDK revision used by the source build (compatibility
-reviewed on 2026-10-22):
-
 ```text
 GO_VERSION=1.26.0
-SDK_COMMIT=c62584675c593816cc07e7b5b977d14c7eb505a3
-SDK_REPOSITORY=https://github.com/metatube-community/metatube-sdk-go.git
+METAX_VERSION=          # optional semantic version override
+METAX_COMMIT=           # optional commit override
+METAX_GIT_REF=main      # deployed ref resolved when .git is unavailable
+METAX_GIT_URL=https://github.com/strange-dragon/metaX.git
 ```
 
-Override them only when intentionally testing another compatible revision:
+`scripts/version.sh` uses local Git tags and `HEAD` when available. In a Docker
+build context without `.git`, it falls back to `VERSION` and resolves the
+current commit of `METAX_GIT_REF` from GitHub. Pass explicit values for a
+reproducible release build:
 
 ```sh
 docker build \
-  --build-arg SDK_COMMIT=<revision> \
-  -t metax-backend:test .
+  --build-arg METAX_VERSION=0.2.0 \
+  --build-arg METAX_COMMIT="$(git rev-parse --short=7 HEAD)" \
+  -t metax-backend:0.2.0 .
 ```
 
-The build script rejects a mismatched or dirty SDK checkout, so a changed
-`SDK_COMMIT` must still be compatible with the patches in `patches/metatube-sdk-go`.
+The resulting version is available at `GET /` and through
+`metax-server --version`.
 
 ## Operations
 

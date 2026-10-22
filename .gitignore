@@ -25,6 +25,10 @@ profile.cov
 go.work
 go.work.sum
 
+# Local build output
+/metax-server
+/dist/
+
 # env file
 .env
 

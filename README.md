@@ -1,9 +1,12 @@
 # metaX
 
-metaX is a MetaTube-compatible metadata backend for Jellyfin. It builds on
-[metatube-sdk-go](https://github.com/metatube-community/metatube-sdk-go) and
+metaX is a self-contained, MetaTube-compatible metadata backend for Jellyfin.
+It includes the server, engine, routes, and providers in this repository, and
 adds category-aware provider routing, cross-provider metadata aggregation,
-request-scoped provider credentials, and a suite of native Go providers.
+request-scoped provider credentials, and a suite of native Go providers. The
+server code is derived from
+[metatube-sdk-go](https://github.com/metatube-community/metatube-sdk-go) under
+the Apache-2.0 license; see [NOTICE.md](NOTICE.md).
 
 The companion Jellyfin plugin is
 [metaX-jellyfin](https://github.com/strange-dragon/metaX-jellyfin).
@@ -12,7 +15,7 @@ The companion Jellyfin plugin is
 Jellyfin
   └─ metaX Jellyfin plugin
        └─ metaX backend (MetaTube-compatible /v1 API)
-            └─ MetaTube SDK engine + native Go providers
+            └─ metaX engine + native and upstream-derived providers
                  └─ source sites and APIs
 ```
 
@@ -84,19 +87,17 @@ alias for `hentai`. The route table can be replaced with `METAX_ROUTES` or
 ### Building from source
 
 - Go `1.26.0` or newer.
-- Git.
-- Python 3.
-- Network access to GitHub and the Go module proxy for the first build.
+- Git (used to derive the version and commit).
+- Network access to the Go module proxy for the first build.
 
-The integrated build script requires a clean checkout of the pinned SDK
-revision. The Docker image uses the same build path.
+The server source is already in this repository. The build does not clone or
+patch an upstream checkout. The Docker image uses the same build script.
 
 ## Quick start with Docker
 
-The Docker image is the recommended deployment method because it pins the SDK
-revision, applies the maintained patches, runs the focused integration tests,
-and builds the server in one reproducible step. The first build downloads the
-SDK and Go modules, so it can take several minutes.
+The Docker image is the recommended deployment method. It builds the complete
+server from this repository, without cloning or patching an upstream checkout.
+The first build downloads Go modules, so it can take a few minutes.
 
 ```bash
 git clone https://github.com/strange-dragon/metaX.git
@@ -138,24 +139,18 @@ directly on the host.
 git clone https://github.com/strange-dragon/metaX.git
 cd metaX
 
-git clone https://github.com/metatube-community/metatube-sdk-go.git ./metatube-sdk-go
-git -C ./metatube-sdk-go checkout c62584675c593816cc07e7b5b977d14c7eb505a3
-
-bash .github/scripts/build-metatube-server.sh \
-  ./metatube-sdk-go \
-  ./dist/metatube-server
+bash scripts/build-server.sh ./dist/metax-server
 ```
 
-The build script applies the maintained SDK patches, overlays the native
-providers, runs focused integration tests, and compiles the server. For a
-deterministic build environment that does not run live-site upstream tests, set
-`METAX_SKIP_UPSTREAM_TESTS=1` before invoking the script. This is the mode used
-by the Docker build.
+The build script derives the version and commit automatically (see
+[Versioning](#versioning)), injects them into the binary, and compiles
+`./cmd/metax-server`. To override the derived values, set `METAX_VERSION` and
+`METAX_COMMIT` before invoking it.
 
 ### 2. Install the binary and service account
 
 ```bash
-sudo install -m 0755 ./dist/metatube-server /usr/local/bin/metatube-server
+sudo install -m 0755 ./dist/metax-server /usr/local/bin/metax-server
 
 sudo useradd --system --user-group \
   --home-dir /var/lib/metax \
@@ -201,7 +196,7 @@ User=metax
 Group=metax
 WorkingDirectory=/var/lib/metax
 EnvironmentFile=-/etc/metax/metax.env
-ExecStart=/usr/local/bin/metatube-server \
+ExecStart=/usr/local/bin/metax-server \
   --bind 127.0.0.1 \
   --port 18080 \
   --dsn /var/lib/metax/metatube.db
@@ -335,19 +330,29 @@ Repository tests:
 go test ./...
 ```
 
-Integrated server build:
+Server build:
 
 ```bash
-bash .github/scripts/build-metatube-server.sh \
-  ./metatube-sdk-go \
-  ./dist/metatube-server
+bash scripts/build-server.sh ./dist/metax-server
 ```
 
-The script refuses a dirty SDK checkout or an unexpected commit. The focused
-integration tests are deterministic. The optional full upstream SDK suite makes
-live-site requests, so it can fail because of region blocks, login walls, or
-anti-bot responses unrelated to the integration. Docker builds set
-`METAX_SKIP_UPSTREAM_TESTS=1` and still run the focused tests.
+The deterministic routing, engine, route, and native-provider suites are safe
+to run in CI. Some provider tests make live-site requests and can fail because
+of region blocks, login walls, or anti-bot responses unrelated to the server
+code.
+
+## Versioning
+
+`scripts/version.sh` resolves the build version in this order:
+
+1. `METAX_VERSION` / `METAX_COMMIT` environment variables (release builds).
+2. Local Git tags and `HEAD`.
+3. The repository `VERSION` file plus the current commit of the deployed ref
+   resolved from GitHub (Docker builds without `.git`).
+
+The binary reports `v<version>-<commit>` when a commit is known. Tag a release
+with a semantic version such as `v0.2.0` to make the version advance
+automatically; `VERSION` is the fallback for environments without Git.
 
 ## Documentation
 

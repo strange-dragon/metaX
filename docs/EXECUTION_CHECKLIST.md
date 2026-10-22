@@ -1,5 +1,9 @@
 # Amane → MetaTube migration execution checklist
 
+> Historical document. Build and verification commands that reference a separate
+> SDK checkout are obsolete. The server is self-contained; see
+> [INTEGRATION.md](INTEGRATION.md) and the README for current commands.
+
 This file is the durable handoff for small, independently reviewable work units. Update it after each task so work can resume without relying on a long chat session.
 
 ## Working rules

@@ -1,39 +1,34 @@
 # syntax=docker/dockerfile:1
 
-# The metaX repository is a Provider workspace, not a standalone server. The
-# builder applies its patches and overlays to the pinned upstream SDK checkout,
-# runs the integration tests, and compiles the server binary.
+# metaX is a self-contained server. The engine, routes, and providers are all
+# part of this repository; nothing is cloned or patched at build time.
 ARG GO_VERSION=1.26.0
-ARG SDK_REPOSITORY=https://github.com/metatube-community/metatube-sdk-go.git
-ARG SDK_COMMIT=c62584675c593816cc07e7b5b977d14c7eb505a3
-
 FROM golang:${GO_VERSION}-bookworm AS build
 
-ARG SDK_REPOSITORY
-ARG SDK_COMMIT
-ARG METAX_VERSION=0.1.0
-ARG METAX_COMMIT=
+SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git python3 \
+    && apt-get install -y --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src/metax
 
-# Keep the build context small and cache-friendly. The build script only reads
-# these directories; docs and Git metadata are not used.
-COPY .github ./.github
-COPY provider ./provider
-COPY routing ./routing
-COPY patches ./patches
-COPY third_party ./third_party
+# Cache the module graph before copying the rest of the source.
+COPY go.mod go.sum ./
+RUN go mod download
 
-RUN git clone "$SDK_REPOSITORY" /src/metatube-sdk-go \
-    && git -C /src/metatube-sdk-go checkout "$SDK_COMMIT" \
-    && METAX_VERSION="$METAX_VERSION" METAX_COMMIT="$METAX_COMMIT" \
-        METAX_SKIP_UPSTREAM_TESTS=1 bash .github/scripts/build-metax-server.sh \
-        /src/metatube-sdk-go \
-        /out/metax-server
+COPY . .
+
+ARG METAX_VERSION=
+ARG METAX_COMMIT=
+ARG METAX_GIT_REF=main
+ARG METAX_GIT_URL=https://github.com/strange-dragon/metaX.git
+
+RUN METAX_VERSION="$METAX_VERSION" \
+    METAX_COMMIT="$METAX_COMMIT" \
+    METAX_GIT_REF="$METAX_GIT_REF" \
+    METAX_GIT_URL="$METAX_GIT_URL" \
+    bash scripts/build-server.sh /out/metax-server
 
 FROM debian:bookworm-slim AS runtime
 
@@ -46,10 +41,10 @@ RUN apt-get update \
     && chown -R metax:metax /data
 
 COPY --from=build /out/metax-server /usr/local/bin/metax-server
+COPY LICENSE NOTICE.md /usr/share/licenses/metax/
 
 LABEL org.opencontainers.image.title="metaX backend" \
-      org.opencontainers.image.version="${METAX_VERSION}" \
-      org.opencontainers.image.description="metaX server with the native providers" \
+      org.opencontainers.image.description="metaX metadata backend with native providers" \
       org.opencontainers.image.source="https://github.com/strange-dragon/metaX"
 
 ENV GIN_MODE=release
