@@ -57,7 +57,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-The service listens on port `8080` by default. See
+The service listens on port `18080` by default. See
 [Docker deployment](docs/DOCKER.md) for authentication, route configuration,
 PostgreSQL, bind-mount permissions, and operations. Put the container behind
 HTTPS before sending provider cookies from Jellyfin.
