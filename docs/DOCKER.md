@@ -85,7 +85,7 @@ The defaults pin the SDK revision used by the source build (compatibility
 reviewed on 2026-10-22):
 
 ```text
-GO_VERSION=1.26
+GO_VERSION=1.26.0
 SDK_COMMIT=c62584675c593816cc07e7b5b977d14c7eb505a3
 SDK_REPOSITORY=https://github.com/metatube-community/metatube-sdk-go.git
 ```

@@ -3,7 +3,7 @@
 # The metaX repository is a Provider workspace, not a standalone server. The
 # builder applies its patches and overlays to the pinned MetaTube SDK checkout,
 # runs the integration tests, and compiles the server binary.
-ARG GO_VERSION=1.26
+ARG GO_VERSION=1.26.0
 ARG SDK_REPOSITORY=https://github.com/metatube-community/metatube-sdk-go.git
 ARG SDK_COMMIT=c62584675c593816cc07e7b5b977d14c7eb505a3
 
