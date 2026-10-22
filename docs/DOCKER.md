@@ -81,7 +81,8 @@ sudo chown -R 10001:10001 ./metax-data
 
 ## Build arguments
 
-The defaults pin the SDK revision used by the source build:
+The defaults pin the SDK revision used by the source build (compatibility
+reviewed on 2026-10-22):
 
 ```text
 GO_VERSION=1.26
