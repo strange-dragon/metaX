@@ -7,7 +7,7 @@ existing MetaTube plugin API.
 Companion Jellyfin plugin:
 [metaX-jellyfin](https://github.com/strange-dragon/metaX-jellyfin).
 
-[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&builder=dockerfile&repository=github.com/strange-dragon/metaX&branch=main&name=metax&ports=18080;http;/&env[TOKEN]=change-me-before-deploy)
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&builder=dockerfile&repository=github.com/strange-dragon/metaX&branch=main&name=metax&ports=18080;http;/&env%5BTOKEN%5D=change-me-before-deploy)
 
 ## One-click deploy on Koyeb
 
