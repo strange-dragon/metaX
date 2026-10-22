@@ -37,8 +37,8 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --gid 10001 metax \
-    && useradd --uid 10001 --gid metax --home-dir /data --shell /usr/sbin/nologin --no-create-home metax \
+    && groupadd --gid 1000 metax \
+    && useradd --uid 1000 --gid metax --home-dir /data --shell /usr/sbin/nologin --no-create-home metax \
     && mkdir -p /data \
     && chown -R metax:metax /data
 
@@ -52,9 +52,9 @@ ENV GIN_MODE=release
 
 USER metax
 WORKDIR /data
-EXPOSE 8080
+EXPOSE 18080
 VOLUME ["/data"]
 STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/usr/local/bin/metatube-server"]
-CMD ["--bind", "0.0.0.0", "--port", "8080", "--dsn", "/data/metatube.db"]
+CMD ["--bind", "0.0.0.0", "--port", "18080", "--dsn", "/data/metatube.db"]

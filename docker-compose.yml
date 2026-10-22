@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
     init: true
     ports:
-      - "${METAX_PORT:-8080}:8080"
+      - "${METAX_PORT:-18080}:18080"
     volumes:
       - metax-data:/data
     environment:

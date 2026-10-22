@@ -28,38 +28,38 @@ docker compose up -d --build
 docker compose logs -f metax
 ```
 
-The default service listens on port `8080` and persists SQLite data in the
+The default service listens on port `18080` and persists SQLite data in the
 `metax-data` volume at `/data/metatube.db`.
 
 Check the non-secret routing status:
 
 ```sh
-curl http://127.0.0.1:8080/v1/metax/status
+curl http://127.0.0.1:18080/v1/metax/status
 ```
 
 In Jellyfin, set the MetaX plugin server URL to the address of this container,
-for example `http://docker-host:8080` (or an HTTPS reverse-proxy URL). If
+for example `http://docker-host:18080` (or an HTTPS reverse-proxy URL). If
 `METAX_TOKEN` is set, enter the same token in the plugin. The plugin sends
 provider cookies per request; the `MT_*` environment variables are optional
 fallback values.
 
 ## Authentication and exposure
 
-The server itself does not terminate TLS. Do not expose port `8080` directly to
+The server itself does not terminate TLS. Do not expose port `18080` directly to
 an untrusted network. Put it behind HTTPS (a reverse proxy or a private
 network), especially when the Jellyfin plugin sends provider cookies.
 
 `METAX_TOKEN` is optional. When set, it is passed to the server's `--token`
 flag through the `TOKEN` environment variable. The Compose file publishes the
 port on all host interfaces by default; restrict it with firewall rules or
-change the port mapping to `127.0.0.1:${METAX_PORT:-8080}:8080` when Jellyfin
+change the port mapping to `127.0.0.1:${METAX_PORT:-18080}:18080` when Jellyfin
 runs on the same host.
 
 ## Data and configuration
 
 - `/data` is the persistent volume. Back it up if SQLite is used.
 - The default command is:
-  `--bind 0.0.0.0 --port 8080 --dsn /data/metatube.db`
+  `--bind 0.0.0.0 --port 18080 --dsn /data/metatube.db`
 - To use PostgreSQL instead, override the command with a PostgreSQL DSN:
   `--dsn 'postgresql://user:password@postgres:5432/metax'`. The server
   auto-migrates SQLite; for PostgreSQL, keep `--db-auto-migrate` enabled or
@@ -71,11 +71,11 @@ runs on the same host.
   [`PROVIDER_ACCESS.md`](PROVIDER_ACCESS.md).
 
 If you use a bind mount instead of the named volume, make the host directory
-writable by UID/GID `10001` (the image's runtime user):
+writable by UID/GID `1000` (the image's runtime user):
 
 ```sh
 mkdir -p ./metax-data
-sudo chown -R 10001:10001 ./metax-data
+sudo chown -R 1000:1000 ./metax-data
 # then mount ./metax-data:/data
 ```
 
