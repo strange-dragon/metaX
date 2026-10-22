@@ -13,7 +13,9 @@ Companion Jellyfin plugin:
 
 1. Click the button above.
 2. Replace the placeholder `TOKEN` with a long random value **before**
-   clicking Deploy.
+   clicking Deploy. This is your own backend access token, not a GitHub,
+   Koyeb, provider-cookie, or ThePornDB token. Generate one with
+   `openssl rand -hex 32`.
 3. Keep the service port at `18080`.
 4. Deploy.
 5. If you need persistent metadata, add a Koyeb volume mounted at `/data`, or
@@ -136,7 +138,7 @@ The most commonly used settings:
 
 | Variable or flag | Default | Description |
 | --- | --- | --- |
-| `TOKEN` / `--token` | empty | Bearer token for protected API routes. Set this on any public deployment. |
+| `TOKEN` / `--token` | empty | Your own backend access token for protected API routes. Generate a long random value with `openssl rand -hex 32`. This is not a provider cookie or ThePornDB token. |
 | `METAX_ROUTES` | built-in table | Inline JSON route table. Takes precedence over `METAX_ROUTES_FILE`. |
 | `METAX_ROUTES_FILE` | empty | Path to a JSON route table. |
 | `METAX_ROUTES_FINGERPRINT` | empty | Optional expected route fingerprint; startup fails on mismatch. |
@@ -149,6 +151,28 @@ The most commonly used settings:
 | `--request-timeout` | `1m` | Per-provider HTTP timeout. |
 | `--db-auto-migrate` | false | Enable database migration. SQLite is auto-migrated automatically. |
 | `METAX_PORT` | `18080` | Docker Compose host port only. |
+
+`TOKEN` is a shared secret between the backend and the Jellyfin plugin. Clients
+send it as:
+
+```http
+Authorization: Bearer <TOKEN>
+```
+
+Generate it yourself, for example:
+
+```bash
+openssl rand -hex 32
+```
+
+Set the same value in the backend (`TOKEN`) and in the plugin (**Token**). If
+`TOKEN` is empty, protected search/detail/actor routes are unauthenticated.
+Public routes such as `/`, `/v1/providers`, `/v1/metax/status`, and image
+endpoints remain public either way.
+
+Do not confuse `TOKEN` with provider credentials. JavDB/JavBus cookies and
+ThePornDB access tokens are separate values and belong in the `MT_*` variables
+or in the plugin's per-provider cookie settings.
 
 Provider credentials use the MetaTube environment convention. They are optional
 fallbacks; the Jellyfin plugin normally sends provider cookies per request.
