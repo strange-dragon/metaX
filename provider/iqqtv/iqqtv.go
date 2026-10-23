@@ -129,14 +129,15 @@ func (p *IQQTV) validOrigin(u *url.URL) bool {
 	}
 
 	// Amane documents that iqq5.xyz redirects to rotating IQQTV hosts such as
-	// iqqk4.quest. Accept only that narrow HTTPS host family; never trust an
-	// arbitrary cross-origin redirect or relax TLS certificate verification.
+	// iqqk4.quest and iqqq5.work. Accept only those two narrow HTTPS host
+	// families; never trust an arbitrary cross-origin redirect or relax TLS
+	// certificate verification.
 	return strings.EqualFold(p.baseURL.Scheme, "https") &&
 		effectivePort(u) == "443" &&
 		rotatingHostRE.MatchString(host)
 }
 
-var rotatingHostRE = regexp.MustCompile(`^iqq[a-z0-9]+\.quest$`)
+var rotatingHostRE = regexp.MustCompile(`^iqq[a-z0-9]+\.(?:quest|work)$`)
 
 func effectivePort(u *url.URL) string {
 	if port := u.Port(); port != "" {

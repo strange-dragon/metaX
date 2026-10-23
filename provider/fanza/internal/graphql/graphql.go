@@ -20,6 +20,9 @@ var (
 
 	//go:embed query/UserReviews.graphql
 	userReviewsQuery string
+
+	//go:embed query/SearchPPV.graphql
+	searchPPVQuery string
 )
 
 var ErrNullResponse = errors.New("response is null")
@@ -66,6 +69,29 @@ func (c *Client) GetContentPageData(id string, opts ContentPageDataQueryOptions)
 		return nil, ErrNullResponse
 	}
 
+	return &resp, nil
+}
+
+func (c *Client) SearchPPV(queryWord, floor string, limit, offset int) (*SearchPPVResponse, error) {
+	req := graphql.NewRequest(searchPPVQuery)
+	req.Var("limit", limit)
+	req.Var("offset", offset)
+	req.Var("floor", floor)
+	req.Var("sort", "RECOMMENDED")
+	req.Var("queryWord", queryWord)
+
+	req.Header.Set("Referer", videoURL)
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Fanza-Device", "BROWSER")
+	req.Header.Set("User-Agent", "") // skip
+
+	var resp SearchPPVResponse
+	if err := c.gc.Run(context.Background(), req, &resp); err != nil {
+		return nil, err
+	}
+	if reflect.DeepEqual(resp, SearchPPVResponse{}) {
+		return nil, ErrNullResponse
+	}
 	return &resp, nil
 }
 

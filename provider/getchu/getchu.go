@@ -12,7 +12,9 @@ import (
 	"github.com/antchfx/htmlquery"
 	"github.com/gocolly/colly/v2"
 	"golang.org/x/net/html"
+	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/language"
+	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/strange-dragon/metaX/common/parser"
@@ -34,13 +36,15 @@ const (
 
 const (
 	baseURL       = "https://dl.getchu.com/"
+	webBaseURL    = "https://www.getchu.com/"
 	searchBaseURL = "https://www.getchu.com"
-	searchPath    = "/php/nsearch.phtml"
+	searchPath    = "/php/search.phtml"
 	maxCandidates = 10
 )
 
 var (
 	detailPathRE           = regexp.MustCompile("^/i/item([0-9]+)$")
+	webDetailPathRE        = regexp.MustCompile("^/item/([0-9]+)/?$")
 	catalogRE              = regexp.MustCompile(`(?i)^[A-Z]{2,}[-_ ]?\d+[A-Z0-9_-]*$`)
 	numericIDRE            = regexp.MustCompile(`^(?i)(?:GETCHU[-_])?(\d+)$`)
 	softPathRE             = regexp.MustCompile(`/soft\.phtml$`)
@@ -48,12 +52,14 @@ var (
 	cookieNameRE           = regexp.MustCompile(`^[!#$%&'*+.^_|~0-9A-Za-z-]+$`)
 	searchBaseURLParsed, _ = url.Parse(searchBaseURL)
 	detailBaseURLParsed, _ = url.Parse(baseURL)
+	webBaseURLParsed, _    = url.Parse(webBaseURL)
 )
 
 type Getchu struct {
 	*scraper.Scraper
 
 	detailBase *url.URL
+	webBase    *url.URL
 	searchBase *url.URL
 
 	cookieMu sync.RWMutex
@@ -64,6 +70,7 @@ func New() *Getchu {
 	return &Getchu{
 		Scraper:    scraper.NewDefaultScraper(Name, baseURL, Priority, language.Japanese),
 		detailBase: cloneURL(detailBaseURLParsed),
+		webBase:    cloneURL(webBaseURLParsed),
 		searchBase: cloneURL(searchBaseURLParsed),
 		cookies:    defaultCookies(),
 	}
@@ -75,6 +82,7 @@ func newForTest(detailBase, searchBase string) *Getchu {
 	return &Getchu{
 		Scraper:    scraper.NewDefaultScraper(Name, detailBase, Priority, language.Japanese),
 		detailBase: detail,
+		webBase:    cloneURL(search),
 		searchBase: search,
 		cookies:    defaultCookies(),
 	}
@@ -206,6 +214,17 @@ func (gcu *Getchu) detailURL(id string) string {
 	return u.String()
 }
 
+func (gcu *Getchu) webDetailURL(id string) string {
+	u := cloneURL(gcu.webBase)
+	if u == nil {
+		return ""
+	}
+	u.Path = "/item/" + id + "/"
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
+}
+
 func (gcu *Getchu) validDetailOrigin(u *url.URL) bool {
 	if u == nil || gcu.detailBase == nil || u.User != nil || u.Host == "" ||
 		!strings.EqualFold(u.Scheme, gcu.detailBase.Scheme) {
@@ -215,6 +234,17 @@ func (gcu *Getchu) validDetailOrigin(u *url.URL) bool {
 		return false
 	}
 	return effectivePort(u) == effectivePort(gcu.detailBase)
+}
+
+func (gcu *Getchu) validWebOrigin(u *url.URL) bool {
+	if u == nil || gcu.webBase == nil || u.User != nil || u.Host == "" ||
+		!strings.EqualFold(u.Scheme, gcu.webBase.Scheme) {
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSuffix(u.Hostname(), "."), strings.TrimSuffix(gcu.webBase.Hostname(), ".")) {
+		return false
+	}
+	return effectivePort(u) == effectivePort(gcu.webBase)
 }
 
 func (gcu *Getchu) validSearchOrigin(u *url.URL) bool {
@@ -246,7 +276,25 @@ func (gcu *Getchu) GetMovieInfoByID(id string) (info *model.MovieInfo, err error
 	if id == "" {
 		return nil, fmt.Errorf("getchu: invalid movie ID")
 	}
-	return gcu.GetMovieInfoByURL(gcu.detailURL(id))
+	// Download items live on dl.getchu.com. Search results point at the retail
+	// catalog on www.getchu.com, which uses a different detail URL and page
+	// layout. Try both and keep the first complete response.
+	for _, rawURL := range []string{gcu.detailURL(id), gcu.webDetailURL(id)} {
+		if rawURL == "" {
+			continue
+		}
+		candidate, candidateErr := gcu.GetMovieInfoByURL(rawURL)
+		if candidateErr == nil && candidate != nil && candidate.IsValid() {
+			return candidate, nil
+		}
+		if candidateErr != nil {
+			err = candidateErr
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("getchu: movie not found: %s", id)
 }
 
 func (gcu *Getchu) ParseMovieIDFromURL(rawURL string) (string, error) {
@@ -254,23 +302,28 @@ func (gcu *Getchu) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !gcu.validDetailOrigin(u) {
-		return "", fmt.Errorf("getchu: unexpected detail origin %q", rawURL)
-	}
-	if path.Dir(u.Path) != "/i" {
+	if gcu.validDetailOrigin(u) {
+		if path.Dir(u.Path) != "/i" {
+			return "", fmt.Errorf("getchu: invalid detail path %q", u.Path)
+		}
+		if match := detailPathRE.FindStringSubmatch(u.Path); len(match) == 2 {
+			return match[1], nil
+		}
 		return "", fmt.Errorf("getchu: invalid detail path %q", u.Path)
 	}
-	match := detailPathRE.FindStringSubmatch(u.Path)
-	if len(match) != 2 {
+	if gcu.validWebOrigin(u) {
+		if match := webDetailPathRE.FindStringSubmatch(u.Path); len(match) == 2 {
+			return match[1], nil
+		}
 		return "", fmt.Errorf("getchu: invalid detail path %q", u.Path)
 	}
-	return match[1], nil
+	return "", fmt.Errorf("getchu: unexpected detail origin %q", rawURL)
 }
 
-// SearchMovie implements the legacy www.getchu.com catalog search. Amane's
-// first-soft-result shortcut is deliberately not reproduced: every candidate
-// must pass an exact normalized catalog/title identity check before it is
-// returned.
+// SearchMovie implements title and catalog searches. Title searches are read
+// directly from the result list (avoiding N+1 detail requests); catalog
+// searches still verify every candidate against the exact normalized number
+// before returning it.
 func (gcu *Getchu) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
 	keyword = gcu.NormalizeMovieKeyword(keyword)
 	if keyword == "" {
@@ -278,6 +331,13 @@ func (gcu *Getchu) SearchMovie(keyword string) ([]*model.MovieSearchResult, erro
 	}
 
 	queryID := gcu.NormalizeMovieID(keyword)
+	if queryID == "" && !catalogRE.MatchString(keyword) {
+		// Title searches can be answered directly from the result list. This
+		// avoids fetching up to ten detail pages just to discover that a result
+		// is unrelated, which made Japanese title searches take tens of
+		// seconds. Catalog searches keep the exact detail-based path below.
+		return gcu.searchTitleResults(keyword)
+	}
 	candidates, searchErr := gcu.searchCandidates(keyword)
 	if searchErr != nil && queryID == "" {
 		return nil, searchErr
@@ -331,14 +391,120 @@ func (gcu *Getchu) SearchMovie(keyword string) ([]*model.MovieSearchResult, erro
 	return nil, nil
 }
 
+func encodeEUCJP(value string) (string, error) {
+	encoded, _, err := transform.String(japanese.EUCJP.NewEncoder(), value)
+	return encoded, err
+}
+
+func matchesTitleQuery(keyword, title string) bool {
+	query := normalizeIdentity(keyword)
+	title = normalizeIdentity(title)
+	return query != "" && title != "" && strings.Contains(title, query)
+}
+
+func largerGetchuImage(raw string) string {
+	raw = strings.TrimSpace(raw)
+	for _, suffix := range []string{"_ss.jpg", "_s.jpg"} {
+		if strings.HasSuffix(raw, suffix) {
+			return strings.TrimSuffix(raw, suffix) + ".jpg"
+		}
+	}
+	return raw
+}
+
+func (gcu *Getchu) searchTitleResults(keyword string) ([]*model.MovieSearchResult, error) {
+	u := cloneURL(gcu.searchBase)
+	if u == nil {
+		return nil, fmt.Errorf("getchu: missing search base URL")
+	}
+	u.Path = searchPath
+	encodedKeyword, err := encodeEUCJP(keyword)
+	if err != nil {
+		// Getchu's catalog is EUC-JP. Simplified Chinese (and other text that
+		// cannot be represented there) is not searchable; let the other
+		// providers in the category answer instead of failing the fan-out.
+		return nil, nil
+	}
+	query := url.Values{}
+	query.Set("search_keyword", encodedKeyword)
+	query.Set("check_key_dtl", "1")
+	query.Set("genre", "anime_dvd")
+	query.Set("gc", "gc")
+	u.RawQuery = query.Encode()
+	u.Fragment = ""
+
+	c := gcu.ClonedCollector()
+	if err := c.SetCookies(gcu.searchBase.String(), gcu.configuredCookies()); err != nil {
+		return nil, fmt.Errorf("getchu: set search cookies: %w", err)
+	}
+	c.AllowURLRevisit = true
+
+	results := make([]*model.MovieSearchResult, 0, maxCandidates)
+	seen := map[string]struct{}{}
+	releaseDateRE := regexp.MustCompile(`発売日：\s*(\d{4}/\d{2}/\d{2})`)
+	c.OnHTML("ul.display > li", func(e *colly.HTMLElement) {
+		link := e.ChildAttr(`#detail_block a.blueb`, "href")
+		id, ok := gcu.softResultID(link)
+		if !ok {
+			return
+		}
+		if _, exists := seen[id]; exists {
+			return
+		}
+		seen[id] = struct{}{}
+		title := strings.TrimSpace(e.ChildText(`#detail_block a.blueb`))
+		if title == "" {
+			return
+		}
+		info := &model.MovieInfo{
+			ID:       id,
+			Number:   fmt.Sprintf("GETCHU-%s", id),
+			Title:    title,
+			Provider: gcu.Name(),
+			Homepage: gcu.webDetailURL(id),
+			Genres:   []string{},
+		}
+		if raw := strings.TrimSpace(e.ChildAttr(`#package_block img`, "data-original")); raw != "" {
+			ref, refErr := url.Parse(raw)
+			if refErr == nil {
+				info.CoverURL = gcu.searchBase.ResolveReference(ref).String()
+				info.ThumbURL = largerGetchuImage(info.CoverURL)
+			}
+		}
+		if match := releaseDateRE.FindStringSubmatch(e.Text); len(match) == 2 {
+			info.ReleaseDate = parser.ParseDate(match[1])
+		}
+		if !matchesTitleQuery(keyword, info.Title) {
+			return
+		}
+		results = append(results, info.ToSearchResult())
+	})
+	if err := c.Visit(u.String()); err != nil {
+		return nil, fmt.Errorf("getchu: title search: %w", err)
+	}
+	if len(results) > maxCandidates {
+		results = results[:maxCandidates]
+	}
+	return results, nil
+}
+
 func (gcu *Getchu) searchCandidates(keyword string) ([]string, error) {
 	u := cloneURL(gcu.searchBase)
 	if u == nil {
 		return nil, fmt.Errorf("getchu: missing search base URL")
 	}
 	u.Path = searchPath
+	encodedKeyword, err := encodeEUCJP(keyword)
+	if err != nil {
+		// Getchu's catalog is EUC-JP. Simplified Chinese (and other text that
+		// cannot be represented there) is not searchable; let the other
+		// providers in the category answer instead of failing the fan-out.
+		return nil, nil
+	}
 	query := url.Values{}
-	query.Set("search_keyword", keyword)
+	query.Set("search_keyword", encodedKeyword)
+	query.Set("check_key_dtl", "1")
+	query.Set("genre", "anime_dvd")
 	query.Set("gc", "gc")
 	u.RawQuery = query.Encode()
 	u.Fragment = ""
@@ -447,6 +613,14 @@ func (gcu *Getchu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err 
 	}
 
 	c := gcu.ClonedCollector()
+	for _, base := range []*url.URL{gcu.detailBase, gcu.webBase} {
+		if base == nil {
+			continue
+		}
+		if err := c.SetCookies(base.String(), gcu.configuredCookies()); err != nil {
+			return nil, fmt.Errorf("getchu: set detail cookies: %w", err)
+		}
+	}
 
 	// Misc
 	c.OnXML(`//td`, func(e *colly.XMLElement) {
@@ -466,19 +640,27 @@ func (gcu *Getchu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err 
 
 	// Fields
 	c.OnXML(`//tr`, func(e *colly.XMLElement) {
-		switch e.ChildText(`.//td[1]`) {
+		key := strings.TrimSuffix(strings.TrimSpace(e.ChildText(`.//td[1]`)), "：")
+		switch key {
 		case "サークル":
 			info.Label = strings.TrimSpace(e.ChildText(`.//td[2]`))
 		case "作者":
 			// info.Director = e.ChildText(`.//td[2]`)
 		case "画像数&ページ数":
 			// info.Runtime = parser.ParseRuntime(e.ChildText(`.//td[2]`))
-		case "配信開始日":
+		case "配信開始日", "発売日":
 			info.ReleaseDate = parser.ParseDate(e.ChildText(`.//td[2]`))
+		case "ブランド":
+			info.Label = strings.TrimSpace(e.ChildText(`.//td[2]`))
+		case "ジャンル":
+			parser.ParseTexts(htmlquery.FindOne(e.DOM.(*html.Node), `.//td[2]`),
+				(*[]string)(&info.Genres))
+		case "出演":
+			info.Actors = strings.Fields(e.ChildText(`.//td[2]`))
 		case "趣向":
 			parser.ParseTexts(htmlquery.FindOne(e.DOM.(*html.Node), `.//td[2]`),
 				(*[]string)(&info.Genres))
-		case "作品内容":
+		case "作品内容", "商品紹介":
 			info.Summary = strings.TrimSpace(e.ChildText(`.//td[2]`))
 		}
 	})
@@ -488,7 +670,11 @@ func (gcu *Getchu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err 
 		if info.Title != "" {
 			return
 		}
-		info.Title = e.Attr("content")
+		title := strings.TrimSpace(e.Attr("content"))
+		if i := strings.Index(title, " | "); i > 0 {
+			title = strings.TrimSpace(title[:i])
+		}
+		info.Title = title
 	})
 
 	// Cover (fallback)

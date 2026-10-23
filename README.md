@@ -168,6 +168,7 @@ MT_MOVIE_PROVIDER_FALENO__PROXY='http://proxy.example:18081'
 MT_MOVIE_PROVIDER_MGSTAGE__PROXY='socks5://proxy.example:1080'
 
 # ThePornDB tokens
+MT_MOVIE_PROVIDER_THEPORNDBMOVIE__ACCESS_TOKEN='...'
 MT_MOVIE_PROVIDER_THEPORNDBSCENE__ACCESS_TOKEN='...'
 MT_ACTOR_PROVIDER_THEPORNDBACTOR__ACCESS_TOKEN='...'
 ```
@@ -199,7 +200,9 @@ credential list.
 7. Run **Scan library** or **Refresh metadata**.
 
 For provider cookies, configure them in the plugin settings. They are sent only
-to the configured metaX backend and are not stored by the backend.
+to the configured metaX backend and are not stored by the backend. ThePornDB
+has no separate plugin token field; enter `access_token=YOUR_TOKEN` in the
+cookie field for the ThePornDB provider rows (Movie, Scene, and Actor).
 
 ## Default category routes
 
@@ -210,7 +213,7 @@ to the configured metaX backend and are not stored by the backend.
 | `chinese` | IQQTV, JavDB, Airav, Freejavbt |
 | `amateur` | MGS, FANZA, JavDB, JavBus |
 | `western` | ThePornDB (movie/scene), JavDB, Freejavbt |
-| `hentai` | Getchu, FANZA, JavDB |
+| `hentai` | Getchu, AniList, FANZA, JavDB |
 
 `fc2` is an alias for `uncensored`; `animation` is an alias for `hentai`.
 Override the table with `METAX_ROUTES` or `METAX_ROUTES_FILE`.
@@ -223,8 +226,10 @@ Override the table with `METAX_ROUTES` or `METAX_ROUTES_FILE`.
 | Actor | AVBaseActor, JavDBActor, MinnanoActor, WikipediaActor |
 
 The server also includes the upstream-derived providers such as FANZA, MGS,
-FC2, Getchu, JavBus, and ThePornDB. Live availability depends on region, login
-state, cookies, proxies, and the source site.
+FC2, Getchu, JavBus, and ThePornDB. AniList provides title-based anime/hentai
+metadata (including English, Japanese, and, through Bangumi aliases, Chinese
+titles), so hentai searches do not require a catalog number. Live availability
+depends on region, login state, cookies, proxies, and the source site.
 
 ## API checks
 

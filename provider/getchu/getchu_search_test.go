@@ -43,7 +43,7 @@ func searchPage(links ...string) string {
 
 func TestSearchMovieRequiresExactIdentity(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/php/nsearch.phtml", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/php/search.phtml", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("search_keyword") != "ABC-123" {
 			http.Error(w, "unexpected keyword", http.StatusBadRequest)
 			return
@@ -99,7 +99,7 @@ func TestSearchMovieRequiresExactIdentity(t *testing.T) {
 
 func TestSearchMovieRejectsFuzzyOnlyResult(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/php/nsearch.phtml", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/php/search.phtml", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, searchPage("/soft.phtml?id=4042392"))
 	})
 	mux.HandleFunc("/i/item4042392", func(w http.ResponseWriter, _ *http.Request) {
@@ -119,7 +119,7 @@ func TestSearchMovieRejectsFuzzyOnlyResult(t *testing.T) {
 
 func TestSearchMovieNumericIDUsesExactCatalogID(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/php/nsearch.phtml", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/php/search.phtml", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, searchPage(
 			"/soft.phtml?id=9999999",
 			"/soft.phtml?id=4042392",
@@ -145,7 +145,7 @@ func TestSearchMovieNumericIDUsesExactCatalogID(t *testing.T) {
 
 func TestSearchMovieFallsBackToExactNumericDetail(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/php/nsearch.phtml", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/php/search.phtml", func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "blocked", http.StatusForbidden)
 	})
 	mux.HandleFunc("/i/item4042392", func(w http.ResponseWriter, _ *http.Request) {
@@ -191,7 +191,7 @@ func (c testConfig) GetDuration(string) (time.Duration, error) { return 0, nil }
 
 func TestSetConfigAppliesCookiesToCatalogSearch(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/php/nsearch.phtml", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/php/search.phtml", func(w http.ResponseWriter, r *http.Request) {
 		cookie := r.Header.Get("Cookie")
 		if !strings.Contains(cookie, "custom=value") {
 			http.Error(w, "missing custom cookie", http.StatusBadRequest)
@@ -219,7 +219,7 @@ func TestSoftResultIDRejectsForeignAndMalformedLinks(t *testing.T) {
 	gcu := New()
 	for _, raw := range []string{
 		"https://evil.invalid/soft.phtml?id=1",
-		"https://www.getchu.com/php/nsearch.phtml?id=1",
+		"https://www.getchu.com/php/search.phtml?id=1",
 		"/soft.phtml?id=abc",
 		"/soft.phtml",
 	} {
@@ -233,3 +233,13 @@ func TestSoftResultIDRejectsForeignAndMalformedLinks(t *testing.T) {
 }
 
 var _ provider.Config = testConfig{}
+
+func TestSearchMovieUnencodableTitleIsEmpty(t *testing.T) {
+	results, err := New().SearchMovie("黑暗圣经")
+	if err != nil {
+		t.Fatalf("SearchMovie() error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("SearchMovie() returned %d results, want 0", len(results))
+	}
+}

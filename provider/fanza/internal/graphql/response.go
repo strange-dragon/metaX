@@ -235,3 +235,38 @@ type UserReviewsResponse struct {
 		Typename string `json:"__typename"`
 	} `json:"reviews"`
 }
+
+type SearchPPVContent struct {
+	ID              string    `json:"id"`
+	Title           string    `json:"title"`
+	ContentType     string    `json:"contentType"`
+	ReleaseStatus   string    `json:"releaseStatus"`
+	DeliveryStartAt time.Time `json:"deliveryStartAt"`
+	PackageImage    struct {
+		MediumURL string `json:"mediumUrl"`
+		LargeURL  string `json:"largeUrl"`
+	} `json:"packageImage"`
+	SampleImages []struct {
+		LargeURL string `json:"largeUrl"`
+	} `json:"sampleImages"`
+	Actresses []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"actresses"`
+	Maker struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"maker"`
+}
+
+type SearchPPVResponse struct {
+	LegacySearchPPV struct {
+		Result struct {
+			Contents []SearchPPVContent `json:"contents"`
+			PageInfo struct {
+				HasNext    bool `json:"hasNext"`
+				TotalCount int  `json:"totalCount"`
+			} `json:"pageInfo"`
+		} `json:"result"`
+	} `json:"legacySearchPPV"`
+}

@@ -620,17 +620,74 @@ func (fz *FANZA) NormalizeMovieKeyword(keyword string) string {
 }
 
 func (fz *FANZA) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return nil, nil
+	}
+	// video.dmm.co.jp exposes a public GraphQL search API. It is not affected
+	// by the geo-fence that blocks www.dmm.co.jp/search and is therefore the
+	// primary search path. A legacy HTML search is kept as a fallback for
+	// environments that can reach www.dmm.co.jp but cannot reach the API.
+	results, err := fz.searchMovieGraphQL(keyword)
+	if err == nil {
+		if len(results) > 0 || !looksLikeCatalogQuery(keyword) {
+			return results, nil
+		}
+		// The video API searches titles, not catalog numbers. Keep the legacy
+		// HTML search as a fallback for exact catalog-number lookups.
+	} else if !looksLikeCatalogQuery(keyword) {
+		// A title search should not fail just because the legacy endpoint is
+		// geo-blocked; return the GraphQL error only after trying it.
+	}
 	if strings.Contains(keyword, "-") {
-		if results, err := fz.searchMovieNext(strings.Replace(keyword,
+		if results, fallbackErr := fz.searchMovieNext(strings.Replace(keyword,
 			/* FANZA cannot search hyphened number */
 			"-", "00", 1) +
 			/* Add a `#` sign to distinguish 001 style number */
-			"#"); err == nil && len(results) > 0 {
+			"#"); fallbackErr == nil && len(results) > 0 {
 			return results, nil
 		}
 	}
 	// fallback to normal dvd search.
 	return fz.searchMovieNext(strings.Replace(keyword, "-", "", 1))
+}
+
+func looksLikeCatalogQuery(keyword string) bool {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" || !regexp.MustCompile(`\d`).MatchString(keyword) {
+		return false
+	}
+	return regexp.MustCompile(`(?i)^[a-z0-9]+(?:[-_][a-z0-9]+)*$`).MatchString(keyword)
+}
+
+func (fz *FANZA) searchMovieGraphQL(keyword string) (results []*model.MovieSearchResult, err error) {
+	const limit = 120
+	resp, err := fz.videoAPI.SearchPPV(keyword, "AV", limit, 0)
+	if err != nil {
+		return nil, err
+	}
+	for _, content := range resp.LegacySearchPPV.Result.Contents {
+		if content.ID == "" || content.Title == "" {
+			continue
+		}
+		result := &model.MovieSearchResult{
+			ID:          content.ID,
+			Number:      ParseNumber(content.ID),
+			Title:       content.Title,
+			Provider:    fz.Name(),
+			Homepage:    fmt.Sprintf(movieDigitalAVURL, content.ID),
+			ThumbURL:    content.PackageImage.MediumURL,
+			CoverURL:    content.PackageImage.LargeURL,
+			ReleaseDate: dt.Date(content.DeliveryStartAt),
+		}
+		for _, actress := range content.Actresses {
+			if name := strings.TrimSpace(actress.Name); name != "" {
+				result.Actors = append(result.Actors, name)
+			}
+		}
+		results = append(results, result)
+	}
+	return results, nil
 }
 
 func (fz *FANZA) searchMovieNext(keyword string) (results []*model.MovieSearchResult, err error) {

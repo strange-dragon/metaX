@@ -105,3 +105,21 @@ func TestThePornDBSetConfigPreservesTokenWhenAbsent(t *testing.T) {
 		t.Fatalf("accessToken after nil config = %q, want existing", actor.accessToken)
 	}
 }
+
+func TestThePornDBSetConfigReadsTokenFromPluginCookieField(t *testing.T) {
+	actor := NewThePornDBActor()
+	if err := actor.SetConfig(configTestValues{"cookies": "theme=dark; access_token= cookie-token "}); err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+	if actor.accessToken != "cookie-token" {
+		t.Fatalf("accessToken = %q, want cookie-token", actor.accessToken)
+	}
+
+	movie := NewThePornDBMovie()
+	if err := movie.SetConfig(configTestValues{"cookie": "api_token=api-cookie-token"}); err != nil {
+		t.Fatalf("SetConfig() error = %v", err)
+	}
+	if movie.accessToken != "api-cookie-token" {
+		t.Fatalf("accessToken = %q, want api-cookie-token", movie.accessToken)
+	}
+}

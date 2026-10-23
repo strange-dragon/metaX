@@ -159,6 +159,21 @@ func (p *AVSOX) validOrigin(u *url.URL) bool {
 	}
 	return effectivePort(u) == effectivePort(p.baseURL)
 }
+func (p *AVSOX) validAssetOrigin(u *url.URL) bool {
+	if u == nil || u.User != nil || u.Host == "" || !strings.EqualFold(u.Scheme, "https") {
+		return false
+	}
+	if effectivePort(u) != "443" {
+		return false
+	}
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+	return host == "file.netcdn.space"
+}
+
+func (p *AVSOX) validFetchOrigin(u *url.URL) bool {
+	return p.validOrigin(u) || p.validAssetOrigin(u)
+}
+
 func (p *AVSOX) checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= 10 {
 		return fmt.Errorf("avsox: stopped after 10 redirects")
@@ -231,7 +246,7 @@ func (p *AVSOX) Fetch(raw string) (*http.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("avsox: parse request URL: %w", err)
 	}
-	if !p.validOrigin(u) {
+	if !p.validFetchOrigin(u) {
 		return nil, fmt.Errorf("avsox: refusing request to unexpected origin %q", raw)
 	}
 	req, err := http.NewRequest(http.MethodGet, raw, nil)

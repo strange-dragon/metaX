@@ -15,6 +15,7 @@ func TestFC2_ParseMovieIDFromURLValidation(t *testing.T) {
 		{"https://adult.contents.fc2.com/article/2812904/", "2812904"},
 		{"https://adult.contents.fc2.com/article/2812904", "2812904"},
 		{"https://adult.contents.fc2.com:443/article/2812904/", "2812904"},
+		{"https://contents.fc2.com/article/1695912/", "1695912"},
 	}
 	for _, tt := range valid {
 		got, err := fc2.ParseMovieIDFromURL(tt.url)
@@ -28,6 +29,7 @@ func TestFC2_ParseMovieIDFromURLValidation(t *testing.T) {
 		"https://adult.contents.fc2.com:444/article/2812904/",
 		"https://user@adult.contents.fc2.com/article/2812904/",
 		"https://adult.contents.fc2.com.evil.invalid/article/2812904/",
+		"https://contents.fc2.com.evil.invalid/article/1695912/",
 		"https://example.invalid/article/2812904/",
 		"https://adult.contents.fc2.com/article/../2812904/",
 		"https://adult.contents.fc2.com/article/abc/",
@@ -51,6 +53,6 @@ func TestFC2_GetMovieInfoByIDRejectsInvalidID(t *testing.T) {
 func TestFC2_GetMovieInfoByID(t *testing.T) {
 	testkit.Test(t, New, []string{
 		"2812904",
-		"4669533",
+		"4996887",
 	})
 }

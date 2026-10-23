@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/strange-dragon/metaX/provider/internal/testkit"
 )
@@ -194,4 +195,14 @@ func TestPreviewSrc(t *testing.T) {
 	} {
 		assert.Equal(t, unit.want, PreviewSrc(unit.src))
 	}
+}
+
+func TestFANZA_SearchMovieByTitle(t *testing.T) {
+	results, err := New().SearchMovie("巨乳")
+	require.NoError(t, err)
+	require.NotEmpty(t, results)
+	assert.NotEmpty(t, results[0].ID)
+	assert.NotEmpty(t, results[0].Title)
+	assert.NotEmpty(t, results[0].Homepage)
+	assert.NotEmpty(t, results[0].ThumbURL)
 }

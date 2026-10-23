@@ -183,3 +183,43 @@ func TestEnvelopeDecoding(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"code":200,"data":[]}`), &envelope))
 	require.Equal(t, 200, envelope.Code)
 }
+
+func TestFetchAllowsOnlyKnownAssetOrigin(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       http.NoBody,
+			Request:    req,
+		}, nil
+	})}
+	p := newForTest("https://avsox.click", client)
+
+	for _, raw := range []string{
+		"https://file.netcdn.space/storage/example.jpg",
+		"https://file.netcdn.space:443/storage/example.jpg",
+	} {
+		resp, err := p.Fetch(raw)
+		require.NoError(t, err, raw)
+		resp.Body.Close()
+	}
+
+	for _, raw := range []string{
+		"http://file.netcdn.space/storage/example.jpg",
+		"https://file.netcdn.space:444/storage/example.jpg",
+		"https://file.netcdn.space.evil.invalid/storage/example.jpg",
+		"https://other.netcdn.space/storage/example.jpg",
+		"https://user@file.netcdn.space/storage/example.jpg",
+	} {
+		_, err := p.Fetch(raw)
+		require.Error(t, err, raw)
+	}
+
+	// Asset origins are only valid for Fetch. Detail parsing must stay on the
+	// AVSOX site origin.
+	_, err := p.ParseMovieIDFromURL("https://file.netcdn.space/movies/movie2")
+	require.Error(t, err)
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }

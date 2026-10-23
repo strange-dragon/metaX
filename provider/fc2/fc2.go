@@ -36,7 +36,12 @@ type FC2 struct {
 }
 
 func New() *FC2 {
-	return &FC2{scraper.NewDefaultScraper(Name, baseURL, Priority, language.Japanese)}
+	ageCookie := []*http.Cookie{{Name: "age_check_done", Value: "1"}}
+	return &FC2{scraper.NewDefaultScraper(
+		Name, baseURL, Priority, language.Japanese,
+		scraper.WithCookies(baseURL, ageCookie),
+		scraper.WithCookies("https://contents.fc2.com/", ageCookie),
+	)}
 }
 
 func (fc2 *FC2) NormalizeMovieID(id string) string {
@@ -58,7 +63,7 @@ func (fc2 *FC2) ParseMovieIDFromURL(rawURL string) (string, error) {
 	}
 	if !homepage.IsAbs() || homepage.User != nil ||
 		!strings.EqualFold(homepage.Scheme, "https") ||
-		!strings.EqualFold(homepage.Hostname(), "adult.contents.fc2.com") ||
+		!isFC2ArticleHost(homepage.Hostname()) ||
 		(homepage.Port() != "" && homepage.Port() != "443") {
 		return "", provider.ErrInvalidURL
 	}
@@ -67,6 +72,15 @@ func (fc2 *FC2) ParseMovieIDFromURL(rawURL string) (string, error) {
 		return "", provider.ErrInvalidURL
 	}
 	return match[1], nil
+}
+
+func isFC2ArticleHost(host string) bool {
+	switch strings.ToLower(strings.TrimSuffix(host, ".")) {
+	case "adult.contents.fc2.com", "contents.fc2.com":
+		return true
+	default:
+		return false
+	}
 }
 
 func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {

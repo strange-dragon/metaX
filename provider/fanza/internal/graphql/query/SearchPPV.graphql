@@ -1,0 +1,40 @@
+query SearchPPV($limit: Int!, $offset: Int, $floor: PPVFloor, $sort: ContentSearchPPVSort!, $queryWord: String) {
+  legacySearchPPV(
+    limit: $limit
+    offset: $offset
+    floor: $floor
+    sort: $sort
+    queryWord: $queryWord
+    includeExplicit: true
+    excludeUndelivered: false
+  ) {
+    result {
+      contents {
+        id
+        title
+        contentType
+        releaseStatus
+        deliveryStartAt
+        packageImage {
+          mediumUrl
+          largeUrl
+        }
+        sampleImages {
+          largeUrl
+        }
+        actresses {
+          id
+          name
+        }
+        maker {
+          id
+          name
+        }
+      }
+      pageInfo {
+        hasNext
+        totalCount
+      }
+    }
+  }
+}

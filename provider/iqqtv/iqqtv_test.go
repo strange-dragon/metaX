@@ -139,6 +139,7 @@ func TestParseMovieIDFromURLAllowsOnlyDocumentedRotatingHosts(t *testing.T) {
 	for _, rawURL := range []string{
 		"https://iqqk4.quest/cn/detail/abc123",
 		"https://iqqq3.quest/cn/detail/abc123",
+		"https://iqqq5.work/cn/detail/abc123",
 	} {
 		id, err := p.ParseMovieIDFromURL(rawURL)
 		require.NoError(t, err, rawURL)
@@ -148,7 +149,8 @@ func TestParseMovieIDFromURLAllowsOnlyDocumentedRotatingHosts(t *testing.T) {
 	for _, rawURL := range []string{
 		"https://unrelated.quest/cn/detail/abc123",
 		"https://iqqq3.quest.evil.invalid/cn/detail/abc123",
-		"https://iqqq3.quest:444/cn/detail/abc123",
+		"https://iqqq5.work.evil.invalid/cn/detail/abc123",
+		"https://iqqq5.work:444/cn/detail/abc123",
 		"http://iqqq3.quest/cn/detail/abc123",
 		"https://user@iqqq3.quest/cn/detail/abc123",
 	} {

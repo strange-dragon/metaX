@@ -228,7 +228,7 @@ func DefaultConfig() Config {
 		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},
 		CategoryWestern:    {"ThePornDB", "JavDB", "Freejavbt"},
-		CategoryHentai:     {"Getchu", "DMM", "JavDB"},
+		CategoryHentai:     {"Getchu", "AniList", "DMM", "JavDB"},
 	}}
 }
 
@@ -310,11 +310,10 @@ func (c Config) Resolve(category Category, explicitProvider string, registered [
 			}
 			key := normalize(registeredName)
 			if _, duplicate := seen[key]; duplicate {
-				break
+				continue
 			}
 			seen[key] = struct{}{}
 			result = append(result, registeredName)
-			break
 		}
 	}
 	if len(result) == 0 {

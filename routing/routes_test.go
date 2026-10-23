@@ -15,7 +15,7 @@ func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
 		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},
 		CategoryWestern:    {"ThePornDB", "JavDB", "Freejavbt"},
-		CategoryHentai:     {"Getchu", "DMM", "JavDB"},
+		CategoryHentai:     {"Getchu", "AniList", "DMM", "JavDB"},
 	}
 	for category, expected := range want {
 		if got := config.Routes[category]; !reflect.DeepEqual(got, expected) {
@@ -50,7 +50,7 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 	// Amane's Official studio router is not part of the category fan-out model.
 	registered := []string{
 		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
-		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "Getchu",
+		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "ThePornDBScene", "Getchu", "AniList",
 	}
 	tests := []struct {
 		category Category
@@ -60,8 +60,8 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 		{CategoryUncensored, []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}},
 		{CategoryChinese, []string{"IQQTV", "JavDB", "Airav", "Freejavbt"}},
 		{CategoryAmateur, []string{"MGS", "FANZA", "JavDB", "JavBus"}},
-		{CategoryWestern, []string{"ThePornDBMovie", "JavDB", "Freejavbt"}},
-		{CategoryHentai, []string{"Getchu", "FANZA", "JavDB"}},
+		{CategoryWestern, []string{"ThePornDBMovie", "ThePornDBScene", "JavDB", "Freejavbt"}},
+		{CategoryHentai, []string{"Getchu", "AniList", "FANZA", "JavDB"}},
 	}
 	config := DefaultConfig()
 	for _, tc := range tests {
@@ -243,7 +243,7 @@ func TestConfigFingerprintIsDeterministicAndOrderSensitive(t *testing.T) {
 func TestDefaultRoutesHaveNoDeferredGaps(t *testing.T) {
 	registered := []string{
 		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
-		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "Getchu",
+		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "ThePornDBScene", "Getchu", "AniList",
 	}
 	coverage := DefaultConfig().ProviderCoverage(registered)
 	if len(coverage.Gaps) != 0 || len(coverage.Empty) != 0 {

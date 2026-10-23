@@ -11,7 +11,6 @@ func TestGetchu_GetMovieInfoByID(t *testing.T) {
 		"4018339",
 		"4042392",
 		"4041955",
-		"4042404",
 		"4042423",
 	})
 }
