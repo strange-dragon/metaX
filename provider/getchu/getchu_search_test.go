@@ -243,3 +243,32 @@ func TestSearchMovieUnencodableTitleIsEmpty(t *testing.T) {
 		t.Fatalf("SearchMovie() returned %d results, want 0", len(results))
 	}
 }
+
+func TestFetchUsesCookiesAndItemReferer(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Referer") != server.URL+"/item/1081116/" {
+			http.Error(w, "unexpected referer: "+r.Header.Get("Referer"), http.StatusForbidden)
+			return
+		}
+		cookie := r.Header.Get("Cookie")
+		if !strings.Contains(cookie, "getchu_adalt_flag=getchu.com") || !strings.Contains(cookie, "gc=gc") {
+			http.Error(w, "missing age cookies", http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		_, _ = w.Write([]byte("jpeg"))
+	}))
+	defer server.Close()
+
+	gcu := newForTest(server.URL, server.URL)
+	resp, err := gcu.Fetch(server.URL + "/brandnew/1081116/c1081116package.jpg")
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	defer resp.Body.Close()
+
+	if _, err := gcu.Fetch("https://evil.invalid/image.jpg"); err == nil {
+		t.Fatal("Fetch() accepted an unexpected origin")
+	}
+}

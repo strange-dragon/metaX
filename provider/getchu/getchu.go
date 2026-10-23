@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/antchfx/htmlquery"
 	"github.com/gocolly/colly/v2"
@@ -27,6 +28,7 @@ var (
 	_ provider.MovieProvider = (*Getchu)(nil)
 	_ provider.MovieSearcher = (*Getchu)(nil)
 	_ provider.ConfigSetter  = (*Getchu)(nil)
+	_ provider.Fetcher       = (*Getchu)(nil)
 )
 
 const (
@@ -48,6 +50,7 @@ var (
 	catalogRE              = regexp.MustCompile(`(?i)^[A-Z]{2,}[-_ ]?\d+[A-Z0-9_-]*$`)
 	numericIDRE            = regexp.MustCompile(`^(?i)(?:GETCHU[-_])?(\d+)$`)
 	softPathRE             = regexp.MustCompile(`/soft\.phtml$`)
+	webImagePathRE         = regexp.MustCompile(`^/brandnew/([0-9]+)/`)
 	searchPathRE           = regexp.MustCompile(`(?i)^[a-z]{2,}[-_ ]?\d+[a-z0-9_-]*$`)
 	cookieNameRE           = regexp.MustCompile(`^[!#$%&'*+.^_|~0-9A-Za-z-]+$`)
 	searchBaseURLParsed, _ = url.Parse(searchBaseURL)
@@ -201,6 +204,80 @@ func (gcu *Getchu) configuredCookies() []*http.Cookie {
 		result = append(result, &value)
 	}
 	return result
+}
+
+// Fetch fetches Getchu media with the same age/configuration cookies used for
+// detail pages. Retail cover images are hotlink-protected and require a
+// referer pointing at the matching item page; without it the image host
+// returns 403 even when the cookies are present.
+func (gcu *Getchu) Fetch(raw string) (*http.Response, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("getchu: parse image URL: %w", err)
+	}
+	if !gcu.validWebOrigin(u) && !gcu.validDetailOrigin(u) {
+		return nil, fmt.Errorf("getchu: refusing image request to unexpected origin %q", raw)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	if err != nil {
+		return nil, fmt.Errorf("getchu: create image request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "ja,en-US;q=0.9,en;q=0.8")
+	if referer := gcu.imageReferer(u); referer != "" {
+		req.Header.Set("Referer", referer)
+	}
+	for _, cookie := range gcu.configuredCookies() {
+		req.AddCookie(cookie)
+	}
+
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(next *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("getchu: stopped after 10 redirects")
+			}
+			if !gcu.validWebOrigin(next.URL) && !gcu.validDetailOrigin(next.URL) {
+				return fmt.Errorf("getchu: refusing redirect to unexpected origin %q", next.URL)
+			}
+			return nil
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("getchu: GET %s: %w", raw, err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("%w: %s", provider.ErrImageNotFound, raw)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("getchu: GET %s: unexpected HTTP status %s", raw, resp.Status)
+	}
+	return resp, nil
+}
+
+func (gcu *Getchu) imageReferer(u *url.URL) string {
+	if gcu.validWebOrigin(u) {
+		if match := webImagePathRE.FindStringSubmatch(u.Path); len(match) == 2 {
+			return gcu.webDetailURL(match[1])
+		}
+		if gcu.webBase != nil {
+			return gcu.webBase.String()
+		}
+	}
+	if gcu.validDetailOrigin(u) {
+		if match := detailPathRE.FindStringSubmatch(u.Path); len(match) == 2 {
+			return gcu.detailURL(match[1])
+		}
+		if gcu.detailBase != nil {
+			return gcu.detailBase.String()
+		}
+	}
+	return ""
 }
 
 func (gcu *Getchu) detailURL(id string) string {
