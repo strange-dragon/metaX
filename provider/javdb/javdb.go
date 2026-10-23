@@ -42,6 +42,7 @@ const (
 var (
 	ErrMovieNotFound          = errors.New("javdb: movie not found")
 	movieNumberRE             = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
+	compactNumberRE           = regexp.MustCompile(`(?i)^[a-z]{1,16}[-_ ]?[0-9]{2,}[a-z0-9._-]*$`)
 	numericUnderscoreNumberRE = regexp.MustCompile(`^[0-9]{3,}(?:_[0-9]+)+$`)
 	leadingDigitsRE           = regexp.MustCompile(`(?i)^\d+`)
 	dayNumberRE               = regexp.MustCompile(`(?i)^(?P<studio>.+?)(?P<sep0>[._-])(?P<year>\d{4}|\d{2})(?P<sep1>[._-])(?P<month>\d{2})(?P<sep2>[._-])(?P<day>\d{2})$`)
@@ -590,6 +591,24 @@ func (p *JavDB) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) 
 			results = append(results, result)
 		})
 	}
+	// Catalog-number searches are commonly answered with a whole series of
+	// loosely related entries. If the requested number is present, keep only
+	// the exact matches so clients do not receive a list of unrelated titles.
+	// When no exact match exists (for example a leading studio prefix variant)
+	// preserve the provider's loose results and let the detail lookup choose.
+	if movieNumberRE.MatchString(keyword) || compactNumberRE.MatchString(keyword) ||
+		numericUnderscoreNumberRE.MatchString(keyword) || fc2ArticleID(keyword) != "" {
+		exact := make([]*model.MovieSearchResult, 0, len(results))
+		for _, result := range results {
+			if numberMatch(result.Number, keyword) == 2 {
+				exact = append(exact, result)
+			}
+		}
+		if len(exact) > 0 {
+			results = exact
+		}
+	}
+
 	return results, nil
 }
 

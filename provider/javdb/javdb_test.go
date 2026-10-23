@@ -130,6 +130,24 @@ func TestSearchMovieAndFetchDetails(t *testing.T) {
 	require.Equal(t, "2024-03-14", time.Time(info.ReleaseDate).Format("2006-01-02"))
 }
 
+func TestSearchMovieFiltersFuzzyResultsWhenExactCatalogNumberExists(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `<html><body>
+<a class="box" href="/v/ssis001"><div class="video-title"><strong>SSIS-001</strong> Exact Film</div><img src="/covers/exact.jpg"></a>
+<a class="box" href="/v/ssis002"><div class="video-title"><strong>SSIS-002</strong> Related Film</div><img src="/covers/related.jpg"></a>
+<a class="box" href="/v/ssis003"><div class="video-title"><strong>SSIS-003</strong> Another Film</div><img src="/covers/another.jpg"></a>
+</body></html>`)
+	}))
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	results, err := p.SearchMovie("ssis-001")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "SSIS-001", results[0].Number)
+	require.Equal(t, "Exact Film", results[0].Title)
+}
+
 func TestGetMovieInfoByURLReturnsNotFoundForNonDetailPage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, "<html><body>verification page</body></html>")
