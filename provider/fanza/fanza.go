@@ -639,6 +639,11 @@ func (fz *FANZA) SearchMovie(keyword string) ([]*model.MovieSearchResult, error)
 		// A title search should not fail just because the legacy endpoint is
 		// geo-blocked; return the GraphQL error only after trying it.
 	}
+	if looksLikeCatalogQuery(keyword) {
+		if result, catalogErr := fz.searchMovieCatalogExact(keyword); catalogErr == nil && result != nil {
+			return []*model.MovieSearchResult{result}, nil
+		}
+	}
 	if strings.Contains(keyword, "-") {
 		if results, fallbackErr := fz.searchMovieNext(strings.Replace(keyword,
 			/* FANZA cannot search hyphened number */
@@ -650,6 +655,52 @@ func (fz *FANZA) SearchMovie(keyword string) ([]*model.MovieSearchResult, error)
 	}
 	// fallback to normal dvd search.
 	return fz.searchMovieNext(strings.Replace(keyword, "-", "", 1))
+}
+
+// searchMovieCatalogExact resolves a catalog number through the public video
+// GraphQL content endpoint. FANZA's title search cannot find bare catalog
+// numbers, and the legacy HTML search is blocked in many regions. DMM stores
+// the same release under several content-ID spellings (for example
+// SSIS-001 is ssis00001), so try each spelling and accept only an exact
+// normalized number match.
+func (fz *FANZA) searchMovieCatalogExact(keyword string) (*model.MovieSearchResult, error) {
+	want := ParseNumber(keyword)
+	for _, id := range catalogContentIDCandidates(keyword) {
+		info, err := fz.getDigitalMovieInfoByURL(fmt.Sprintf(movieDigitalAVURL, id))
+		if err != nil || info == nil || info.ID == "" || info.Title == "" || info.Homepage == "" {
+			continue
+		}
+		if !strings.EqualFold(ParseNumber(info.Number), want) &&
+			!strings.EqualFold(ParseNumber(info.ID), want) {
+			continue
+		}
+		return info.ToSearchResult(), nil
+	}
+	return nil, nil
+}
+
+var catalogContentIDRE = regexp.MustCompile(`(?i)^([a-z0-9]+?)[-_]?(\d+)$`)
+
+func catalogContentIDCandidates(keyword string) []string {
+	match := catalogContentIDRE.FindStringSubmatch(strings.TrimSpace(keyword))
+	if len(match) != 3 {
+		return nil
+	}
+	prefix, digits := strings.ToLower(match[1]), match[2]
+	candidates := []string{prefix + digits}
+	if len(digits) < 5 {
+		candidates = append(candidates, prefix+strings.Repeat("0", 5-len(digits))+digits)
+	}
+	seen := make(map[string]struct{}, len(candidates))
+	result := candidates[:0]
+	for _, candidate := range candidates {
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		result = append(result, candidate)
+	}
+	return result
 }
 
 func looksLikeCatalogQuery(keyword string) bool {

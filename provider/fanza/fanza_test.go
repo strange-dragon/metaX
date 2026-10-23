@@ -206,3 +206,19 @@ func TestFANZA_SearchMovieByTitle(t *testing.T) {
 	assert.NotEmpty(t, results[0].Homepage)
 	assert.NotEmpty(t, results[0].ThumbURL)
 }
+
+func TestCatalogContentIDCandidates(t *testing.T) {
+	for _, unit := range []struct {
+		keyword string
+		want    []string
+	}{
+		{"SSIS-001", []string{"ssis001", "ssis00001"}},
+		{"MIDV-003", []string{"midv003", "midv00003"}},
+		{"PRST-022", []string{"prst022", "prst00022"}},
+		{"ssis00123", []string{"ssis00123"}},
+		{"T-28621", []string{"t28621"}},
+		{"not-a-number", nil},
+	} {
+		assert.Equal(t, unit.want, catalogContentIDCandidates(unit.keyword), unit.keyword)
+	}
+}
