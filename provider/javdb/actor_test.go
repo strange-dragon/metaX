@@ -59,7 +59,7 @@ func TestJavDBActorSearchAndDetails(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	p := &JavDBActor{JavDB: newForTest(server.URL, nil)}
+	p := &JavDBActor{db: newForTest(server.URL, nil)}
 	results, err := p.SearchActor("Example Name")
 	require.NoError(t, err)
 	require.Len(t, results, 1)
@@ -91,6 +91,16 @@ func TestJavDBActorRegistered(t *testing.T) {
 	require.True(t, found, "JavDB actor provider should be registered")
 }
 
+// TestJavDBActorIsNotAMovieProvider guards against re-embedding *JavDB: that
+// promotes MovieProvider's method set, so provider.Register would add a second
+// movie provider for javdb.com and duplicate every JavDB search.
+func TestJavDBActorIsNotAMovieProvider(t *testing.T) {
+	mt.RangeMovieFactory(func(name string, _ mt.MovieFactory) bool {
+		require.NotEqual(t, ActorProviderName, name, "actor provider must not be registered as a movie provider")
+		return true
+	})
+}
+
 func TestSplitActorNamesRemovesUncensoredMarkers(t *testing.T) {
 	got := splitActorNames("Example Name (Uncensored), 葵（無碼）, 乙 (无码), Example Name")
 	require.Equal(t, []string{"Example Name", "葵", "乙"}, got)
@@ -103,7 +113,7 @@ func TestJavDBActorUsesCanonicalProfileIdentity(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	p := &JavDBActor{JavDB: newForTest(server.URL, nil)}
+	p := &JavDBActor{db: newForTest(server.URL, nil)}
 	info, err := p.GetActorInfoByURL(server.URL + "/actors/Requested123")
 	require.NoError(t, err)
 	require.Equal(t, "Canonical456", info.ID)

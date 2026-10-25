@@ -6,9 +6,11 @@ package javdb
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/lib/pq"
@@ -33,15 +35,29 @@ var (
 // JavDBActor exposes JavDB's actor search and profile pages through the SDK
 // ActorProvider interfaces. It shares the movie provider's hardened HTTP client.
 type JavDBActor struct {
-	*JavDB
+	// db is deliberately not embedded: embedding *JavDB would promote the
+	// MovieProvider method set and make provider.Register register the actor
+	// provider as a second movie provider for the same site.
+	db *JavDB
 }
 
 func NewActor() *JavDBActor {
-	return &JavDBActor{JavDB: New()}
+	return &JavDBActor{db: New()}
 }
 
 func (p *JavDBActor) Name() string           { return ActorProviderName }
 func (p *JavDBActor) Language() language.Tag { return language.SimplifiedChinese }
+
+// The actor provider shares JavDB's hardened HTTP client, priority, proxy and
+// cookie configuration. These are explicit delegations rather than embedding
+// so that this type does not also satisfy mt.MovieProvider.
+func (p *JavDBActor) Priority() float64                           { return p.db.Priority() }
+func (p *JavDBActor) SetPriority(v float64)                       { p.db.SetPriority(v) }
+func (p *JavDBActor) URL() *url.URL                               { return p.db.URL() }
+func (p *JavDBActor) Fetch(rawURL string) (*http.Response, error) { return p.db.Fetch(rawURL) }
+func (p *JavDBActor) SetRequestTimeout(d time.Duration)           { p.db.SetRequestTimeout(d) }
+func (p *JavDBActor) SetProxy(proxyURL string) error              { return p.db.SetProxy(proxyURL) }
+func (p *JavDBActor) SetConfig(config mt.Config) error            { return p.db.SetConfig(config) }
 
 func (p *JavDBActor) NormalizeActorID(id string) string {
 	id = strings.TrimSpace(id)
@@ -54,7 +70,7 @@ func (p *JavDBActor) NormalizeActorID(id string) string {
 }
 
 func (p *JavDBActor) actorURL(id string) string {
-	u := *p.baseURL
+	u := *p.db.baseURL
 	u.Path = strings.TrimRight(u.Path, "/") + "/actors/" + url.PathEscape(id)
 	u.RawQuery = ""
 	u.Fragment = ""
@@ -69,7 +85,7 @@ func (p *JavDBActor) ParseActorIDFromURL(rawURL string) (string, error) {
 	if u.Scheme == "" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return "", fmt.Errorf("javdb actor: expected a canonical absolute actor URL")
 	}
-	if !p.allowedHost(u.Hostname()) || !p.allowedRedirectURL(u) {
+	if !p.db.allowedHost(u.Hostname()) || !p.db.allowedRedirectURL(u) {
 		return "", fmt.Errorf("javdb actor: unexpected actor origin %q", rawURL)
 	}
 	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
@@ -92,7 +108,7 @@ func (p *JavDBActor) GetActorInfoByURL(rawURL string) (*model.ActorInfo, error) 
 	if err != nil {
 		return nil, err
 	}
-	doc, err := p.getHTML(rawURL)
+	doc, err := p.db.getHTML(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +132,7 @@ func (p *JavDBActor) GetActorInfoByURL(rawURL string) (*model.ActorInfo, error) 
 	homepage := p.actorURL(id)
 	canonical := strings.TrimSpace(attrText(doc.Find("link[rel='canonical']").First(), "href"))
 	if canonical != "" {
-		canonical = absoluteURL(p.baseURL, canonical)
+		canonical = absoluteURL(p.db.baseURL, canonical)
 		if canonicalID, parseErr := p.ParseActorIDFromURL(canonical); parseErr == nil {
 			id = canonicalID
 			homepage = canonical
@@ -143,7 +159,7 @@ func (p *JavDBActor) SearchActor(keyword string) ([]*model.ActorSearchResult, er
 	if keyword == "" {
 		return nil, nil
 	}
-	u := *p.baseURL
+	u := *p.db.baseURL
 	u.Path = strings.TrimRight(u.Path, "/") + "/search"
 	q := u.Query()
 	q.Set("q", keyword)
@@ -151,7 +167,7 @@ func (p *JavDBActor) SearchActor(keyword string) ([]*model.ActorSearchResult, er
 	q.Set("locale", "zh")
 	u.RawQuery = q.Encode()
 
-	doc, err := p.getHTML(u.String())
+	doc, err := p.db.getHTML(u.String())
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +185,7 @@ func (p *JavDBActor) SearchActor(keyword string) ([]*model.ActorSearchResult, er
 	seen := make(map[string]struct{})
 	doc.Find("div.actor-box a[href]").Each(func(_ int, box *goquery.Selection) {
 		href := strings.TrimSpace(attrText(box, "href"))
-		homepage := absoluteURL(p.baseURL, href)
+		homepage := absoluteURL(p.db.baseURL, href)
 		id, err := p.ParseActorIDFromURL(homepage)
 		if err != nil {
 			return
@@ -184,7 +200,7 @@ func (p *JavDBActor) SearchActor(keyword string) ([]*model.ActorSearchResult, er
 		}
 		seen[id] = struct{}{}
 		images := pq.StringArray{}
-		image := absoluteURL(p.baseURL, firstAttr(box.Find("img").First(), "data-src", "data-original", "src"))
+		image := absoluteURL(p.db.baseURL, firstAttr(box.Find("img").First(), "data-src", "data-original", "src"))
 		if image != "" {
 			images = append(images, image)
 		}
