@@ -104,6 +104,14 @@ position in the category route, then by match quality within the same provider.
 The SDK's numeric `Provider.Priority()` value does not control this ordering.
 The merged `MetaX` candidate is always prepended as the first result.
 
+The built-in `routing.DefaultConfig()` routes every movie provider compiled into
+the binary (43 on a default build, in quality-first order). The experimental
+providers `AVBASE` and `MadouQu` are listed in the table but only resolve in a
+`-tags experimental` build, so a default build reports them under
+`route_provider_gaps`. `MadouQu` additionally ships with `Priority = 0` and
+needs `MT_MOVIE_PROVIDER_MADOUQU__PRIORITY` to be set. Override the table with the variables
+below to narrow the fan-out or to change the priority order.
+
 The table is configurable at startup:
 
 - `METAX_ROUTES` contains inline JSON and takes precedence over `METAX_ROUTES_FILE`, which points at a JSON file. With neither set, `routing.DefaultConfig()` is used.

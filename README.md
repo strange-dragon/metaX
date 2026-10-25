@@ -206,17 +206,38 @@ cookie field for the ThePornDB provider rows (Movie, Scene, and Actor).
 
 ## Default category routes
 
+The built-in table routes **every movie provider in the default build** (43 of
+45; `AVBASE` and `MadouQu` need `-tags experimental`, and `MadouQu` also ships
+disabled) into the category it belongs to. `AV-LEAGUE` is an actor-only
+provider, so it has no movie route. Order is quality-first: the providers that normally
+return the most complete metadata come first, and merged fields are taken in
+that order.
+
 | Category | Default providers, in order |
 | --- | --- |
-| `censored` | FANZA, JavDB, JavBus |
-| `uncensored` | JavDB, JavBus, AVSOX, Freejavbt, FC2PPVDB, FC2, Airav |
-| `chinese` | IQQTV, JavDB, Airav, Freejavbt |
-| `amateur` | MGS, FANZA, JavDB, JavBus |
-| `western` | ThePornDB (movie/scene), JavDB, Freejavbt |
-| `hentai` | Getchu, AniList, FANZA, JavDB |
+| `censored` | FANZA, JavDB, JavBus, MGS, SOD, Prestige, FALENO, DAHLIA, JavLibrary, Jav321, GIGA, XCity, AVBASE |
+| `uncensored` | JavDB, JavBus, AVSOX, Freejavbt, FC2PPVDB, FC2, FC2Club, fc2hub, Airav, HEYZO, TOKYO-HOT, 1Pondo, Caribbeancom, CaribbeancomPR, 10musume, HeyDouga, KIN8, DUGA, AVE, JAVFREE, PACOPACOMAMA, MURAMURA, H0930, H4610, C0930, Gcolle, Pcolle |
+| `chinese` | IQQTV, JavDB, Airav, Freejavbt, MadouQu |
+| `amateur` | MGS, FANZA, JavDB, JavBus, 10musume, 1Pondo, Caribbeancom, CaribbeancomPR, PACOPACOMAMA, MURAMURA, HeyDouga, H0930, H4610, C0930, Gcolle, Pcolle, MYWIFE, KIN8, TOKYO-HOT |
+| `western` | ThePornDBMovie, ThePornDBScene, JavDB, Freejavbt |
+| `hentai` | Getchu, AniList, FANZA, JavDB, GIGA |
 
 `fc2` is an alias for `uncensored`; `animation` is an alias for `hentai`.
-Override the table with `METAX_ROUTES` or `METAX_ROUTES_FILE`.
+Narrow or reorder the table with `METAX_ROUTES` or `METAX_ROUTES_FILE`.
+
+A cold category search now fans out to as many as 27 sites. Raise the
+concurrency budget if you prefer latency over upstream friendliness:
+
+```bash
+METAX_AGGREGATE_FANOUT=24
+```
+
+Routing a provider does not make an unauthenticated or region-blocked site
+succeed: FANZA usually needs a Japanese IP, and Freejavbt, MGS, FALENO, DAHLIA
+and JavDB's FC2 detail commonly need cookies. See
+[docs/PROVIDER_ACCESS.md](docs/PROVIDER_ACCESS.md). `GET /v1/metax/status`
+lists the resolved routes and reports the two experimental names as
+`route_provider_gaps` on a default build.
 
 ## Native providers
 

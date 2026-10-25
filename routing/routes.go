@@ -218,18 +218,111 @@ func providerRegistered(provider string, registered map[string]struct{}) bool {
 	return false
 }
 
-// DefaultConfig provides category -> provider lists for the plugin/library
-// model. It intentionally merges FC2 and uncensored into one shared route and
-// does not include Amane's Official manufacturer router.
+// DefaultConfig routes every movie provider that ships in the default build
+// (43 of 45; AVBASE and MadouQu need `-tags experimental`, and MadouQu also
+// ships disabled) into the category it belongs to. Ordering inside a category is quality-first: the
+// providers that normally return the most complete metadata are queried first,
+// and merged fields are taken in that order.
+//
+// There is intentionally no manufacturer ("Official") router: category fan-out
+// replaces it. FC2 is merged into the uncensored chain and keeps its four
+// FC2-family providers adjacent so a single search reuses the same number
+// normalization.
+//
+// A deployment that prefers the previous narrow table can override this with
+// METAX_ROUTES or METAX_ROUTES_FILE.
+var defaultRoutes = Config{Routes: map[Category][]string{
+	CategoryCensored: {
+		"FANZA", // canonical DMM catalog; usually needs a Japanese IP
+		"JavDB", // broadest coverage, Chinese titles
+		"JavBus",
+		"MGS",
+		"SOD",
+		"Prestige",
+		"FALENO",
+		"DAHLIA",
+		"JavLibrary",
+		"Jav321",
+		"GIGA",
+		"XCity",
+		"AVBASE", // experimental build
+	},
+	CategoryUncensored: {
+		"JavDB",
+		"JavBus",
+		"AVSOX",
+		"Freejavbt",
+		"FC2PPVDB",
+		"FC2",
+		"FC2Club",
+		"fc2hub",
+		"Airav",
+		"HEYZO",
+		"TOKYO-HOT",
+		"1Pondo",
+		"Caribbeancom",
+		"CaribbeancomPR",
+		"10musume",
+		"HeyDouga",
+		"KIN8",
+		"DUGA",
+		"AVE",
+		"JAVFREE",
+		"PACOPACOMAMA",
+		"MURAMURA",
+		"H0930",
+		"H4610",
+		"C0930",
+		"Gcolle",
+		"Pcolle",
+	},
+	CategoryChinese: {
+		"IQQTV",
+		"JavDB",
+		"Airav",
+		"Freejavbt",
+		"MadouQu", // experimental build, Priority 0 by default
+	},
+	CategoryAmateur: {
+		"MGS",
+		"FANZA",
+		"JavDB",
+		"JavBus",
+		"10musume",
+		"1Pondo",
+		"Caribbeancom",
+		"CaribbeancomPR",
+		"PACOPACOMAMA",
+		"MURAMURA",
+		"HeyDouga",
+		"H0930",
+		"H4610",
+		"C0930",
+		"Gcolle",
+		"Pcolle",
+		"MYWIFE",
+		"KIN8",
+		"TOKYO-HOT",
+	},
+	CategoryWestern: {
+		"ThePornDBMovie",
+		"ThePornDBScene",
+		"JavDB",
+		"Freejavbt",
+	},
+	CategoryHentai: {
+		"Getchu",
+		"AniList",
+		"FANZA",
+		"JavDB",
+		"GIGA",
+	},
+}}
+
+// DefaultConfig returns a copy of the built-in route table. The returned map
+// and slices are independent of the package state so callers may modify them.
 func DefaultConfig() Config {
-	return Config{Routes: map[Category][]string{
-		CategoryCensored:   {"DMM", "JavDB", "JavBus"},
-		CategoryUncensored: {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
-		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
-		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},
-		CategoryWestern:    {"ThePornDB", "JavDB", "Freejavbt"},
-		CategoryHentai:     {"Getchu", "AniList", "DMM", "JavDB"},
-	}}
+	return cloneConfig(defaultRoutes)
 }
 
 // Validate checks route configuration for unknown or legacy categories, empty

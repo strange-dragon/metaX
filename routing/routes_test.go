@@ -7,15 +7,30 @@ import (
 	"testing"
 )
 
-func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
+func TestDefaultRoutesRouteEveryIntegratedProvider(t *testing.T) {
 	config := DefaultConfig()
 	want := map[Category][]string{
-		CategoryCensored:   {"DMM", "JavDB", "JavBus"},
-		CategoryUncensored: {"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"},
-		CategoryChinese:    {"IQQTV", "JavDB", "Airav", "Freejavbt"},
-		CategoryAmateur:    {"MGStage", "DMM", "JavDB", "JavBus"},
-		CategoryWestern:    {"ThePornDB", "JavDB", "Freejavbt"},
-		CategoryHentai:     {"Getchu", "AniList", "DMM", "JavDB"},
+		CategoryCensored: {
+			"FANZA", "JavDB", "JavBus", "MGS", "SOD", "Prestige", "FALENO", "DAHLIA",
+			"JavLibrary", "Jav321", "GIGA", "XCity", "AVBASE",
+		},
+		CategoryUncensored: {
+			"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
+			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
+			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
+			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",
+		},
+		CategoryChinese: {"IQQTV", "JavDB", "Airav", "Freejavbt", "MadouQu"},
+		CategoryAmateur: {
+			"MGS", "FANZA", "JavDB", "JavBus", "10musume", "1Pondo", "Caribbeancom",
+			"CaribbeancomPR", "PACOPACOMAMA", "MURAMURA", "HeyDouga", "H0930", "H4610",
+			"C0930", "Gcolle", "Pcolle", "MYWIFE", "KIN8", "TOKYO-HOT",
+		},
+		CategoryWestern: {"ThePornDBMovie", "ThePornDBScene", "JavDB", "Freejavbt"},
+		CategoryHentai:  {"Getchu", "AniList", "FANZA", "JavDB", "GIGA"},
+	}
+	if len(config.Routes) != len(want) {
+		t.Fatalf("default route categories = %d, want %d", len(config.Routes), len(want))
 	}
 	for category, expected := range want {
 		if got := config.Routes[category]; !reflect.DeepEqual(got, expected) {
@@ -23,13 +38,27 @@ func TestDefaultRoutesMatchAmaneContentRoutes(t *testing.T) {
 		}
 	}
 	if _, exists := config.Routes[CategoryChineseSubtitles]; exists {
-		t.Error("legacy chinese_subtitles alias must not duplicate Amane's canonical route")
+		t.Error("legacy chinese_subtitles alias must not duplicate the canonical route")
 	}
 	if _, exists := config.Routes[CategoryAnimation]; exists {
-		t.Error("legacy animation alias must not duplicate Amane's canonical hentai route")
+		t.Error("legacy animation alias must not duplicate the canonical hentai route")
 	}
 	if err := config.Validate(); err != nil {
 		t.Fatalf("default route config is invalid: %v", err)
+	}
+}
+
+func TestDefaultConfigReturnsIndependentCopies(t *testing.T) {
+	first := DefaultConfig()
+	first.Routes[CategoryCensored][0] = "Mutated"
+	first.Routes[Category("extra")] = []string{"JavDB"}
+
+	second := DefaultConfig()
+	if second.Routes[CategoryCensored][0] != "FANZA" {
+		t.Fatalf("DefaultConfig() shares its route slices: censored[0] = %q", second.Routes[CategoryCensored][0])
+	}
+	if _, exists := second.Routes[Category("extra")]; exists {
+		t.Fatal("DefaultConfig() shares its route map")
 	}
 }
 
@@ -46,22 +75,39 @@ func TestDMMRouteResolvesToRegisteredFANZAProvider(t *testing.T) {
 }
 
 func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
-	// Mirrors the in-tree provider inventory registered by engine/register.go.
-	// Amane's Official studio router is not part of the category fan-out model.
+	// Mirrors the in-tree provider inventory registered by engine/register.go on
+	// a default build. Amane's Official studio router is not part of the
+	// category fan-out model.
 	registered := []string{
-		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
-		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "ThePornDBScene", "Getchu", "AniList",
+		"10musume", "1Pondo", "AVE", "AVSOX", "Airav", "AniList", "C0930",
+		"Caribbeancom", "CaribbeancomPR", "DAHLIA", "DUGA", "FALENO", "FANZA", "FC2",
+		"FC2Club", "FC2PPVDB", "Freejavbt", "GIGA", "Gcolle", "Getchu", "H0930",
+		"H4610", "HEYZO", "HeyDouga", "IQQTV", "JAVFREE", "Jav321", "JavBus", "JavDB",
+		"JavLibrary", "KIN8", "MGS", "MURAMURA", "MYWIFE", "PACOPACOMAMA", "Pcolle",
+		"Prestige", "SOD", "TOKYO-HOT", "ThePornDBMovie", "ThePornDBScene", "XCity", "fc2hub",
 	}
 	tests := []struct {
 		category Category
 		want     []string
 	}{
-		{CategoryCensored, []string{"FANZA", "JavDB", "JavBus"}},
-		{CategoryUncensored, []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}},
+		{CategoryCensored, []string{
+			"FANZA", "JavDB", "JavBus", "MGS", "SOD", "Prestige", "FALENO", "DAHLIA",
+			"JavLibrary", "Jav321", "GIGA", "XCity",
+		}},
+		{CategoryUncensored, []string{
+			"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
+			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
+			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
+			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",
+		}},
 		{CategoryChinese, []string{"IQQTV", "JavDB", "Airav", "Freejavbt"}},
-		{CategoryAmateur, []string{"MGS", "FANZA", "JavDB", "JavBus"}},
+		{CategoryAmateur, []string{
+			"MGS", "FANZA", "JavDB", "JavBus", "10musume", "1Pondo", "Caribbeancom",
+			"CaribbeancomPR", "PACOPACOMAMA", "MURAMURA", "HeyDouga", "H0930", "H4610",
+			"C0930", "Gcolle", "Pcolle", "MYWIFE", "KIN8", "TOKYO-HOT",
+		}},
 		{CategoryWestern, []string{"ThePornDBMovie", "ThePornDBScene", "JavDB", "Freejavbt"}},
-		{CategoryHentai, []string{"Getchu", "AniList", "FANZA", "JavDB"}},
+		{CategoryHentai, []string{"Getchu", "AniList", "FANZA", "JavDB", "GIGA"}},
 	}
 	config := DefaultConfig()
 	for _, tc := range tests {
@@ -87,7 +133,7 @@ func TestExplicitDMMSelectionResolvesToFANZA(t *testing.T) {
 	}
 }
 
-func TestUncensoredRouteMatchesAmaneDefaults(t *testing.T) {
+func TestUncensoredRouteKeepsFC2FamilyAdjacent(t *testing.T) {
 	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	got, err := DefaultConfig().Resolve(CategoryUncensored, "", registered)
 	if err != nil {
@@ -111,15 +157,15 @@ func TestLegacyFC2CategoryResolvesToMergedUncensoredRoute(t *testing.T) {
 	}
 }
 
-func TestLegacyCategoryAliasesResolveToAmaneCategories(t *testing.T) {
+func TestLegacyCategoryAliasesResolveToCanonicalCategories(t *testing.T) {
 	config := DefaultConfig()
-	registered := []string{"Getchu", "DMM", "JavDB", "IQQTV", "JavBus", "Airav", "Freejavbt"}
+	registered := []string{"Getchu", "DMM", "FANZA", "JavDB", "IQQTV", "JavBus", "Airav", "Freejavbt"}
 
 	got, err := config.Resolve(CategoryAnimation, "", registered)
 	if err != nil {
 		t.Fatalf("Resolve(animation alias) error = %v", err)
 	}
-	if want := []string{"Getchu", "DMM", "JavDB"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"Getchu", "FANZA", "JavDB"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Resolve(animation alias) = %#v, want %#v", got, want)
 	}
 
@@ -240,14 +286,24 @@ func TestConfigFingerprintIsDeterministicAndOrderSensitive(t *testing.T) {
 	}
 }
 
-func TestDefaultRoutesHaveNoDeferredGaps(t *testing.T) {
+func TestDefaultRoutesLeaveNoDeferredGaps(t *testing.T) {
+	// Every default-build provider must be routed, so the only gaps a default
+	// deployment can report are the three experimental entries.
 	registered := []string{
-		"FANZA", "JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB",
-		"FC2", "Airav", "IQQTV", "MGS", "ThePornDBMovie", "ThePornDBScene", "Getchu", "AniList",
+		"10musume", "1Pondo", "AVE", "AVSOX", "Airav", "AniList", "C0930",
+		"Caribbeancom", "CaribbeancomPR", "DAHLIA", "DUGA", "FALENO", "FANZA", "FC2",
+		"FC2Club", "FC2PPVDB", "Freejavbt", "GIGA", "Gcolle", "Getchu", "H0930",
+		"H4610", "HEYZO", "HeyDouga", "IQQTV", "JAVFREE", "Jav321", "JavBus", "JavDB",
+		"JavLibrary", "KIN8", "MGS", "MURAMURA", "MYWIFE", "PACOPACOMAMA", "Pcolle",
+		"Prestige", "SOD", "TOKYO-HOT", "ThePornDBMovie", "ThePornDBScene", "XCity", "fc2hub",
 	}
 	coverage := DefaultConfig().ProviderCoverage(registered)
-	if len(coverage.Gaps) != 0 || len(coverage.Empty) != 0 {
-		t.Fatalf("DefaultConfig().ProviderCoverage() = %#v, want no gaps", coverage)
+	want := ProviderCoverage{Gaps: []ProviderGap{
+		{Category: CategoryCensored, Missing: []string{"AVBASE"}},
+		{Category: CategoryChinese, Missing: []string{"MadouQu"}},
+	}}
+	if !reflect.DeepEqual(coverage, want) {
+		t.Fatalf("DefaultConfig().ProviderCoverage() = %#v, want %#v", coverage, want)
 	}
 	if err := DefaultConfig().ValidateRegisteredProviders(registered); err != nil {
 		t.Fatalf("ValidateRegisteredProviders() error = %v, want nil", err)
