@@ -33,7 +33,7 @@ RUN METAX_VERSION="$METAX_VERSION" \
 FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates chromium \
+    && apt-get install -y --no-install-recommends ca-certificates chromium xvfb \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1000 metax \
     && useradd --uid 1000 --gid metax --home-dir /data --shell /usr/sbin/nologin --no-create-home metax \

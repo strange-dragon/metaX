@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -68,20 +69,21 @@ var (
 )
 
 type JavLibrary struct {
-	baseURL      *url.URL
-	cookieJar    fhttp.CookieJar
-	clientMu     sync.RWMutex
-	client       *http.Client
-	timeout      time.Duration
-	proxyURL     string
-	cookies      string
-	browserMu    sync.Mutex
-	browserCtx   context.Context
-	browserStop  context.CancelFunc
-	allocStop    context.CancelFunc
-	browserProxy string
-	priorityMu   sync.RWMutex
-	priority     float64
+	baseURL            *url.URL
+	cookieJar          fhttp.CookieJar
+	clientMu           sync.RWMutex
+	client             *http.Client
+	timeout            time.Duration
+	proxyURL           string
+	cookies            string
+	browserMu          sync.Mutex
+	browserCtx         context.Context
+	browserStop        context.CancelFunc
+	allocStop          context.CancelFunc
+	virtualDisplayStop context.CancelFunc
+	browserProxy       string
+	priorityMu         sync.RWMutex
+	priority           float64
 }
 
 func New() *JavLibrary {
@@ -412,7 +414,19 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 		return nil, err
 	}
 	if err := runStage("wait for challenge", chromedp.PollFunction(`() => document.readyState === "complete" && !/just a moment|checking your browser|请稍候/i.test(document.title)`, new(bool), chromedp.WithPollingTimeout(timeout))); err != nil {
-		return nil, err
+		var diagnostic struct {
+			URL   string `json:"url"`
+			Title string `json:"title"`
+			HTML  string `json:"html"`
+		}
+		diagnosticCtx, diagnosticCancel := context.WithTimeout(p.browserCtx, 3*time.Second)
+		diagnosticErr := chromedp.Run(diagnosticCtx, chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &diagnostic))
+		diagnosticCancel()
+		preview := strings.Join(strings.Fields(diagnostic.HTML), " ")
+		if len(preview) > 1200 {
+			preview = preview[:1200] + "…"
+		}
+		return nil, fmt.Errorf("%w (challenge state: url=%q title=%q status=%d diagnostic_error=%v body=%q)", err, diagnostic.URL, diagnostic.Title, status, diagnosticErr, preview)
 	}
 	if err := runStage("capture page", chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &struct {
 		URL   *string `json:"url"`
@@ -468,9 +482,13 @@ func (p *JavLibrary) startBrowserLocked(proxyURL string) error {
 		}
 		p.browserStop()
 		p.allocStop()
+		if p.virtualDisplayStop != nil {
+			p.virtualDisplayStop()
+		}
 		p.browserCtx = nil
 		p.browserStop = nil
 		p.allocStop = nil
+		p.virtualDisplayStop = nil
 	}
 	executable := strings.TrimSpace(os.Getenv("METAX_CHROMIUM_BIN"))
 	if executable == "" {
@@ -485,11 +503,24 @@ func (p *JavLibrary) startBrowserLocked(proxyURL string) error {
 		return errors.New("Chromium executable not found (set METAX_CHROMIUM_BIN or install chromium)")
 	}
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
+	var display string
+	var displayStop context.CancelFunc
+	if runtime.GOOS != "darwin" && os.Getenv("DISPLAY") == "" {
+		var err error
+		display, displayStop, err = startVirtualDisplay()
+		if err != nil {
+			return fmt.Errorf("start virtual display for Chromium: %w", err)
+		}
+	}
 	opts = append(opts,
 		chromedp.ExecPath(executable),
+		chromedp.Flag("headless", false),
 		chromedp.Flag("enable-automation", false),
 		chromedp.Flag("disable-blink-features", "AutomationControlled"),
 	)
+	if display != "" {
+		opts = append(opts, chromedp.Env("DISPLAY="+display))
+	}
 	if proxyURL != "" {
 		opts = append(opts, chromedp.ProxyServer(proxyURL))
 	}
@@ -502,13 +533,47 @@ func (p *JavLibrary) startBrowserLocked(proxyURL string) error {
 	if err != nil {
 		browserCancel()
 		allocCancel()
+		if displayStop != nil {
+			displayStop()
+		}
 		return fmt.Errorf("start Chromium: %w", err)
 	}
 	p.browserCtx = browserCtx
 	p.browserStop = browserCancel
 	p.allocStop = allocCancel
+	p.virtualDisplayStop = displayStop
 	p.browserProxy = proxyURL
 	return nil
+}
+
+func startVirtualDisplay() (string, context.CancelFunc, error) {
+	xvfb, err := exec.LookPath("Xvfb")
+	if err != nil {
+		return "", nil, errors.New("Xvfb is required for headed Chromium when DISPLAY is unset")
+	}
+	displayNumber := 100 + os.Getpid()%500
+	display := fmt.Sprintf(":%d", displayNumber)
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(ctx, xvfb, display, "-screen", "0", "1280x800x24", "-nolisten", "tcp", "-ac")
+	if err := cmd.Start(); err != nil {
+		cancel()
+		return "", nil, fmt.Errorf("launch Xvfb: %w", err)
+	}
+	go func() { _ = cmd.Wait() }()
+	socket := fmt.Sprintf("/tmp/.X11-unix/X%d", displayNumber)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(socket); err == nil {
+			return display, cancel, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", nil, errors.New("Xvfb exited before its display became ready")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	cancel()
+	return "", nil, errors.New("timed out waiting for Xvfb display")
 }
 
 // fingerprintProfile pairs a TLS ClientHello profile with a matching browser User-Agent.
