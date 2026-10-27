@@ -334,13 +334,13 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	ctx, cancel := context.WithTimeout(original.Context(), timeout)
-	defer cancel()
 	if err := p.startBrowserLocked(proxyURL); err != nil {
 		return nil, err
 	}
 	tabCtx, tabCancel := chromedp.NewContext(p.browserCtx)
 	defer tabCancel()
+	ctx, cancel := context.WithTimeout(tabCtx, timeout)
+	defer cancel()
 	var (
 		finalURL string
 		title    string
