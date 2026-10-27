@@ -235,3 +235,11 @@ func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 	require.Equal(t, 2, requests, "should try the current Chrome profile before rotating to Chrome 131")
 	require.Equal(t, []string{"cf_clearance=test-token", "cf_clearance=test-token"}, cookies)
 }
+
+func TestIsCloudflareChallengeRecognizesHTMLChallengeTitle(t *testing.T) {
+	err := fmt.Errorf(`browser fingerprint attempts exhausted: Chrome 146=403 body="<!DOCTYPE html><title>Just a moment...</title>"`)
+	require.True(t, isCloudflareChallenge(err))
+	require.True(t, isCloudflareChallenge(fmt.Errorf("Cloudflare response contains cf-chl-widget")))
+	require.False(t, isCloudflareChallenge(fmt.Errorf("CloudFront returned 403 Forbidden")))
+	require.False(t, isCloudflareChallenge(nil))
+}

@@ -317,7 +317,7 @@ func isCloudflareChallenge(err error) bool {
 		return false
 	}
 	text := strings.ToLower(err.Error())
-	return strings.Contains(text, `"just a moment`) || strings.Contains(text, "cf-chl-")
+	return strings.Contains(text, "just a moment") || strings.Contains(text, "cf-chl-")
 }
 
 // fetchWithChromium executes JavLibrary's JavaScript challenge in a local
