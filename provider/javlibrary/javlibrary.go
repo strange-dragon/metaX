@@ -370,24 +370,39 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 			}()
 		}
 	})
-	actions := []chromedp.Action{
-		network.Enable(),
-		fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}}),
+	runStage := func(stage string, actions ...chromedp.Action) error {
+		if err := chromedp.Run(ctx, actions...); err != nil {
+			return fmt.Errorf("%s: %w", stage, err)
+		}
+		return nil
 	}
+	if err := runStage("enable network", network.Enable()); err != nil {
+		return nil, err
+	}
+	if err := runStage("enable same-origin navigation guard", fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}})); err != nil {
+		return nil, err
+	}
+	var cookieActions []chromedp.Action
 	for _, cookie := range parseCookieHeader(cookieHeader) {
-		actions = append(actions, network.SetCookie(cookie.Name, cookie.Value).WithURL(original.URL.String()).WithPath("/"))
+		cookieActions = append(cookieActions, network.SetCookie(cookie.Name, cookie.Value).WithURL(original.URL.String()).WithPath("/"))
 	}
-	actions = append(actions,
-		chromedp.Navigate(original.URL.String()),
-		chromedp.PollFunction(`() => document.readyState === "complete" && !/just a moment|checking your browser/i.test(document.title)`, new(bool), chromedp.WithPollingTimeout(timeout)),
-		chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &struct {
-			URL   *string `json:"url"`
-			Title *string `json:"title"`
-			HTML  *string `json:"html"`
-		}{URL: &finalURL, Title: &title, HTML: &html}),
-	)
-	if err := chromedp.Run(ctx, actions...); err != nil {
-		return nil, fmt.Errorf("run JavLibrary page in Chromium: %w", err)
+	if len(cookieActions) > 0 {
+		if err := runStage("set configured cookies", cookieActions...); err != nil {
+			return nil, err
+		}
+	}
+	if err := runStage("navigate", chromedp.Navigate(original.URL.String())); err != nil {
+		return nil, err
+	}
+	if err := runStage("wait for challenge", chromedp.PollFunction(`() => document.readyState === "complete" && !/just a moment|checking your browser/i.test(document.title)`, new(bool), chromedp.WithPollingTimeout(timeout))); err != nil {
+		return nil, err
+	}
+	if err := runStage("capture page", chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &struct {
+		URL   *string `json:"url"`
+		Title *string `json:"title"`
+		HTML  *string `json:"html"`
+	}{URL: &finalURL, Title: &title, HTML: &html})); err != nil {
+		return nil, err
 	}
 	parsedFinal, err := url.Parse(finalURL)
 	if err != nil || !p.validOrigin(parsedFinal) {
