@@ -14,11 +14,11 @@ import (
 
 const searchFixture = `<!doctype html><html><body>
 <div class="oneVideo">
-  <a href="/video/target"><img src="/images/poster.jpg"></a>
+  <a href="/video?hid=target"><img src="/images/poster.jpg"></a>
   <h5>ABC-123 Exact title</h5>
 </div>
 <div class="oneVideo">
-  <a href="/video/near"><img src="/images/near.jpg"></a>
+  <a href="/video?hid=near"><img src="/images/near.jpg"></a>
   <h5>ABC-1234 Wrong near match</h5>
 </div>
 <div class="oneVideo">
@@ -44,7 +44,8 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	mux.HandleFunc("/search_result", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, searchFixture)
 	})
-	mux.HandleFunc("/video/target", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/video", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "target", r.URL.Query().Get("hid"))
 		_, _ = fmt.Fprint(w, detailFixture)
 	})
 	server := httptest.NewServer(mux)
@@ -56,7 +57,7 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	require.Len(t, results, 1)
 	require.Equal(t, "ABC-123", results[0].Number)
 	require.Equal(t, "Exact title", results[0].Title)
-	require.Equal(t, server.URL+"/video/target", results[0].Homepage)
+	require.Equal(t, server.URL+"/video?hid=target", results[0].Homepage)
 	require.Equal(t, server.URL+"/images/poster.jpg", results[0].ThumbURL)
 
 	info, err := p.GetMovieInfoByID("ABC-123")
@@ -87,7 +88,7 @@ func TestGetMovieInfoRejectsMissingOrMismatchedIdentity(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, results)
 
-	info, err := p.GetMovieInfoByURL(server.URL + "/video/target")
+	info, err := p.GetMovieInfoByURL(server.URL + "/video?hid=target")
 	require.ErrorIs(t, err, ErrMovieNotFound)
 	require.Nil(t, info)
 }
@@ -102,6 +103,8 @@ func TestParseMovieIDFromURLRejectsUnsafeOrigins(t *testing.T) {
 		"https://airav.io/not-video/123",
 		"https://airav.io/video/123/extra",
 		"https://airav.io/video/123?redirect=other",
+		"https://airav.io/video?hid=123&redirect=other",
+		"https://airav.io/video?other=123",
 		"https://airav.io/video/123#fragment",
 	} {
 		t.Run(raw, func(t *testing.T) {

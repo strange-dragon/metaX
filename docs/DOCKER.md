@@ -6,7 +6,8 @@ repository:
 1. copy the source and download Go modules;
 2. derive the version and commit with `scripts/version.sh`;
 3. build the `metax-server` binary with `scripts/build-server.sh`;
-4. copy that binary into a small Debian runtime image.
+4. copy that binary into a Debian runtime image with Chromium for JavLibrary's
+   on-demand browser challenge fallback.
 
 The build needs network access to the Go module proxy. No upstream SDK checkout
 is cloned and no patches are applied at build time. Image builds do not run
@@ -24,6 +25,12 @@ docker compose logs -f metax
 
 The default service listens on port `18080` and persists SQLite data in the
 `metax-data` volume at `/data/metax.db`.
+
+Chromium is started only when JavLibrary's lightweight Go request receives a
+Cloudflare JavaScript challenge. It is not a separate service, but it adds
+image size and temporary memory/CPU use during that fallback. The executable
+defaults to `/usr/bin/chromium`; set `METAX_CHROMIUM_BIN` only if your image
+installs it elsewhere.
 
 Check the non-secret routing status:
 

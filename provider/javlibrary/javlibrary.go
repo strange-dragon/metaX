@@ -6,11 +6,14 @@
 package javlibrary
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,6 +25,9 @@ import (
 	fhttpcookiejar "github.com/bogdanfinn/fhttp/cookiejar"
 	tlsclient "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
+	"github.com/chromedp/cdproto/fetch"
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/chromedp"
 	"github.com/lib/pq"
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/text/language"
@@ -36,32 +42,42 @@ import (
 const (
 	Name           = "JavLibrary"
 	Priority       = 1000 - 25
-	defaultURL     = "https://www.javlibrary.com"
+	defaultURL     = "https://www.f101w.com"
 	defaultTimeout = 20 * time.Second
 	maxPageBytes   = 8 << 20
 )
 
 var (
-	ErrMovieNotFound                         = errors.New("javlibrary: movie not found")
-	numberTokenRE                            = regexp.MustCompile(`(?i)^[a-z0-9]+(?:[-_.][a-z0-9]+)*$`)
-	runtimeRE                                = regexp.MustCompile(`\d+`)
-	scoreRE                                  = regexp.MustCompile(`\(([\d.]+)\)`)
-	_                mt.MovieProvider        = (*JavLibrary)(nil)
-	_                mt.MovieSearcher        = (*JavLibrary)(nil)
-	_                mt.Fetcher              = (*JavLibrary)(nil)
-	_                mt.ProxySetter          = (*JavLibrary)(nil)
-	_                mt.RequestTimeoutSetter = (*JavLibrary)(nil)
+	ErrMovieNotFound                          = errors.New("javlibrary: movie not found")
+	numberTokenRE                             = regexp.MustCompile(`(?i)^[a-z0-9]+(?:[-_.][a-z0-9]+)*$`)
+	runtimeRE                                 = regexp.MustCompile(`\d+`)
+	scoreRE                                   = regexp.MustCompile(`\(([\d.]+)\)`)
+	detailSlugRE                              = regexp.MustCompile(`^/(?:cn|en|ja)/([A-Za-z0-9_-]+)\.html$`)
+	opaqueSlugRE                              = regexp.MustCompile(`[a-z]`)
+	opaqueSlugDigitRE                         = regexp.MustCompile(`[0-9]`)
+	_                 mt.MovieProvider        = (*JavLibrary)(nil)
+	_                 mt.MovieSearcher        = (*JavLibrary)(nil)
+	_                 mt.Fetcher              = (*JavLibrary)(nil)
+	_                 mt.ConfigSetter         = (*JavLibrary)(nil)
+	_                 mt.ProxySetter          = (*JavLibrary)(nil)
+	_                 mt.RequestTimeoutSetter = (*JavLibrary)(nil)
 )
 
 type JavLibrary struct {
-	baseURL    *url.URL
-	cookieJar  fhttp.CookieJar
-	clientMu   sync.RWMutex
-	client     *http.Client
-	timeout    time.Duration
-	proxyURL   string
-	priorityMu sync.RWMutex
-	priority   float64
+	baseURL      *url.URL
+	cookieJar    fhttp.CookieJar
+	clientMu     sync.RWMutex
+	client       *http.Client
+	timeout      time.Duration
+	proxyURL     string
+	cookies      string
+	browserMu    sync.Mutex
+	browserCtx   context.Context
+	browserStop  context.CancelFunc
+	allocStop    context.CancelFunc
+	browserProxy string
+	priorityMu   sync.RWMutex
+	priority     float64
 }
 
 func New() *JavLibrary {
@@ -108,6 +124,63 @@ func (p *JavLibrary) SetPriority(v float64) {
 }
 func (p *JavLibrary) Language() language.Tag { return language.English }
 func (p *JavLibrary) URL() *url.URL          { u := *p.baseURL; return &u }
+
+// SetConfig allows deployments to select the current JavLibrary language-site
+// origin when the canonical www.javlibrary.com hostname is blocked or moved.
+// Do not use javlib.com here: it is an address portal, not the scraper site.
+func (p *JavLibrary) SetConfig(config mt.Config) error {
+	if config == nil {
+		return nil
+	}
+	if config.Has("base_url") {
+		raw, err := config.GetString("base_url")
+		if err != nil {
+			return fmt.Errorf("javlibrary: read base_url config: %w", err)
+		}
+		u, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil || !strings.EqualFold(u.Scheme, "https") || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return fmt.Errorf("javlibrary: base_url must be an HTTPS origin without path, query, or userinfo")
+		}
+		u.Path = ""
+		u.RawPath = ""
+		p.clientMu.Lock()
+		p.baseURL = u
+		p.clientMu.Unlock()
+	}
+	var cookieKey string
+	switch {
+	case config.Has("cookies"):
+		cookieKey = "cookies"
+	case config.Has("cookie"):
+		cookieKey = "cookie"
+	}
+	if cookieKey != "" {
+		raw, err := config.GetString(cookieKey)
+		if err != nil {
+			return fmt.Errorf("javlibrary: read cookies config: %w", err)
+		}
+		raw = strings.TrimSpace(raw)
+		if strings.ContainsAny(raw, "\r\n") {
+			return errors.New("javlibrary: cookies must not contain CR or LF")
+		}
+		request, _ := http.NewRequest(http.MethodGet, p.baseURL.String(), nil)
+		request.Header.Set("Cookie", raw)
+		parsed := request.Cookies()
+		if raw != "" && len(parsed) == 0 {
+			return errors.New("javlibrary: invalid cookies header")
+		}
+		cookies := make([]*fhttp.Cookie, 0, len(parsed))
+		for _, cookie := range parsed {
+			cookies = append(cookies, &fhttp.Cookie{Name: cookie.Name, Value: cookie.Value, Path: "/"})
+		}
+		p.clientMu.Lock()
+		p.cookieJar.SetCookies(p.baseURL, cookies)
+		p.cookies = raw
+		p.clientMu.Unlock()
+	}
+	return nil
+}
+
 func (p *JavLibrary) NormalizeMovieID(id string) string {
 	return strings.TrimSpace(norm.NFKC.String(id))
 }
@@ -220,6 +293,13 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 	// returns 403/406, matching Amane's request strategy.
 	resp, err := p.fetchWithFingerprintRotation(req)
 	if err != nil {
+		if isCloudflareChallenge(err) {
+			resp, browserErr := p.fetchWithChromium(req)
+			if browserErr == nil {
+				return resp, nil
+			}
+			return nil, fmt.Errorf("javlibrary: GET %s blocked by Cloudflare; Chromium fallback failed: %w (initial Go request: %v)", raw, browserErr, err)
+		}
 		return nil, fmt.Errorf("javlibrary: GET %s with browser fingerprints: %w", raw, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -232,6 +312,164 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 	return resp, nil
 }
 
+func isCloudflareChallenge(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, `"just a moment`) || strings.Contains(text, "cf-chl-")
+}
+
+// fetchWithChromium executes JavLibrary's JavaScript challenge in a local
+// browser. Chromium is started lazily and reused; one tab at a time shares its
+// clearance-cookie jar. The fallback is intentionally only used after a
+// Cloudflare challenge, not for ordinary requests.
+func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, error) {
+	p.browserMu.Lock()
+	defer p.browserMu.Unlock()
+
+	p.clientMu.RLock()
+	timeout, proxyURL, cookieHeader := p.timeout, p.proxyURL, p.cookies
+	p.clientMu.RUnlock()
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(original.Context(), timeout)
+	defer cancel()
+	if err := p.startBrowserLocked(proxyURL); err != nil {
+		return nil, err
+	}
+	tabCtx, tabCancel := chromedp.NewContext(p.browserCtx)
+	defer tabCancel()
+	var (
+		finalURL string
+		title    string
+		html     string
+		statusMu sync.Mutex
+		status   int
+	)
+	chromedp.ListenTarget(tabCtx, func(event any) {
+		switch e := event.(type) {
+		case *network.EventResponseReceived:
+			if e.Type == network.ResourceTypeDocument {
+				statusMu.Lock()
+				status = int(e.Response.Status)
+				statusMu.Unlock()
+			}
+		case *fetch.EventRequestPaused:
+			paused := e
+			go func() {
+				if paused.ResourceType == network.ResourceTypeDocument {
+					target, err := url.Parse(paused.Request.URL)
+					if err != nil || !p.validOrigin(target) && !isCloudflareChallengeOrigin(target) {
+						_ = fetch.FailRequest(paused.RequestID, network.ErrorReasonBlockedByClient).Do(tabCtx)
+						return
+					}
+				}
+				_ = fetch.ContinueRequest(paused.RequestID).Do(tabCtx)
+			}()
+		}
+	})
+	actions := []chromedp.Action{
+		network.Enable(),
+		fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}}),
+	}
+	for _, cookie := range parseCookieHeader(cookieHeader) {
+		actions = append(actions, network.SetCookie(cookie.Name, cookie.Value).WithURL(original.URL.String()).WithPath("/"))
+	}
+	actions = append(actions,
+		chromedp.Navigate(original.URL.String()),
+		chromedp.PollFunction(`() => document.readyState === "complete" && !/just a moment|checking your browser/i.test(document.title)`, new(bool), chromedp.WithPollingTimeout(timeout)),
+		chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &struct {
+			URL   *string `json:"url"`
+			Title *string `json:"title"`
+			HTML  *string `json:"html"`
+		}{URL: &finalURL, Title: &title, HTML: &html}),
+	)
+	if err := chromedp.Run(ctx, actions...); err != nil {
+		return nil, fmt.Errorf("run JavLibrary page in Chromium: %w", err)
+	}
+	parsedFinal, err := url.Parse(finalURL)
+	if err != nil || !p.validOrigin(parsedFinal) {
+		return nil, fmt.Errorf("Chromium ended at unexpected URL %q", finalURL)
+	}
+	if strings.Contains(strings.ToLower(title), "just a moment") || strings.TrimSpace(html) == "" {
+		return nil, fmt.Errorf("Chromium did not clear the Cloudflare challenge (title %q)", title)
+	}
+	statusMu.Lock()
+	statusCode := status
+	statusMu.Unlock()
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("Chromium page returned HTTP status %d", statusCode)
+	}
+	return &http.Response{
+		Status: "200 OK", StatusCode: http.StatusOK,
+		Header: http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+		Body:   io.NopCloser(strings.NewReader(html)), Request: original,
+	}, nil
+}
+
+func isCloudflareChallengeOrigin(u *url.URL) bool {
+	return u != nil && u.Scheme == "https" && u.Port() == "" && u.User == nil && strings.EqualFold(u.Hostname(), "challenges.cloudflare.com")
+}
+
+func parseCookieHeader(raw string) []*http.Cookie {
+	if strings.TrimSpace(raw) == "" || strings.ContainsAny(raw, "\r\n") {
+		return nil
+	}
+	req, err := http.NewRequest(http.MethodGet, "https://localhost/", nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Cookie", raw)
+	return req.Cookies()
+}
+
+func (p *JavLibrary) startBrowserLocked(proxyURL string) error {
+	if p.browserCtx != nil {
+		if p.browserProxy == proxyURL {
+			return nil
+		}
+		p.browserStop()
+		p.allocStop()
+		p.browserCtx = nil
+		p.browserStop = nil
+		p.allocStop = nil
+	}
+	executable := strings.TrimSpace(os.Getenv("METAX_CHROMIUM_BIN"))
+	if executable == "" {
+		for _, candidate := range []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"} {
+			if found, err := exec.LookPath(candidate); err == nil {
+				executable = found
+				break
+			}
+		}
+	}
+	if executable == "" {
+		return errors.New("Chromium executable not found (set METAX_CHROMIUM_BIN or install chromium)")
+	}
+	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
+	opts = append(opts, chromedp.ExecPath(executable))
+	if proxyURL != "" {
+		opts = append(opts, chromedp.ProxyServer(proxyURL))
+	}
+	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
+	ctx, cancel := context.WithTimeout(browserCtx, 15*time.Second)
+	err := chromedp.Run(ctx)
+	cancel()
+	if err != nil {
+		browserCancel()
+		allocCancel()
+		return fmt.Errorf("start Chromium: %w", err)
+	}
+	p.browserCtx = browserCtx
+	p.browserStop = browserCancel
+	p.allocStop = allocCancel
+	p.browserProxy = proxyURL
+	return nil
+}
+
 // fingerprintProfile pairs a TLS ClientHello profile with a matching browser User-Agent.
 // Browser profiles are tried in order. A 403/406 triggers a one-second pause and the
 // next profile, while a shared cookie jar preserves upstream challenge cookies.
@@ -241,9 +479,11 @@ type fingerprintProfile struct {
 	userAgent string
 }
 
-// Use Amane's supported browser generations where available; Chrome 133 is the
-// closest exposed TLS profile to Amane's Chrome 136 entry in tls-client v1.14.0.
+// Keep the newest available Chrome profiles first: the live JavLibrary browser
+// session on 2026-10-27 negotiated with Chromium 152, while older profiles were
+// all challenged from this environment.
 var javLibraryFingerprintProfiles = []fingerprintProfile{
+	{name: "Chrome 146", profile: profiles.Chrome_146, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"},
 	{name: "Chrome 131", profile: profiles.Chrome_131, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"},
 	{name: "Chrome 133", profile: profiles.Chrome_133, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"},
 	{name: "Chrome 144", profile: profiles.Chrome_144, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"},
@@ -301,7 +541,11 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 		return resp, nil
 	}
 	if len(failures) > 0 {
-		return nil, fmt.Errorf("browser fingerprint attempts exhausted: %s", strings.Join(failures, "; "))
+		detail := strings.Join(failures, "; ")
+		if strings.Contains(strings.ToLower(detail), `"just a moment`) || strings.Contains(strings.ToLower(detail), "cf-chl-") {
+			return nil, fmt.Errorf("Cloudflare JavaScript challenge rejected every browser TLS profile; Go does not execute the challenge page. Configure a fresh COOKIES value containing cf_clearance from the same egress IP, or use an egress network that passes the challenge (%s)", detail)
+		}
+		return nil, fmt.Errorf("browser fingerprint attempts exhausted: %s", detail)
 	}
 	if lastError == nil {
 		lastError = errors.New("all browser fingerprint attempts failed")
@@ -333,6 +577,7 @@ func (p *JavLibrary) doFingerprintRequest(client tlsclient.HttpClient, original 
 			req.Header[key] = append([]string(nil), values...)
 		}
 		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
 		if previous != "" {
 			req.Header.Set("Referer", previous)
 		}
@@ -400,10 +645,18 @@ func (p *JavLibrary) getHTML(raw string) (*goquery.Document, error) {
 }
 func (p *JavLibrary) detailURL(id string) string {
 	u := *p.baseURL
-	u.Path = "/cn/"
-	q := url.Values{}
-	q.Set("v", id)
-	u.RawQuery = q.Encode()
+	if strings.HasSuffix(strings.ToLower(id), ".html") {
+		u.Path = "/cn/" + strings.TrimPrefix(id, "/")
+		u.RawQuery = ""
+	} else if isOpaqueSlug(id) {
+		u.Path = "/cn/" + id + ".html"
+		u.RawQuery = ""
+	} else {
+		u.Path = "/cn/"
+		q := url.Values{}
+		q.Set("v", id)
+		u.RawQuery = q.Encode()
+	}
 	u.Fragment = ""
 	return u.String()
 }
@@ -415,14 +668,26 @@ func (p *JavLibrary) ParseMovieIDFromURL(raw string) (string, error) {
 	if !p.validOrigin(u) {
 		return "", fmt.Errorf("javlibrary: unexpected detail origin %q", raw)
 	}
-	if u.Path != "/cn/" && u.Path != "/en/" && u.Path != "/ja/" && u.Path != "/" {
+	id := ""
+	switch {
+	case u.Path == "/cn/" || u.Path == "/en/" || u.Path == "/ja/" || u.Path == "/":
+		id = strings.TrimSpace(u.Query().Get("v"))
+	case detailSlugRE.MatchString(u.Path):
+		id = detailSlugRE.FindStringSubmatch(u.Path)[1]
+	default:
 		return "", fmt.Errorf("javlibrary: unsupported detail path %q", u.Path)
 	}
-	id := strings.TrimSpace(u.Query().Get("v"))
 	if id == "" || !numberTokenRE.MatchString(id) {
 		return "", fmt.Errorf("javlibrary: missing or invalid v parameter")
 	}
 	return id, nil
+}
+
+func isOpaqueSlug(id string) bool {
+	if id == "" || strings.ContainsAny(id, "/\\?#") || !numberTokenRE.MatchString(id) {
+		return false
+	}
+	return id == strings.ToLower(id) && opaqueSlugRE.MatchString(id) && opaqueSlugDigitRE.MatchString(id)
 }
 
 func (p *JavLibrary) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
@@ -451,7 +716,7 @@ func (p *JavLibrary) SearchMovie(keyword string) ([]*model.MovieSearchResult, er
 		if e != nil {
 			return
 		}
-		target := p.baseURL.ResolveReference(ref)
+		target := u.ResolveReference(ref)
 		id, e := p.ParseMovieIDFromURL(target.String())
 		if e != nil || seen[id] {
 			return
@@ -459,6 +724,9 @@ func (p *JavLibrary) SearchMovie(keyword string) ([]*model.MovieSearchResult, er
 		title, _ := a.Attr("title")
 		title = cleanText(title)
 		number := findNumber(title, keyword)
+		if number == "" {
+			number = findNumber(cleanText(card.Find(".id").First().Text()), keyword)
+		}
 		if number == "" {
 			return
 		}
@@ -494,7 +762,7 @@ func (p *JavLibrary) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if u, e := url.Parse(id); e == nil && u.IsAbs() {
 		return p.GetMovieInfoByURL(id)
 	}
-	if numberTokenRE.MatchString(id) && !strings.ContainsAny(id, "/ ?#") {
+	if numberTokenRE.MatchString(id) && !strings.ContainsAny(id, "/ ?#") && !isOpaqueSlug(id) {
 		results, err := p.SearchMovie(id)
 		if err != nil {
 			return nil, err
@@ -551,12 +819,23 @@ func (p *JavLibrary) GetMovieInfoByURL(raw string) (*model.MovieInfo, error) {
 	if cover == "" {
 		return nil, fmt.Errorf("javlibrary: detail page %s has no cover image", raw)
 	}
+	thumb := cover
+	if strings.HasSuffix(strings.ToLower(cover), "pl.jpg") {
+		thumb = cover[:len(cover)-len("pl.jpg")] + "ps.jpg"
+	}
+	var previewImages []string
+	doc.Find(".previewthumbs a").Each(func(_ int, a *goquery.Selection) {
+		image := absoluteURL(p.baseURL, firstAttr(a, "href"))
+		if image != "" && (strings.HasPrefix(image, "https://") || strings.HasPrefix(image, "http://")) {
+			previewImages = appendUnique(previewImages, image)
+		}
+	})
 	scoreText := cleanText(doc.Find("span.score").First().Text())
 	score := 0.0
 	if m := scoreRE.FindStringSubmatch(scoreText); len(m) > 1 {
 		score, _ = strconv.ParseFloat(m[1], 64)
 	}
-	info := &model.MovieInfo{ID: id, Number: number, Title: title, Provider: p.Name(), Homepage: raw, Maker: studio, Label: label, Director: director, Actors: pq.StringArray(actors), Genres: pq.StringArray(genres), CoverURL: cover, ThumbURL: cover, Score: score, Runtime: runtime}
+	info := &model.MovieInfo{ID: id, Number: number, Title: title, Provider: p.Name(), Homepage: raw, Maker: studio, Label: label, Director: director, Actors: pq.StringArray(actors), Genres: pq.StringArray(genres), CoverURL: cover, BigCoverURL: cover, ThumbURL: thumb, BigThumbURL: cover, PreviewImages: pq.StringArray(previewImages), Score: score, Runtime: runtime}
 	if release != "" {
 		info.ReleaseDate = parser.ParseDate(release)
 	}

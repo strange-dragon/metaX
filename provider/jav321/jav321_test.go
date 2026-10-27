@@ -12,9 +12,11 @@ import (
 )
 
 const detailFixture = `<!doctype html><html><body>
-<div class="panel-heading"><h3>SSIS-033  Sample Jav321 Title</h3></div>
+<div class="panel-heading"><h3>Sample Jav321 Title <small>SSIS-033</small></h3></div>
 <div class="panel-body">
-  <img src="/images/ssis033.jpg">
+  <img src="http://pics.dmm.co.jp/digital/video/ssis00033/ssis00033ps.jpg">
+  <img src="http://pics.dmm.co.jp//digital/video/ssis00033/ssis00033pl.jpg">
+  <img src="http://pics.dmm.co.jp/digital/video/ssis00033/ssis00033jp-1.jpg">
   <div class="row"><div class="col-md-12">A short synopsis.</div></div>
 </div>
 <div><b>出演者</b><a>Actor One</a><a>Actor Two</a></div>
@@ -39,7 +41,13 @@ func TestNormalizeAndParseMovieID(t *testing.T) {
 
 func TestSearchAndDetailParsing(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/video/SSIS-033", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.NoError(t, r.ParseForm())
+		require.Equal(t, "SSIS-033", r.Form.Get("sn"))
+		http.Redirect(w, r, "/video/ssis00033", http.StatusFound)
+	})
+	mux.HandleFunc("/video/ssis00033", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, detailFixture)
 	})
 	server := httptest.NewServer(mux)
@@ -51,8 +59,8 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	require.Len(t, results, 1)
 	require.Equal(t, "SSIS-033", results[0].Number)
 	require.Equal(t, "Sample Jav321 Title", results[0].Title)
-	require.Equal(t, server.URL+"/video/SSIS-033", results[0].Homepage)
-	require.Equal(t, server.URL+"/images/ssis033.jpg", results[0].CoverURL)
+	require.Equal(t, server.URL+"/video/ssis00033", results[0].Homepage)
+	require.Equal(t, "https://pics.dmm.co.jp/digital/video/ssis00033/ssis00033pl.jpg", results[0].CoverURL)
 
 	info, err := p.GetMovieInfoByID("SSIS-033")
 	require.NoError(t, err)
@@ -63,6 +71,8 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	require.Equal(t, []string{"Drama", "Romance"}, []string(info.Genres))
 	require.Equal(t, 120, info.Runtime)
 	require.Equal(t, "2024-02-19", time.Time(info.ReleaseDate).Format("2006-01-02"))
+	require.Equal(t, "https://pics.dmm.co.jp/digital/video/ssis00033/ssis00033ps.jpg", info.ThumbURL)
+	require.Equal(t, []string{"https://pics.dmm.co.jp/digital/video/ssis00033/ssis00033jp-1.jpg"}, []string(info.PreviewImages))
 }
 
 func TestSearchMovieIgnoresNonNumberKeywords(t *testing.T) {

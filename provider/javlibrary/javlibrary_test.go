@@ -15,6 +15,7 @@ import (
 
 const searchHTML = `<!doctype html><html><body>
 <div class="video"><a href="/cn/?v=abc123" title="Exact title ABC-123"><img src="/images/cover.jpg"></a></div>
+<div class="video"><a href="./javme5adzi.html" title="SSIS-033 Exact title"><div class="id">SSIS-033</div><img src="https://pics.dmm.co.jp/mono/movie/adult/ssis033/ssis033ps.jpg"></a></div>
 <div class="video"><a href="/cn/?v=near1234" title="Near title ABC-1234"></a></div>
 <div class="video"><a href="https://evil.invalid/cn/?v=abc123" title="Exact title ABC-123"></a></div>
 </body></html>`
@@ -29,9 +30,43 @@ const detailHTML = `<!doctype html><html><head><meta property="og:image" content
 <div id="video_label"><table><tr><td class="text"><a>Label One</a></td></tr></table></div>
 <div id="video_genres"><table><tr><td class="text"><span class="genre"><a>Drama</a></span><span class="genre"><a>Drama</a></span><span class="genre"><a>Romance</a></span></td></tr></table></div>
 <span class="cast"><span class="star"><a>Actor One</a></span><span class="star"><a>Actor Two</a></span></span>
-<img id="video_jacket_img" src="/images/cover.jpg">
+<img id="video_jacket_img" src="https://pics.dmm.co.jp/mono/movie/adult/ssis033/ssis033pl.jpg">
+<div class="previewthumbs"><a href="https://pics.dmm.co.jp/digital/video/ssis00033/ssis00033jp-1.jpg"><img src="https://pics.dmm.co.jp/digital/video/ssis00033/ssis00033-1.jpg"></a></div>
 <span class="score">(7.8)</span>
 </body></html>`
+
+type testConfig map[string]string
+
+func (c testConfig) Has(key string) bool { _, ok := c[strings.ToLower(key)]; return ok }
+func (c testConfig) GetString(key string) (string, error) {
+	value, ok := c[strings.ToLower(key)]
+	if !ok {
+		return "", fmt.Errorf("missing config key %q", key)
+	}
+	return value, nil
+}
+func (testConfig) GetBool(string) (bool, error)              { return false, nil }
+func (testConfig) GetInt64(string) (int64, error)            { return 0, nil }
+func (testConfig) GetFloat64(string) (float64, error)        { return 0, nil }
+func (testConfig) GetDuration(string) (time.Duration, error) { return 0, nil }
+
+func TestSetConfigAcceptsAlternateHTTPSOrigin(t *testing.T) {
+	p := New()
+	require.NoError(t, p.SetConfig(testConfig{"base_url": "https://www.h103n.com/"}))
+	require.Equal(t, "https://www.h103n.com", p.URL().String())
+	require.NoError(t, p.SetConfig(testConfig{"cookies": "cf_clearance=clearance-token; session=session-token"}))
+	jarCookies := p.cookieJar.Cookies(p.URL())
+	require.Len(t, jarCookies, 2)
+	require.Equal(t, "cf_clearance", jarCookies[0].Name)
+	require.Equal(t, "clearance-token", jarCookies[0].Value)
+	require.Error(t, p.SetConfig(testConfig{"cookies": "session=abc\r\nInjected: yes"}))
+	for _, invalid := range []string{
+		"http://www.h103n.com", "https://user@www.h103n.com", "https://www.h103n.com/cn",
+		"https://www.h103n.com?next=evil", "https://www.h103n.com#fragment",
+	} {
+		require.Error(t, p.SetConfig(testConfig{"base_url": invalid}), invalid)
+	}
+}
 
 func TestSearchMovieRequiresExactCatalogNumber(t *testing.T) {
 	mux := http.NewServeMux()
@@ -46,6 +81,35 @@ func TestSearchMovieRequiresExactCatalogNumber(t *testing.T) {
 	require.Equal(t, "Exact title", results[0].Title)
 	require.Equal(t, server.URL+"/cn/?v=abc123", results[0].Homepage)
 	require.Equal(t, server.URL+"/images/cover.jpg", results[0].ThumbURL)
+}
+
+func TestSearchMovieResolvesCurrentRelativeSlug(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/cn/vl_searchbyid.php", r.URL.Path)
+		_, _ = fmt.Fprint(w, `<div class="video"><a href="./javme5adzi.html" title="SSIS-033 Current title"><div class="id">SSIS-033</div><img src="https://pics.dmm.co.jp/ssis033ps.jpg"></a></div>`)
+	}))
+	defer server.Close()
+	results, err := newForTest(server.URL, server.Client()).SearchMovie("SSIS-033")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "javme5adzi", results[0].ID)
+	require.Equal(t, "SSIS-033", results[0].Number)
+	require.Equal(t, "Current title", results[0].Title)
+	require.Equal(t, server.URL+"/cn/javme5adzi.html", results[0].Homepage)
+}
+
+func TestGetMovieInfoByIDUsesOpaqueDetailSlug(t *testing.T) {
+	var requested string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = r.URL.Path
+		_, _ = fmt.Fprint(w, detailHTML)
+	}))
+	defer server.Close()
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByID("javme5adzi")
+	require.NoError(t, err)
+	require.Equal(t, "/cn/javme5adzi.html", requested)
+	require.Equal(t, "javme5adzi", info.ID)
 }
 
 func TestGetMovieInfoByURLMapsMetadata(t *testing.T) {
@@ -64,7 +128,10 @@ func TestGetMovieInfoByURLMapsMetadata(t *testing.T) {
 	require.Equal(t, "Director One", info.Director)
 	require.Equal(t, []string{"Actor One", "Actor Two"}, []string(info.Actors))
 	require.Equal(t, []string{"Drama", "Romance"}, []string(info.Genres))
-	require.Equal(t, server.URL+"/images/cover.jpg", info.CoverURL)
+	require.Equal(t, "https://pics.dmm.co.jp/mono/movie/adult/ssis033/ssis033pl.jpg", info.CoverURL)
+	require.Equal(t, "https://pics.dmm.co.jp/mono/movie/adult/ssis033/ssis033pl.jpg", info.BigCoverURL)
+	require.Equal(t, "https://pics.dmm.co.jp/mono/movie/adult/ssis033/ssis033ps.jpg", info.ThumbURL)
+	require.Equal(t, []string{"https://pics.dmm.co.jp/digital/video/ssis00033/ssis00033jp-1.jpg"}, []string(info.PreviewImages))
 	require.Equal(t, 7.8, info.Score)
 	require.Equal(t, 120, info.Runtime)
 	require.Equal(t, "2024-05-16", time.Time(info.ReleaseDate).Format("2006-01-02"))
@@ -86,20 +153,23 @@ func TestGetMovieInfoByIDSearchesByCatalogNumber(t *testing.T) {
 func TestParseMovieIDRejectsUnexpectedURL(t *testing.T) {
 	p := New()
 	for _, raw := range []string{
-		"http://www.javlibrary.com/cn/?v=abc123",
-		"https://www.javlibrary.com:444/cn/?v=abc123",
-		"https://user@www.javlibrary.com/cn/?v=abc123",
-		"https://www.javlibrary.com.evil.invalid/cn/?v=abc123",
-		"https://www.javlibrary.com/cn/vl_searchbyid.php?keyword=ABC-123",
-		"https://www.javlibrary.com/cn/?v=../evil",
+		"http://www.f101w.com/cn/?v=abc123",
+		"https://www.f101w.com:444/cn/?v=abc123",
+		"https://user@www.f101w.com/cn/?v=abc123",
+		"https://www.f101w.com.evil.invalid/cn/?v=abc123",
+		"https://www.f101w.com/cn/vl_searchbyid.php?keyword=ABC-123",
+		"https://www.f101w.com/cn/?v=../evil",
 		"/cn/?v=abc123",
 	} {
 		_, err := p.ParseMovieIDFromURL(raw)
 		require.Error(t, err, raw)
 	}
-	id, err := p.ParseMovieIDFromURL("https://www.javlibrary.com/cn/?v=abc123")
+	id, err := p.ParseMovieIDFromURL("https://www.f101w.com/cn/?v=abc123")
 	require.NoError(t, err)
 	require.Equal(t, "abc123", id)
+	id, err = p.ParseMovieIDFromURL("https://www.f101w.com/cn/javme5adzi.html")
+	require.NoError(t, err)
+	require.Equal(t, "javme5adzi", id)
 }
 
 func TestFetchRejectsCrossOriginRedirect(t *testing.T) {
@@ -132,6 +202,7 @@ func TestRegistrationAndSettings(t *testing.T) {
 	}
 	require.True(t, found)
 	p := New()
+	require.Equal(t, "https://www.f101w.com", p.URL().String())
 	require.Error(t, p.SetProxy("invalid"))
 	require.NoError(t, p.SetProxy(""))
 	p.SetRequestTimeout(3 * time.Second)
@@ -140,9 +211,11 @@ func TestRegistrationAndSettings(t *testing.T) {
 
 func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 	var requests int
+	var cookies []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		if strings.Contains(r.UserAgent(), "Chrome/133.0.0.0") {
+		cookies = append(cookies, r.Header.Get("Cookie"))
+		if strings.Contains(r.UserAgent(), "Chrome/131.0.0.0") {
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, "fingerprint accepted")
 			return
@@ -152,11 +225,13 @@ func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 	defer server.Close()
 
 	p := newForTest(server.URL, server.Client())
+	require.NoError(t, p.SetConfig(testConfig{"cookies": "cf_clearance=test-token"}))
 	resp, err := p.Fetch(server.URL + "/cn/vl_searchbyid.php?keyword=ABC-123")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Equal(t, "fingerprint accepted", string(body))
-	require.Equal(t, 2, requests, "should start with Chrome 131 and rotate to Chrome 133 after a 403")
+	require.Equal(t, 2, requests, "should try the current Chrome profile before rotating to Chrome 131")
+	require.Equal(t, []string{"cf_clearance=test-token", "cf_clearance=test-token"}, cookies)
 }

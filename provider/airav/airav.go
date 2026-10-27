@@ -119,11 +119,22 @@ func (p *Airav) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if !p.validOrigin(u) {
 		return "", fmt.Errorf("airav: unexpected detail origin %q", rawURL)
 	}
-	if u.RawQuery != "" || u.Fragment != "" {
-		return "", fmt.Errorf("airav: detail URL must not contain query or fragment")
+	if u.Fragment != "" {
+		return "", fmt.Errorf("airav: detail URL must not contain a fragment")
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) != 2 || parts[0] != "video" || parts[1] == "" || parts[1] == "." || parts[1] == ".." {
+	if len(parts) == 1 && parts[0] == "video" {
+		query := u.Query()
+		if len(query) != 1 || len(query["hid"]) != 1 {
+			return "", fmt.Errorf("airav: query detail URL requires only one hid parameter")
+		}
+		id := strings.TrimSpace(query.Get("hid"))
+		if id == "" || strings.ContainsAny(id, `/\\?#`) || id == "." || id == ".." {
+			return "", fmt.Errorf("airav: invalid detail ID %q", id)
+		}
+		return id, nil
+	}
+	if u.RawQuery != "" || len(parts) != 2 || parts[0] != "video" || parts[1] == "" || parts[1] == "." || parts[1] == ".." {
 		return "", fmt.Errorf("airav: invalid detail path %q", u.Path)
 	}
 	return parts[1], nil

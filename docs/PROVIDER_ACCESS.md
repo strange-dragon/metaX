@@ -43,6 +43,10 @@ export MT_MOVIE_PROVIDER_FREEJAVBT__COOKIES='session=...'
 export MT_MOVIE_PROVIDER_FALENO__COOKIES='...'
 export MT_MOVIE_PROVIDER_MGSTAGE__COOKIES='...'
 export MT_MOVIE_PROVIDER_FC2PPVDB__COOKIES='...'
+export MT_MOVIE_PROVIDER_JAVLIBRARY__COOKIES='cf_clearance=...; other_cookie=...'
+
+# Optional: use a current JavLibrary language-site origin, not the javlib.com address portal
+export MT_MOVIE_PROVIDER_JAVLIBRARY__BASE_URL='https://www.f101w.com'
 
 # Per-provider proxy (HTTP(S) or SOCKS5, depending on the provider client)
 export MT_MOVIE_PROVIDER_FALENO__PROXY='http://127.0.0.1:8080'
@@ -62,6 +66,21 @@ Coverage details:
 - `JavDB` (native Go provider): sends the configured header on search, detail,
   and fetch requests. This is the supported workaround for the anonymous FC2
   detail page redirecting to the login page.
+- `JavLibrary` (native Go provider): accepts `BASE_URL` to select an HTTPS site
+  origin and `COOKIES`/`COOKIE` for its browser-fingerprint requests. The
+  `javlib.com` domain is an address portal and should not be configured as the
+  scraping origin. Browser verification on 2026-10-27 confirmed that the
+  `www.f101w.com` search and current slug detail routes are accessible after
+  the browser's JavaScript challenge completes. Go requests still receive the
+  Cloudflare `Just a moment...` challenge, even with the newest Chrome 146 TLS
+  profile available in pinned tls-client v1.14.0. Ordinary headers alone did
+  not remove it; the provider now falls back to an in-container Chromium
+  instance to execute the challenge and retain its clearance cookies. The
+  Docker runtime image includes Chromium; `METAX_CHROMIUM_BIN` can override its
+  path. This fallback compiles and is covered by the provider's ordinary parser
+  tests, but live headless-Chromium challenge success still needs deployment
+  verification. `COOKIES`/`COOKIE` remains an optional fallback for restricted
+  environments.
 - `Freejavbt` (native Go provider): sends the configured header on all requests.
   The site currently serves a login page with HTTP 503 to anonymous clients.
 - SDK scraper providers such as `FALENO`, `MGSTAGE`, and `FC2PPVDB`: patch
@@ -95,6 +114,20 @@ are point-in-time network evidence, not parser tests.
 | R18Dev | Out of scope (2026-10-21) | Offline PostgreSQL mirror | r18.dev publishes a PostgreSQL dump, not a per-title HTTP API; metaX will not add an optional PostgreSQL/import contract for a source absent from the default routes. |
 | Getchu fuzzy search | `www.getchu.com/php/nsearch.phtml` returned HTTP 403 with `Content-Length: 0` and `Vary: User-Agent` | Amane sends age cookies and uses the first `soft.phtml` result | Patch `0017` adds exact numeric/title identity matching over the existing `dl.getchu.com` detail provider. Deterministic synthetic tests pass; live catalog HTML remains unverified. |
 | Wikipedia/Wikidata actor biography | Implemented as `WikipediaActor` | Wikidata entity filtering + Wikipedia extraction | Exact label/alias identity, AV occupation/description filtering, and deterministic API fixtures are covered locally; live-site verification remains pending. |
+
+### Chromium fallback applicability (2026-10-27)
+
+A browser-session spot check distinguishes JavLibrary's executable JavaScript
+challenge from other observed blocks. The browser could complete JavLibrary's
+challenge and load its search/detail pages; the Go TLS client received the
+Cloudflare challenge HTML. By contrast, Chromium itself received immediate
+HTTP 403 responses for FC2PPVDB (`Cloudflare Access denied`), MGStage
+(`ERROR: The request could not be satisfied`), FALENO search/detail paths, the
+Getchu legacy search (blank 403), and Prestige. Those responses indicate an IP,
+region, or hosting-provider rule rather than a browser-rendering requirement;
+adding Chromium is not expected to fix them. This is a point-in-time check from
+the connected browser egress, not a guarantee for Koyeb's region. No other
+provider currently has evidence that it requires Chromium specifically.
 
 ## Request-scoped cookies from the Jellyfin plugin
 

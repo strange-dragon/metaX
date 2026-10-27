@@ -25,6 +25,15 @@ upstream sites. They are not used to protect the metaX API.
 4. If you need persistent metadata, add a Koyeb volume mounted at `/data`, or
    configure an external PostgreSQL database with `--dsn`.
 
+Koyeb builds from this repository's `Dockerfile`; the runtime image includes
+Chromium for JavLibrary's on-demand Cloudflare challenge fallback. Chromium is
+only started when the normal Go request is challenged, but it needs additional
+memory while that request is being handled. Existing Koyeb services must rebuild
+and redeploy an image containing these changes; editing this working tree alone
+does not update an already-running service. The default JavLibrary origin is
+`https://www.f101w.com`; override it in Koyeb's environment settings with
+`MT_MOVIE_PROVIDER_JAVLIBRARY__BASE_URL` only if you need another HTTPS mirror.
+
 After deployment, open:
 
 ```text

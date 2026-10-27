@@ -39,7 +39,7 @@ const (
 
 var (
 	ErrMovieNotFound = errors.New("jav321: movie not found")
-	movieNumberRE    = regexp.MustCompile(`(?i)^(?:[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*|FC2[-_]?PPV[-_]?[0-9]+)$`)
+	movieNumberRE    = regexp.MustCompile(`(?i)^(?:[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*|[A-Z]{2,12}[0-9]{2,12}|FC2[-_]?PPV[-_]?[0-9]+)$`)
 	numberInTitleRE  = regexp.MustCompile(`(?i)(FC2[-_]?PPV[-_]?[0-9]+|[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*)`)
 )
 
@@ -279,18 +279,6 @@ func (p *Jav321) getHTML(rawURL string) (*goquery.Document, error) {
 	return doc, nil
 }
 
-func (p *Jav321) detailURL(number string) (string, error) {
-	number = p.NormalizeMovieID(number)
-	if !movieNumberRE.MatchString(number) {
-		return "", fmt.Errorf("jav321: invalid movie number %q", number)
-	}
-	u := *p.baseURL
-	u.Path = path.Join(u.Path, "video", number)
-	u.RawQuery = ""
-	u.Fragment = ""
-	return u.String(), nil
-}
-
 func (p *Jav321) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -299,11 +287,7 @@ func (p *Jav321) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	if u, err := url.Parse(id); err == nil && u.IsAbs() {
 		return p.GetMovieInfoByURL(id)
 	}
-	rawURL, err := p.detailURL(id)
-	if err != nil {
-		return nil, err
-	}
-	return p.GetMovieInfoByURL(rawURL)
+	return p.searchDetail(id)
 }
 
 func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
@@ -321,10 +305,16 @@ func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		return nil, ErrMovieNotFound
 	}
 	number := id
+	if match := numberInTitleRE.FindString(cleanText(doc.Find("div.panel-heading h3 small").First().Text())); match != "" {
+		number = strings.ToUpper(match)
+	}
 	if match := numberInTitleRE.FindString(title); match != "" {
 		number = strings.ToUpper(match)
 	}
 	displayTitle := removeLeadingNumber(title, number)
+	if displayTitle == title && number != "" {
+		displayTitle = cleanText(regexp.MustCompile(`(?i)`+regexp.QuoteMeta(number)).ReplaceAllString(title, " "))
+	}
 	if displayTitle == "" {
 		displayTitle = title
 	}
@@ -335,7 +325,41 @@ func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	releaseText := collectFollowingText(doc, "配信開始日")
 	runtimeText := collectFollowingText(doc, "収録時間")
 	plot := cleanText(doc.Find("div.panel-body div.row div.col-md-12").First().Text())
-	cover := resolveURL(p.baseURL, attrOrFirst(doc.Find("div.panel-body img").First(), "data-src", "data-original", "src"))
+	images := doc.Find("img")
+	var cover, thumb string
+	images.Each(func(_ int, image *goquery.Selection) {
+		raw := attrOrFirst(image, "data-src", "data-original", "src")
+		resolved := resolveImageURL(p.baseURL, raw)
+		if resolved == "" {
+			return
+		}
+		filename := strings.ToLower(path.Base(raw))
+		if !strings.HasPrefix(filename, strings.ToLower(id)) {
+			return
+		}
+		switch {
+		case strings.Contains(filename, "pl.jpg"):
+			cover = resolved
+		case strings.Contains(filename, "ps.jpg") && thumb == "":
+			thumb = resolved
+		case strings.Contains(filename, "jp-"):
+			// Preview galleries are exposed separately from the package cover.
+		}
+	})
+	if cover == "" {
+		cover = resolveImageURL(p.baseURL, attrOrFirst(images.First(), "data-src", "data-original", "src"))
+	}
+	if thumb == "" {
+		thumb = cover
+	}
+	var previews []string
+	images.Each(func(_ int, image *goquery.Selection) {
+		raw := attrOrFirst(image, "data-src", "data-original", "src")
+		filename := strings.ToLower(path.Base(raw))
+		if strings.HasPrefix(filename, strings.ToLower(id)) && strings.Contains(filename, "jp-") {
+			previews = appendUnique(previews, resolveImageURL(p.baseURL, raw))
+		}
+	})
 	if cover == "" {
 		cover = resolveURL(p.baseURL, attrValue(doc.Find("meta[property='og:image']").First(), "content"))
 	}
@@ -354,8 +378,8 @@ func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		Actors:        pq.StringArray(actors),
 		Genres:        pq.StringArray(genres),
 		CoverURL:      cover,
-		ThumbURL:      cover,
-		PreviewImages: pq.StringArray{},
+		ThumbURL:      thumb,
+		PreviewImages: pq.StringArray(previews),
 	}
 	if strings.TrimSpace(releaseText) != "" {
 		info.ReleaseDate = parser.ParseDate(releaseText)
@@ -374,7 +398,7 @@ func (p *Jav321) SearchMovie(keyword string) ([]*model.MovieSearchResult, error)
 	if !movieNumberRE.MatchString(keyword) {
 		return nil, nil
 	}
-	info, err := p.GetMovieInfoByID(keyword)
+	info, err := p.searchDetail(keyword)
 	if errors.Is(err, ErrMovieNotFound) {
 		return nil, nil
 	}
@@ -382,6 +406,56 @@ func (p *Jav321) SearchMovie(keyword string) ([]*model.MovieSearchResult, error)
 		return nil, err
 	}
 	return []*model.MovieSearchResult{info.ToSearchResult()}, nil
+}
+
+// searchDetail uses Jav321's own POST search form. The route is a compact
+// site-specific slug (for example SSIS-033 -> /video/ssis00033), not the
+// catalog number, so constructing /video/{input} directly misses valid works.
+func (p *Jav321) searchDetail(keyword string) (*model.MovieInfo, error) {
+	u := *p.baseURL
+	u.Path = path.Join(u.Path, "search")
+	form := url.Values{"sn": {keyword}}
+	req, err := http.NewRequest(http.MethodPost, u.String(), strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("jav321: create search request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+	req.Header.Set("Referer", p.baseURL.String()+"/")
+	resp, err := p.httpClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("jav321: search %q: %w", keyword, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("jav321: search %q: unexpected HTTP status %s", keyword, resp.Status)
+	}
+	finalURL := resp.Request.URL.String()
+	_, err = p.ParseMovieIDFromURL(finalURL)
+	if err != nil {
+		return nil, ErrMovieNotFound
+	}
+	info, err := p.GetMovieInfoByURL(finalURL)
+	if err != nil || !sameCatalogNumber(keyword, info.Number) {
+		return nil, ErrMovieNotFound
+	}
+	return info, nil
+}
+
+func sameCatalogNumber(a, b string) bool {
+	compact := func(s string) string {
+		return strings.ToUpper(strings.NewReplacer("-", "", "_", "").Replace(strings.TrimSpace(s)))
+	}
+	return compact(a) == compact(b)
+}
+
+func resolveImageURL(base *url.URL, raw string) string {
+	resolved := resolveURL(base, raw)
+	resolved = strings.Replace(resolved, "pics.dmm.co.jp//", "pics.dmm.co.jp/", 1)
+	if strings.HasPrefix(strings.ToLower(resolved), "http://pics.dmm.co.jp/") {
+		return "https://" + strings.TrimPrefix(resolved, "http://")
+	}
+	return resolved
 }
 
 func removeLeadingNumber(title, number string) string {
