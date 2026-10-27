@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -239,7 +241,30 @@ func TestFetchRetries403WithBrowserFingerprint(t *testing.T) {
 func TestIsCloudflareChallengeRecognizesHTMLChallengeTitle(t *testing.T) {
 	err := fmt.Errorf(`browser fingerprint attempts exhausted: Chrome 146=403 body="<!DOCTYPE html><title>Just a moment...</title>"`)
 	require.True(t, isCloudflareChallenge(err))
+	require.True(t, isCloudflareChallenge(fmt.Errorf("页面标题：请稍候…")))
 	require.True(t, isCloudflareChallenge(fmt.Errorf("Cloudflare response contains cf-chl-widget")))
 	require.False(t, isCloudflareChallenge(fmt.Errorf("CloudFront returned 403 Forbidden")))
 	require.False(t, isCloudflareChallenge(nil))
+}
+
+func TestChromiumFallbackLoadsLocalFixtureWhenAvailable(t *testing.T) {
+	if os.Getenv("METAX_CHROMIUM_BIN") == "" {
+		if _, err := exec.LookPath("chromium"); err != nil {
+			t.Skip("Chromium is not installed; set METAX_CHROMIUM_BIN to run this integration test")
+		}
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = fmt.Fprint(w, `<!doctype html><html><head><title>local fixture</title></head><body>browser fallback fixture</body></html>`)
+	}))
+	defer server.Close()
+	p := newForTest(server.URL, server.Client())
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/fixture", nil)
+	require.NoError(t, err)
+	resp, err := p.fetchWithChromium(request)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), "browser fallback fixture")
 }

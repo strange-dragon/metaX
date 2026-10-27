@@ -25,8 +25,12 @@ import (
 	fhttpcookiejar "github.com/bogdanfinn/fhttp/cookiejar"
 	tlsclient "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
+	"github.com/chromedp/cdproto/browser"
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/lib/pq"
 	"golang.org/x/net/publicsuffix"
@@ -317,7 +321,7 @@ func isCloudflareChallenge(err error) bool {
 		return false
 	}
 	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "just a moment") || strings.Contains(text, "cf-chl-")
+	return strings.Contains(text, "just a moment") || strings.Contains(text, "请稍候") || strings.Contains(text, "cf-chl-")
 }
 
 // fetchWithChromium executes JavLibrary's JavaScript challenge in a local
@@ -337,9 +341,7 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 	if err := p.startBrowserLocked(proxyURL); err != nil {
 		return nil, err
 	}
-	tabCtx, tabCancel := chromedp.NewContext(p.browserCtx)
-	defer tabCancel()
-	ctx, cancel := context.WithTimeout(tabCtx, timeout)
+	ctx, cancel := context.WithTimeout(p.browserCtx, timeout)
 	defer cancel()
 	var (
 		finalURL string
@@ -348,7 +350,7 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 		statusMu sync.Mutex
 		status   int
 	)
-	chromedp.ListenTarget(tabCtx, func(event any) {
+	chromedp.ListenTarget(p.browserCtx, func(event any) {
 		switch e := event.(type) {
 		case *network.EventResponseReceived:
 			if e.Type == network.ResourceTypeDocument {
@@ -362,11 +364,11 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 				if paused.ResourceType == network.ResourceTypeDocument {
 					target, err := url.Parse(paused.Request.URL)
 					if err != nil || !p.validOrigin(target) && !isCloudflareChallengeOrigin(target) {
-						_ = fetch.FailRequest(paused.RequestID, network.ErrorReasonBlockedByClient).Do(tabCtx)
+						_ = chromedp.Run(p.browserCtx, fetch.FailRequest(paused.RequestID, network.ErrorReasonBlockedByClient))
 						return
 					}
 				}
-				_ = fetch.ContinueRequest(paused.RequestID).Do(tabCtx)
+				_ = chromedp.Run(p.browserCtx, fetch.ContinueRequest(paused.RequestID))
 			}()
 		}
 	})
@@ -377,6 +379,21 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 		return nil
 	}
 	if err := runStage("enable network", network.Enable()); err != nil {
+		return nil, err
+	}
+	if err := runStage("prepare Chromium browser identity", chromedp.ActionFunc(func(ctx context.Context) error {
+		c := chromedp.FromContext(ctx)
+		_, _, _, userAgent, _, err := browser.GetVersion().Do(cdp.WithExecutor(ctx, c.Browser))
+		if err != nil {
+			return err
+		}
+		userAgent = strings.Replace(userAgent, "HeadlessChrome/", "Chrome/", 1)
+		if err := emulation.SetUserAgentOverride(userAgent).Do(ctx); err != nil {
+			return err
+		}
+		_, err = page.AddScriptToEvaluateOnNewDocument(`Object.defineProperty(Navigator.prototype, "webdriver", {get: () => undefined});`).Do(ctx)
+		return err
+	})); err != nil {
 		return nil, err
 	}
 	if err := runStage("enable same-origin navigation guard", fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}})); err != nil {
@@ -394,7 +411,7 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 	if err := runStage("navigate", chromedp.Navigate(original.URL.String())); err != nil {
 		return nil, err
 	}
-	if err := runStage("wait for challenge", chromedp.PollFunction(`() => document.readyState === "complete" && !/just a moment|checking your browser/i.test(document.title)`, new(bool), chromedp.WithPollingTimeout(timeout))); err != nil {
+	if err := runStage("wait for challenge", chromedp.PollFunction(`() => document.readyState === "complete" && !/just a moment|checking your browser|请稍候/i.test(document.title)`, new(bool), chromedp.WithPollingTimeout(timeout))); err != nil {
 		return nil, err
 	}
 	if err := runStage("capture page", chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &struct {
@@ -408,14 +425,18 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 	if err != nil || !p.validOrigin(parsedFinal) {
 		return nil, fmt.Errorf("Chromium ended at unexpected URL %q", finalURL)
 	}
-	if strings.Contains(strings.ToLower(title), "just a moment") || strings.TrimSpace(html) == "" {
+	if isCloudflareChallenge(fmt.Errorf("%s", title)) || strings.TrimSpace(html) == "" {
 		return nil, fmt.Errorf("Chromium did not clear the Cloudflare challenge (title %q)", title)
 	}
 	statusMu.Lock()
 	statusCode := status
 	statusMu.Unlock()
 	if statusCode != http.StatusOK {
-		return nil, fmt.Errorf("Chromium page returned HTTP status %d", statusCode)
+		preview := strings.Join(strings.Fields(html), " ")
+		if len(preview) > 1200 {
+			preview = preview[:1200] + "…"
+		}
+		return nil, fmt.Errorf("Chromium page returned HTTP status %d (title %q, body %q)", statusCode, title, preview)
 	}
 	return &http.Response{
 		Status: "200 OK", StatusCode: http.StatusOK,
@@ -464,15 +485,20 @@ func (p *JavLibrary) startBrowserLocked(proxyURL string) error {
 		return errors.New("Chromium executable not found (set METAX_CHROMIUM_BIN or install chromium)")
 	}
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
-	opts = append(opts, chromedp.ExecPath(executable))
+	opts = append(opts,
+		chromedp.ExecPath(executable),
+		chromedp.Flag("enable-automation", false),
+		chromedp.Flag("disable-blink-features", "AutomationControlled"),
+	)
 	if proxyURL != "" {
 		opts = append(opts, chromedp.ProxyServer(proxyURL))
 	}
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
-	ctx, cancel := context.WithTimeout(browserCtx, 15*time.Second)
-	err := chromedp.Run(ctx)
-	cancel()
+	// Do not use a temporary timeout context for the first Run. chromedp binds
+	// the allocated browser process to that context, so cancelling it after
+	// startup would terminate Chromium and cancel every later tab operation.
+	err := chromedp.Run(browserCtx)
 	if err != nil {
 		browserCancel()
 		allocCancel()
