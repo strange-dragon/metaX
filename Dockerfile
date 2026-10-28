@@ -49,6 +49,10 @@ LABEL org.opencontainers.image.title="metaX backend" \
 
 ENV GIN_MODE=release
 ENV METAX_CHROMIUM_BIN=/usr/bin/chromium
+# The runtime is a container: Chromium cannot use its sandbox here (no
+# unprivileged user namespaces) and /dev/shm is only 64 MiB, so the fallback
+# browser has to be launched without either. See internal/antibot.
+ENV METAX_CHROMIUM_NO_SANDBOX=1
 
 USER metax
 WORKDIR /data

@@ -97,11 +97,16 @@ func main() {
 		rawURL    = flag.String("url", "", "fetch a single URL through the shared antibot layer instead of probing providers")
 		noBrowser = flag.Bool("no-browser", false, "disable the Chromium fallback for -url")
 		conc      = flag.Int("concurrency", 4, "how many providers to probe at once")
+		egress    = flag.Bool("egress", false, "print the public egress address, ASN and country, then exit")
 	)
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+
+	if *egress {
+		os.Exit(runEgressCheck(ctx))
+	}
 
 	if *rawURL != "" {
 		os.Exit(runURLCheck(*rawURL, *timeout, *noBrowser))
@@ -245,6 +250,36 @@ func probe(ctx context.Context, factory mt.MovieFactory, name, override string, 
 
 // runURLCheck reports how the shared fetch layer behaves for one URL: which
 // strategy answered, the status code, the document title and the byte count.
+// runEgressCheck reports the public address this process scrapes from. Bot
+// management and geo-blocking key off the ASN and the country, so this is the
+// first thing to check when providers fail on one host but pass on another.
+func runEgressCheck(ctx context.Context) int {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	proxy := os.Getenv("METAX_PROVIDER_PROXY")
+	info, err := antibot.DescribeEgress(ctx, proxy)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "egress lookup failed: %v\n", err)
+		return 1
+	}
+	fmt.Printf("egress  : %s\n", info)
+	if info.Country != "" {
+		fmt.Printf("country : %s\n", info.Country)
+	}
+	if info.Cloud() {
+		fmt.Println("network : cloud/hosting ASN — Cloudflare scores these as high risk,")
+		fmt.Println("          so managed challenges and 1020 blocks are expected here")
+	} else {
+		fmt.Println("network : residential or unclassified — bot management is usually lenient")
+	}
+	if proxy != "" {
+		fmt.Printf("proxy   : %s\n", antibot.RedactProxy(proxy))
+	} else {
+		fmt.Println("proxy   : none (direct connection)")
+	}
+	return 0
+}
+
 func runURLCheck(raw string, timeout time.Duration, disableBrowser bool) int {
 	if timeout <= 0 {
 		timeout = 30 * time.Second

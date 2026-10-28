@@ -254,3 +254,64 @@ provider never accepts, so it says nothing about the provider. Of the failures
 most are the proxy-only hosts above, plus wrong sample numbers on the amateur
 labels (C0930/H0930/H4610/Gcolle/Pcolaco/PACOPACOMAMA/MURAMURA return 404 for
 the shared sample).
+
+## Container and cloud deployment (Koyeb, Cloud Run, Kubernetes)
+
+Two things break a containerised deployment that work fine on a laptop.
+
+**Chromium cannot use its sandbox.** The default seccomp profile denies
+unprivileged user namespaces and `/dev/shm` is capped at 64 MiB, so the fallback
+browser dies with `No usable sandbox!` or a SIGBUS renderer. `internal/antibot`
+detects a container (`/.dockerenv`, `/proc/1/cgroup`, `KUBERNETES_SERVICE_HOST`,
+`KOYEB_APP_NAME`) and adds `--no-sandbox --disable-dev-shm-usage --disable-gpu`.
+The shipped `Dockerfile` also sets `METAX_CHROMIUM_NO_SANDBOX=1` because Koyeb
+runs on microVMs where none of those markers are reliable. Dropping the sandbox
+is acceptable: the container is the isolation boundary.
+
+**Resources.** A 512 MB instance is the practical floor for one Chromium plus the
+server; 256 MB will be OOM-killed mid-challenge. Expect 200-400 MB RSS right
+after a challenge clears.
+
+### Which cloud region fixes what
+
+Changing region only helps the hard geo blocks, and only if the region matches
+the site's allowed country. It does **not** help Cloudflare, which scores the
+ASN rather than the country, and datacenter ranges score worse than residential
+ones. Verified egress pool for Koyeb `was` (Washington D.C.) on 2026-10-28:
+
+```
+dig +short outbound-ips-region-was.infra.prod.koyeb.com   # 17 addresses
+135.148.55.84    AS16276  OVH SAS        Reston, VA
+15.204.161.117   AS16276  OVH SAS        Reston, VA
+64.34.81.129     AS396356 Latitude.sh    Ashburn, VA
+67.213.115.39    AS396356 Latitude.sh    Ashburn, VA
+```
+
+Seventeen shared addresses for every customer in that region, all on hosting
+ASNs. `fc2ppvdb` (error 1020) and `iqqr5` (`urlblock`) are ASN/IP rules, so this
+is exactly the pool they reject; OVH in particular is heavily challenged. The
+`socks5`/HTTP proxy is still the only answer for those.
+
+### Environment variables for a container deployment
+
+```
+METAX_PROVIDER_PROXY=socks5://user:pass@host:1080   # applied to every provider
+METAX_CHROMIUM_NO_SANDBOX=1                          # set by the Dockerfile
+METAX_BROWSER_LANG=ja-JP                             # default already
+METAX_ANTIBOT_DEBUG=1                                # log which strategy ran
+```
+
+`engine.init` applies `METAX_PROVIDER_PROXY` to every provider that implements
+`mt.ProxySetter`, unless that provider already has an explicit `proxy` key in its
+database config (the explicit value wins). Before this, the variable was only
+read by `metax-livecheck`, so setting it on a deployed server silently did
+nothing.
+
+Check where the container actually exits from before blaming a parser:
+
+```
+metax-livecheck -egress
+# egress  : 135.148.55.84 (AS16276 OVH SAS, Reston, VA, US)
+# network : cloud/hosting ASN - challenges and 1020 blocks are expected here
+```
+

@@ -862,6 +862,21 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 	if language := BrowserLanguage(); language != "" {
 		execOpts = append(execOpts, chromedp.Flag("lang", language))
 	}
+	// Containers (Koyeb, Cloud Run, Kubernetes) do not grant Chromium what its
+	// sandbox needs: unprivileged user namespaces are blocked by the default
+	// seccomp profile and /dev/shm is capped at 64 MiB. Without these flags the
+	// browser dies at startup with "No usable sandbox!" or the renderer crashes
+	// with SIGBUS, which surfaces as an empty fetch and a failed provider.
+	// Dropping the sandbox is acceptable here because the container itself is
+	// the isolation boundary.
+	if inContainer() {
+		execOpts = append(execOpts,
+			chromedp.Flag("no-sandbox", true),
+			chromedp.Flag("disable-dev-shm-usage", true),
+			chromedp.Flag("disable-gpu", true),
+		)
+		debugf("container detected: launching Chromium with --no-sandbox --disable-dev-shm-usage")
+	}
 	debugf("launching %q (headed=%v, ua=%q)", executable, headedRequested(), browserUserAgent(executable))
 	if !headedRequested() {
 		// "new" is the modern headless mode: it renders like a real browser,
@@ -883,6 +898,33 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 		return execOpts, stop, nil
 	}
 	return execOpts, func() {}, nil
+}
+
+// inContainer reports whether the process runs inside a container runtime.
+// The check is deliberately cheap and tolerant: a false negative only means
+// Chromium is launched with its sandbox, which is the safer default.
+func inContainer() bool {
+	if os.Getenv("METAX_CHROMIUM_NO_SANDBOX") == "1" {
+		return true
+	}
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" || os.Getenv("KOYEB_APP_NAME") != "" {
+		return true
+	}
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	if _, err := os.Stat("/run/.containerenv"); err == nil {
+		return true
+	}
+	if data, err := os.ReadFile("/proc/1/cgroup"); err == nil {
+		text := string(data)
+		for _, marker := range []string{"docker", "kubepods", "containerd", "lxc", "gke", "koyeb"} {
+			if strings.Contains(text, marker) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // headedRequested reports whether the operator explicitly asked for a visible

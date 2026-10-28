@@ -3,6 +3,7 @@ package engine
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/strange-dragon/metaX/common/fetch"
 	mt "github.com/strange-dragon/metaX/provider"
@@ -33,8 +34,13 @@ func (e *Engine) initActorProviders() {
 			s.SetRequestTimeout(e.timeout /* global timeout */)
 		}
 
+		explicitProxy := false
 		if config, hasConfig := e.actorProviderConfigs.Get(name); hasConfig {
+			explicitProxy = config.Has("proxy")
 			e.applyProviderConfig("actor", provider, config)
+		}
+		if !explicitProxy {
+			e.applyEnvProxy("actor", provider)
 		}
 
 		if provider.Priority() <= 0 {
@@ -61,8 +67,13 @@ func (e *Engine) initMovieProviders() {
 			s.SetRequestTimeout(e.timeout /* global timeout */)
 		}
 
+		explicitProxy := false
 		if config, hasConfig := e.movieProviderConfigs.Get(name); hasConfig {
+			explicitProxy = config.Has("proxy")
 			e.applyProviderConfig("movie", provider, config)
+		}
+		if !explicitProxy {
+			e.applyEnvProxy("movie", provider)
 		}
 
 		if provider.Priority() <= 0 {
@@ -78,6 +89,32 @@ func (e *Engine) initMovieProviders() {
 			append(e.movieHostProviders.
 				GetOrDefault(host, nil), provider))
 	}
+}
+
+// applyEnvProxy hands every provider the proxy named by METAX_PROVIDER_PROXY.
+//
+// Sites that geo-block or score datacenter ASNs need one, and a single-container
+// deployment (Koyeb, Cloud Run, a NAS) has no other convenient place to set it:
+// the per-provider proxy lives in the database config, which is awkward to edit
+// before the service is reachable. A provider that already has an explicit
+// "proxy" config keeps it, so the environment variable is only a default.
+//
+// Failures are logged, not fatal: a proxy that a particular provider's client
+// cannot parse should not take the whole server down.
+func (e *Engine) applyEnvProxy(providerType string, provider mt.Provider) {
+	raw := strings.TrimSpace(os.Getenv("METAX_PROVIDER_PROXY"))
+	if raw == "" {
+		return
+	}
+	setter, ok := provider.(mt.ProxySetter)
+	if !ok {
+		return
+	}
+	if err := setter.SetProxy(raw); err != nil {
+		e.logger.Printf("METAX_PROVIDER_PROXY rejected by %s provider %q: %v", providerType, provider.Name(), err)
+		return
+	}
+	e.logger.Printf("Applied METAX_PROVIDER_PROXY to %s provider %q: %s", providerType, provider.Name(), redactProxyForLog(raw))
 }
 
 func (e *Engine) applyProviderConfig(providerType string, provider mt.Provider, config mt.Config) {
