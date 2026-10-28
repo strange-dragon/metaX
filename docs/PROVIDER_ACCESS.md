@@ -280,16 +280,33 @@ things follow from it:
 - `startBrowserLocked` is bounded by `METAX_CHROMIUM_START_TIMEOUT` (default
   45s) and reports what Chromium printed, so a failed start is an error instead
   of a request that hangs until the gateway answers 504
-- providers implementing `mt.BrowserWarmer` are warmed at boot. `engine.init`
-  starts their browser in the background, so the first scrape finds it ready.
-  Disable with `METAX_WARMUP_BROWSER=0`; the log line to look for is
-  `Browser ready for JavLibrary after 52s`
+- providers implementing `mt.BrowserKeeper` have their browser **kept running**
+  for the life of the process. `engine.init` runs the supervisor in a goroutine;
+  it starts Chromium at boot and restarts it whenever the process disappears
+  (crash, OOM kill, proxy change), with a 1s→60s backoff. Requests never pay a
+  cold start, and a crash does not degrade the next scrape.
+- `mt.BrowserWarmer` is the older, one-shot variant and still supported for
+  providers that only want a warm-up. Disable either with
+  `METAX_WARMUP_BROWSER=0`.
+- `GET /v1/metax/browser` reports `running`, `uptime_ms`, `starts`, `restarts`
+  and `last_error` per provider. After a deployment this is the first thing to
+  check: `["running":true, "starts":1, "restarts":0]` is a healthy resident
+  browser. The boot log prints `Browser ready for JavLibrary after 52s (kept
+  running)`.
+
+The trade-off is memory: a resident browser holds its 200-400 MB even while
+idle. On a 512 MB instance that is most of the allowance, and the rest of the
+process may get OOM-killed instead. If that happens, either move to 1 GB or set
+`METAX_WARMUP_BROWSER=0` and accept a cold start per scrape.
 
 **The edge gateway has its own timeout.** Koyeb cuts a request at 100s and
-returns `504 error code: 504`. Any provider path must finish inside that, which
-is why one page fetch is budgeted at `max(2 x provider timeout, 45s)` and the
-TLS rotation stops at the first challenge instead of retrying four profiles that
-were all going to see the same interstitial.
+returns `504 error code: 504`. Any provider path must finish inside that. A
+javlibrary detail lookup spends *two* page budgets (search page, then article),
+which is why one page is capped at 40s (`METAX_JAVLIBRARY_BUDGET` overrides)
+rather than the `max(2 x provider timeout, 45s)` that produced 120s — longer
+than the gateway allows — and why the TLS rotation stops at the first challenge
+instead of retrying four profiles that were all going to see the same
+interstitial.
 
 ### Which cloud region fixes what
 

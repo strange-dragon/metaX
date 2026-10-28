@@ -37,6 +37,7 @@ func New(app *engine.Engine) *gin.Engine {
 		system.GET("/modules", getModules())
 		system.GET("/providers", getProviders(app))
 		system.GET("/metax/status", getMetaxStatus(app))
+		system.GET("/metax/browser", getMetaxBrowserStatus(app))
 	}
 
 	public := r.Group("/v1",

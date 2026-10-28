@@ -105,6 +105,32 @@ type BrowserWarmer interface {
 	WarmupBrowser(ctx context.Context) error
 }
 
+// BrowserKeeper is implemented by providers that want their browser kept
+// running for the whole process lifetime, not just warmed once. The method
+// blocks: the server runs it in a goroutine until the process exits, and the
+// implementation restarts the browser whenever it disappears.
+type BrowserKeeper interface {
+	KeepBrowser(ctx context.Context) error
+}
+
+// BrowserStatus is a snapshot of a provider's fallback browser, safe to expose
+// over HTTP: no proxy credentials, no page content.
+type BrowserStatus struct {
+	Running    bool          `json:"running"`
+	Supervised bool          `json:"supervised"`
+	Uptime     time.Duration `json:"-"`
+	Starts     int           `json:"starts"`
+	Restarts   int           `json:"restarts"`
+	LastStart  time.Duration `json:"-"`
+	LastError  string        `json:"last_error,omitempty"`
+}
+
+// BrowserReporter is implemented by providers that can describe their fallback
+// browser, for the boot log and the status endpoint.
+type BrowserReporter interface {
+	BrowserStatus() BrowserStatus
+}
+
 type Config interface {
 	Has(string) bool
 	GetString(string) (string, error)

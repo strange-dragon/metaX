@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -95,12 +96,16 @@ func (e *Engine) initMovieProviders() {
 	}
 }
 
-// warmBrowsers starts the fallback browser for providers that need one.
+// warmBrowsers starts the fallback browsers at boot and keeps them running.
 //
 // A provider behind a JavaScript challenge cannot answer its first request
 // until Chromium is running, and on a small cloud instance that cold start
-// takes longer than the whole request budget. Doing it at boot means the first
-// scrape finds a browser already waiting instead of timing out.
+// takes longer than the whole request budget. Starting it at boot means the
+// first scrape finds a browser already waiting instead of timing out.
+//
+// Providers that implement BrowserKeeper are not warmed once but supervised:
+// if the browser is killed later (memory pressure on a 512 MB instance), the
+// keeper restarts it in the background, so no request ever pays a cold start.
 func (e *Engine) warmBrowsers() {
 	if os.Getenv("METAX_WARMUP_BROWSER") == "0" {
 		return
@@ -112,6 +117,10 @@ func (e *Engine) warmBrowsers() {
 	providers := e.GetMovieProviders()
 	go func() {
 		for _, provider := range providers {
+			if keeper, ok := provider.(mt.BrowserKeeper); ok {
+				go e.keepBrowser(provider, keeper)
+				continue
+			}
 			warmer, ok := provider.(mt.BrowserWarmer)
 			if !ok {
 				continue
@@ -127,6 +136,32 @@ func (e *Engine) warmBrowsers() {
 			e.logger.Printf("Browser ready for %s after %s", provider.Name(), time.Since(start).Round(time.Second))
 		}
 	}()
+}
+
+// keepBrowser runs a provider's browser supervisor and reports when the
+// browser first becomes available, so the deployment log shows the state
+// without anyone having to call the status endpoint.
+func (e *Engine) keepBrowser(provider mt.Provider, keeper mt.BrowserKeeper) {
+	go func() {
+		// Wait for the supervisor's first start in the background; the keeper
+		// itself blocks for the life of the process.
+		if reporter, ok := provider.(mt.BrowserReporter); ok {
+			start := time.Now()
+			for i := 0; i < 180; i++ {
+				if reporter.BrowserStatus().Running {
+					e.logger.Printf("Browser ready for %s after %s (kept running)", provider.Name(), time.Since(start).Round(time.Second))
+					return
+				}
+				time.Sleep(time.Second)
+			}
+			e.logger.Printf("Browser for %s is not running after 3m: %s", provider.Name(), reporter.BrowserStatus().LastError)
+		}
+	}()
+	// The keeper lives as long as the process; there is nothing to cancel it
+	// with, so an error here is only worth a log line.
+	if err := keeper.KeepBrowser(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
+		e.logger.Printf("Browser keeper for %s stopped: %v", provider.Name(), err)
+	}
 }
 
 // applyEnvProxy hands every provider the proxy named by METAX_PROVIDER_PROXY.

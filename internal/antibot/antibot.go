@@ -103,6 +103,11 @@ type Fetcher struct {
 	// blocking on the fetcher lock or starting a second browser.
 	starting chan struct{}
 	startErr error
+	// Bookkeeping for BrowserStatus. Guarded by mu.
+	starts      int
+	restarts    int
+	lastStartMS int64
+	supervised  bool
 }
 
 type browserState struct {
@@ -111,6 +116,19 @@ type browserState struct {
 	alloc    context.CancelFunc
 	display  context.CancelFunc
 	proxyKey string
+	started  time.Time
+}
+
+// BrowserStatus is a snapshot of the fallback browser, safe to expose over
+// HTTP: it holds no proxy credentials and no page content.
+type BrowserStatus struct {
+	Running     bool   `json:"running"`
+	UptimeMS    int64  `json:"uptime_ms,omitempty"`
+	Starts      int    `json:"starts"`
+	Restarts    int    `json:"restarts"`
+	Supervised  bool   `json:"supervised"`
+	LastError   string `json:"last_error,omitempty"`
+	StartupTime int64  `json:"last_start_ms,omitempty"`
 }
 
 // New creates a Fetcher. The Chromium browser is not started until a
@@ -172,8 +190,11 @@ const browserWarmupTimeout = 90 * time.Second
 func (f *Fetcher) WarmBrowser(ctx context.Context) error {
 	f.mu.Lock()
 	if f.browser.ctx != nil {
-		f.mu.Unlock()
-		return nil
+		if f.browser.ctx.Err() == nil {
+			f.mu.Unlock()
+			return nil
+		}
+		f.stopBrowserLocked()
 	}
 	if waiter := f.starting; waiter != nil {
 		f.mu.Unlock()
@@ -815,13 +836,18 @@ func waitForDocumentClear(ctx context.Context, timeout time.Duration) (documentS
 func (f *Fetcher) startBrowserLocked(opts Options, startupTimeout time.Duration) error {
 	proxyKey := opts.ProxyURL
 	if f.browser.ctx != nil {
-		if f.browser.proxyKey == proxyKey {
+		if f.browser.proxyKey == proxyKey && f.browser.ctx.Err() == nil {
 			return nil
 		}
+		// A cancelled context means the browser process is gone — crashed or
+		// killed for memory. Keeping it would make every later request fail
+		// against a dead target, so it is replaced here.
 		f.stopBrowserLocked()
 	}
+	begin := time.Now()
 	execOpts, displayStop, err := BrowserLaunchOptions()
 	if err != nil {
+		f.startErr = err
 		return err
 	}
 	if proxyKey != "" {
@@ -851,7 +877,9 @@ func (f *Fetcher) startBrowserLocked(opts Options, startupTimeout time.Duration)
 			if displayStop != nil {
 				displayStop()
 			}
-			return fmt.Errorf("start Chromium: %w%s", err, chromiumLogTail(chromeLog.String()))
+			wrapped := fmt.Errorf("start Chromium: %w%s", err, chromiumLogTail(chromeLog.String()))
+			f.startErr = wrapped
+			return wrapped
 		}
 	case <-time.After(startupTimeout):
 		browserCancel()
@@ -859,10 +887,99 @@ func (f *Fetcher) startBrowserLocked(opts Options, startupTimeout time.Duration)
 		if displayStop != nil {
 			displayStop()
 		}
-		return fmt.Errorf("start Chromium: no DevTools endpoint after %s%s", startupTimeout, chromiumLogTail(chromeLog.String()))
+		wrapped := fmt.Errorf("start Chromium: no DevTools endpoint after %s%s", startupTimeout, chromiumLogTail(chromeLog.String()))
+		f.startErr = wrapped
+		return wrapped
 	}
-	f.browser = browserState{ctx: browserCtx, stop: browserCancel, alloc: allocCancel, display: displayStop, proxyKey: proxyKey}
+	f.browser = browserState{ctx: browserCtx, stop: browserCancel, alloc: allocCancel, display: displayStop, proxyKey: proxyKey, started: time.Now()}
+	f.starts++
+	f.lastStartMS = time.Since(begin).Milliseconds()
+	f.startErr = nil
 	return nil
+}
+
+// BrowserStatus reports whether the fallback browser is running.
+func (f *Fetcher) BrowserStatus() BrowserStatus {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	status := BrowserStatus{
+		Starts:      f.starts,
+		Restarts:    f.restarts,
+		Supervised:  f.supervised,
+		StartupTime: f.lastStartMS,
+	}
+	if f.browser.ctx != nil && f.browser.ctx.Err() == nil {
+		status.Running = true
+		status.UptimeMS = time.Since(f.browser.started).Milliseconds()
+	}
+	if f.startErr != nil {
+		status.LastError = f.startErr.Error()
+	}
+	return status
+}
+
+// KeepWarm supervises the fallback browser for as long as ctx lives: it starts
+// it once and restarts it whenever the process goes away (a crash, an OOM kill
+// on a small instance, a proxy change).
+//
+// Without this, the warm-up was a one-shot: after a crash the next scrape paid
+// the full cold start, and on a 512 MB instance that cold start is what makes
+// the request time out at the reverse proxy.
+func (f *Fetcher) KeepWarm(ctx context.Context) error {
+	f.mu.Lock()
+	f.supervised = true
+	disabled := f.opts.DisableBrowser
+	f.mu.Unlock()
+	if disabled {
+		// A fetcher configured without a browser must not spawn one just
+		// because somebody started its supervisor.
+		return nil
+	}
+	backoff := time.Second
+	for {
+		if err := f.WarmBrowser(ctx); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			debugf("browser supervisor: %v (retrying in %s)", err, backoff)
+			if !sleepOK(ctx, backoff) {
+				return ctx.Err()
+			}
+			backoff = min(2*backoff, time.Minute)
+			continue
+		}
+		backoff = time.Second
+		f.mu.Lock()
+		browserCtx := f.browser.ctx
+		f.mu.Unlock()
+		if browserCtx == nil {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			f.Close()
+			return ctx.Err()
+		case <-browserCtx.Done():
+			// chromedp cancels the browser context when the process exits.
+			debugf("browser supervisor: Chromium exited, restarting")
+			f.mu.Lock()
+			f.restarts++
+			f.stopBrowserLocked()
+			f.mu.Unlock()
+		}
+	}
+}
+
+// sleepOK waits for d, reporting false if ctx ended first.
+func sleepOK(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 // startShareOfTimeout is how much of a request's own budget may go into a

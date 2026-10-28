@@ -75,6 +75,9 @@ var (
 	_                 mt.Fetcher              = (*JavLibrary)(nil)
 	_                 mt.ConfigSetter         = (*JavLibrary)(nil)
 	_                 mt.ProxySetter          = (*JavLibrary)(nil)
+	_                 mt.BrowserWarmer        = (*JavLibrary)(nil)
+	_                 mt.BrowserKeeper        = (*JavLibrary)(nil)
+	_                 mt.BrowserReporter      = (*JavLibrary)(nil)
 	_                 mt.RequestTimeoutSetter = (*JavLibrary)(nil)
 )
 
@@ -87,7 +90,7 @@ type JavLibrary struct {
 	proxyURL   string
 	cookies    string
 	browserMu  sync.Mutex
-	fetcher    *antibot.Fetcher
+	fetcher    atomic.Pointer[antibot.Fetcher]
 	priorityMu sync.RWMutex
 	priority   float64
 	// challenges counts consecutive fetches that ended on a challenge page.
@@ -380,11 +383,43 @@ func parseCookieHeader(raw string) []*http.Cookie {
 func (p *JavLibrary) Close() error {
 	p.browserMu.Lock()
 	defer p.browserMu.Unlock()
-	if p.fetcher != nil {
-		p.fetcher.Close()
-		p.fetcher = nil
+	if fetcher := p.fetcher.Swap(nil); fetcher != nil {
+		fetcher.Close()
 	}
 	return nil
+}
+
+// browserFetcher returns the shared fetcher, creating it on first use. Caller
+// must hold browserMu.
+func (p *JavLibrary) browserFetcherLocked(timeout time.Duration) *antibot.Fetcher {
+	if fetcher := p.fetcher.Load(); fetcher != nil {
+		return fetcher
+	}
+	p.clientMu.RLock()
+	proxyURL, cookies := p.proxyURL, p.cookies
+	p.clientMu.RUnlock()
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	fetcher := antibot.New(antibot.Options{
+		Timeout:         max(2*timeout, 45*time.Second),
+		ProxyURL:        proxyURL,
+		Cookies:         cookies,
+		AllowURL:        p.validOrigin,
+		SkipFingerprint: true,
+	})
+	p.fetcher.Store(fetcher)
+	return fetcher
+}
+
+func (p *JavLibrary) requestTimeout() time.Duration {
+	p.clientMu.RLock()
+	timeout := p.timeout
+	p.clientMu.RUnlock()
+	if timeout <= 0 {
+		return defaultTimeout
+	}
+	return timeout
 }
 
 // WarmupBrowser starts the shared headless browser before the first request.
@@ -395,23 +430,42 @@ func (p *JavLibrary) Close() error {
 // at boot moves that cost to startup, where nobody is waiting.
 func (p *JavLibrary) WarmupBrowser(ctx context.Context) error {
 	p.browserMu.Lock()
-	defer p.browserMu.Unlock()
-	if p.fetcher == nil {
-		p.clientMu.RLock()
-		timeout, proxyURL, cookies := p.timeout, p.proxyURL, p.cookies
-		p.clientMu.RUnlock()
-		if timeout <= 0 {
-			timeout = defaultTimeout
-		}
-		p.fetcher = antibot.New(antibot.Options{
-			Timeout:         max(2*timeout, 45*time.Second),
-			ProxyURL:        proxyURL,
-			Cookies:         cookies,
-			AllowURL:        p.validOrigin,
-			SkipFingerprint: true,
-		})
+	fetcher := p.browserFetcherLocked(p.requestTimeout())
+	p.browserMu.Unlock()
+	return fetcher.WarmBrowser(ctx)
+}
+
+// KeepBrowser keeps the shared browser alive for the whole process lifetime.
+//
+// A one-shot warm-up is not enough on a small instance: if Chromium is killed
+// (memory pressure) the next scrape pays the cold start again, and that cold
+// start is exactly what pushes the request past the reverse proxy's timeout.
+// The supervisor restarts it in the background instead, so requests always
+// find a browser already running.
+func (p *JavLibrary) KeepBrowser(ctx context.Context) error {
+	p.browserMu.Lock()
+	fetcher := p.browserFetcherLocked(p.requestTimeout())
+	p.browserMu.Unlock()
+	return fetcher.KeepWarm(ctx)
+}
+
+// BrowserStatus reports the fallback browser state for the status endpoint.
+// It never blocks on an in-flight scrape.
+func (p *JavLibrary) BrowserStatus() mt.BrowserStatus {
+	fetcher := p.fetcher.Load()
+	if fetcher == nil {
+		return mt.BrowserStatus{}
 	}
-	return p.fetcher.WarmBrowser(ctx)
+	status := fetcher.BrowserStatus()
+	return mt.BrowserStatus{
+		Running:    status.Running,
+		Supervised: status.Supervised,
+		Uptime:     time.Duration(status.UptimeMS) * time.Millisecond,
+		Starts:     status.Starts,
+		Restarts:   status.Restarts,
+		LastStart:  time.Duration(status.StartupTime) * time.Millisecond,
+		LastError:  status.LastError,
+	}
 }
 
 // fingerprintProfile pairs a TLS ClientHello profile with a matching browser User-Agent.
@@ -497,22 +551,13 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request, deadline time.Tim
 	timeout = min(timeout, maxPageBudget)
 	p.browserMu.Lock()
 	defer p.browserMu.Unlock()
-	if p.fetcher == nil {
-		p.fetcher = antibot.New(antibot.Options{
-			Timeout:         timeout,
-			ProxyURL:        proxyURL,
-			Cookies:         cookies,
-			AllowURL:        p.validOrigin,
-			SkipFingerprint: true,
-		})
-	} else {
-		p.fetcher.SetOptions(func(opts *antibot.Options) {
-			opts.Timeout = timeout
-			opts.ProxyURL = proxyURL
-			opts.Cookies = cookies
-			opts.SkipFingerprint = true
-		})
-	}
+	fetcher := p.browserFetcherLocked(p.requestTimeout())
+	fetcher.SetOptions(func(opts *antibot.Options) {
+		opts.Timeout = timeout
+		opts.ProxyURL = proxyURL
+		opts.Cookies = cookies
+		opts.SkipFingerprint = true
+	})
 	req := original.Clone(original.Context())
 	req.Header.Set("Accept-Language", antibot.BrowserLanguage())
 	// The TLS profiles were already tried above, so the fetcher goes straight
@@ -520,7 +565,7 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request, deadline time.Tim
 	// this path can outlive the deadline the caller set.
 	ctx, cancel := context.WithTimeout(req.Context(), timeout)
 	defer cancel()
-	return p.fetcher.Do(req.WithContext(ctx))
+	return fetcher.Do(req.WithContext(ctx))
 }
 
 func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request, deadline time.Time) (*http.Response, error) {
