@@ -113,6 +113,30 @@ type BrowserKeeper interface {
 	KeepBrowser(ctx context.Context) error
 }
 
+// BrowserProber is implemented by providers that can tell whether their
+// fallback browser is actually required from this egress.
+//
+// A browser exists for one reason: to execute a JavaScript challenge. When the
+// network already passes — a residential proxy, an IP Cloudflare does not
+// score, a valid cf_clearance cookie — the cheap TLS client gets the real page
+// and the browser is pure memory cost. On a 512 MB instance that cost is the
+// difference between staying up and being OOM-killed. The server therefore
+// asks each such provider once at boot and skips the browser when it is not
+// needed.
+type BrowserProber interface {
+	// ProbeBrowserNeed reports whether a plain request from this egress is
+	// challenged. detail is a short human-readable reason that goes into the
+	// boot log and the status endpoint. An implementation must be conservative:
+	// when the probe cannot tell, it returns true.
+	ProbeBrowserNeed(ctx context.Context) (required bool, detail string)
+}
+
+// BrowserAllowedSetter lets the server forbid a provider from starting its
+// fallback browser. reason is recorded for the status endpoint.
+type BrowserAllowedSetter interface {
+	SetBrowserAllowed(allowed bool, reason string)
+}
+
 // BrowserStatus is a snapshot of a provider's fallback browser, safe to expose
 // over HTTP: no proxy credentials, no page content.
 type BrowserStatus struct {
@@ -123,6 +147,11 @@ type BrowserStatus struct {
 	Restarts   int           `json:"restarts"`
 	LastStart  time.Duration `json:"-"`
 	LastError  string        `json:"last_error,omitempty"`
+	// Disabled is set when the server decided this deployment does not need a
+	// browser at all, so Running will stay false on purpose.
+	Disabled bool `json:"disabled,omitempty"`
+	// Reason explains a Disabled decision, or the probe result otherwise.
+	Reason string `json:"reason,omitempty"`
 }
 
 // BrowserReporter is implemented by providers that can describe their fallback

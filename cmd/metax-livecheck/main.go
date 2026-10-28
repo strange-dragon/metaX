@@ -184,6 +184,32 @@ func main() {
 	}
 }
 
+// applyBrowserMode mirrors the server's boot decision so a probe run measures
+// the same configuration the deployment runs with.
+func applyBrowserMode(p mt.MovieProvider) {
+	setter, ok := p.(mt.BrowserAllowedSetter)
+	if !ok {
+		return
+	}
+	mode := antibot.BrowserMode()
+	setter.SetBrowserAllowed(true, "METAX_BROWSER_MODE="+mode)
+	if mode == antibot.BrowserModeOff {
+		setter.SetBrowserAllowed(false, "METAX_BROWSER_MODE=off")
+		return
+	}
+	prober, ok := p.(mt.BrowserProber)
+	if !ok || mode == antibot.BrowserModeAlways {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	required, detail := prober.ProbeBrowserNeed(ctx)
+	setter.SetBrowserAllowed(required, detail)
+	if !required {
+		fmt.Fprintf(os.Stderr, "  browser not needed: %s\n", detail)
+	}
+}
+
 func probe(ctx context.Context, factory mt.MovieFactory, name, override string, timeout time.Duration) (res result) {
 	res = result{provider: name}
 	start := time.Now()
@@ -218,6 +244,11 @@ func probe(ctx context.Context, factory mt.MovieFactory, name, override string, 
 	if setter, ok := p.(interface{ SetCookies(string) error }); ok && os.Getenv("METAX_PROVIDER_COOKIES") != "" {
 		_ = setter.SetCookies(os.Getenv("METAX_PROVIDER_COOKIES"))
 	}
+	// Measure what the deployment would do, not what this machine can do with a
+	// browser. `METAX_BROWSER_MODE=off metax-livecheck -providers javlibrary`
+	// therefore answers the only question that matters when buying a proxy:
+	// does this egress pass Cloudflare without Chromium?
+	applyBrowserMode(p)
 
 	done := make(chan error, 1)
 	go func() {

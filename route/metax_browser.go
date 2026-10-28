@@ -12,8 +12,11 @@ import (
 
 type metaxBrowserState struct {
 	Provider    string `json:"provider"`
+	Mode        string `json:"mode"`
 	Running     bool   `json:"running"`
 	Supervised  bool   `json:"supervised"`
+	Disabled    bool   `json:"disabled,omitempty"`
+	Reason      string `json:"reason,omitempty"`
 	UptimeMS    int64  `json:"uptime_ms,omitempty"`
 	Starts      int    `json:"starts"`
 	Restarts    int    `json:"restarts"`
@@ -27,6 +30,10 @@ type metaxBrowserState struct {
 // simply slow down or fail, with nothing that says why. This endpoint makes
 // "is it up, how long has it been up, has it been restarted" answerable in one
 // request after a deployment.
+//
+// "disabled" is not a fault. It means the server probed the egress at boot and
+// found that a plain request already gets through, so the 300 MB browser was
+// never started; "reason" says what the probe saw.
 func getMetaxBrowserStatus(app *engine.Engine) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		providers := app.GetMovieProviders()
@@ -36,6 +43,7 @@ func getMetaxBrowserStatus(app *engine.Engine) gin.HandlerFunc {
 		}
 		sort.Strings(names)
 
+		mode := engine.BrowserMode()
 		states := make([]metaxBrowserState, 0, len(names))
 		for _, name := range names {
 			reporter, ok := providers[name].(mt.BrowserReporter)
@@ -45,8 +53,11 @@ func getMetaxBrowserStatus(app *engine.Engine) gin.HandlerFunc {
 			status := reporter.BrowserStatus()
 			states = append(states, metaxBrowserState{
 				Provider:    name,
+				Mode:        mode,
 				Running:     status.Running,
 				Supervised:  status.Supervised,
+				Disabled:    status.Disabled,
+				Reason:      status.Reason,
 				UptimeMS:    status.Uptime.Milliseconds(),
 				Starts:      status.Starts,
 				Restarts:    status.Restarts,

@@ -286,8 +286,9 @@ things follow from it:
   (crash, OOM kill, proxy change), with a 1s→60s backoff. Requests never pay a
   cold start, and a crash does not degrade the next scrape.
 - `mt.BrowserWarmer` is the older, one-shot variant and still supported for
-  providers that only want a warm-up. Disable either with
-  `METAX_WARMUP_BROWSER=0`.
+  providers that only want a warm-up. Both are controlled by
+  `METAX_BROWSER_MODE` (see below); `METAX_WARMUP_BROWSER=0` still works and
+  means `off`.
 - `GET /v1/metax/browser` reports `running`, `uptime_ms`, `starts`, `restarts`
   and `last_error` per provider. After a deployment this is the first thing to
   check: `["running":true, "starts":1, "restarts":0]` is a healthy resident
@@ -296,8 +297,10 @@ things follow from it:
 
 The trade-off is memory: a resident browser holds its 200-400 MB even while
 idle. On a 512 MB instance that is most of the allowance, and the rest of the
-process may get OOM-killed instead. If that happens, either move to 1 GB or set
-`METAX_WARMUP_BROWSER=0` and accept a cold start per scrape.
+process may get OOM-killed instead. If that happens, move to 1 GB, or stop
+paying for the browser at all with `METAX_BROWSER_MODE=off` — which is the
+correct setting whenever a proxy already gets through, and the default decision
+`auto` makes on its own.
 
 **Trimming the browser.** Three settings reduce the footprint without changing
 the challenge behaviour:
@@ -322,6 +325,8 @@ engine, so engines that skip rendering are exactly the ones that fail.
 |---|---|---|
 | tls-client (already the first stage) | ~10-20 MB | no — no JS |
 | Lightpanda | 24-110 MB | no; its own benchmarks report ~59% of sites work and the failures are Cloudflare challenge pages |
+| Obscura 0.2.5 (Rust + V8) | 133 MB measured RSS, 75 MB binary | **no** — measured 2026-10-28: three runs against javlibrary all stopped on `<title>Just a moment...</title>`, including `--stealth --wait 20`. It loads the challenge script and the Turnstile api.js but never clears the page. The advertised 30 MB is the no-render variant |
+| Splash (Zyte, QtWebKit) | 1-2 GB per instance per its own docs | no; maintenance mode since 2024-08, older JS engine, not a stealth browser |
 | Camoufox (Firefox, anti-detect) | 250 MB+ | yes, but heavier than Chromium and marked "highly experimental" upstream |
 | WebKit via Playwright | ~150 MB | unreliable; needs the Playwright driver image |
 | headless Chromium (this code) | 200-400 MB, less with the flags above | yes, 5-8s on a laptop |
@@ -329,6 +334,44 @@ engine, so engines that skip rendering are exactly the ones that fail.
 So the light answer is not a different browser, it is a different network path:
 a residential proxy with the existing tls-client stage, which costs one HTTP
 request instead of a browser.
+
+**Not starting the browser at all.** `METAX_BROWSER_MODE` decides whether so
+much as one Chromium is spawned, because the browser only ever exists to execute
+a challenge:
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | providers that implement `mt.BrowserProber` are asked once at boot whether a plain TLS request gets a real page; only a challenge starts a browser |
+| `off` | never starts a browser; a challenged site fails with an error that names the mode |
+| `always` | starts the browser without probing, the pre-probe behaviour |
+
+`auto` is the mode worth understanding. With a residential proxy the probe sees
+HTTP 200 on the search page and the 300 MB browser is never started — the whole
+scrape then runs at tls-client's ~20 MB. Without one the probe sees the
+interstitial and the browser runs as before. The boot log states which way it
+went:
+
+```
+Fallback browser not needed for JavLibrary: a plain TLS request got 200 OK without a challenge; Chromium will not be started
+Fallback browser required for JavLibrary: a plain TLS request was served a challenge (HTTP 403)
+```
+
+The probe is deliberately conservative — a timeout, a TLS error or an
+unexpected status keeps the browser, since losing it silently would remove the
+only way through. `GET /v1/metax/browser` reports `mode`, `disabled` and the
+probe's `reason`, so a browser that is off on purpose cannot be mistaken for one
+that failed to start.
+
+The same switch works from the CLI, which makes "do I need a proxy?" a
+measurable question rather than a guess:
+
+```
+METAX_BROWSER_MODE=off metax-livecheck -providers javlibrary -verbose
+```
+
+If that passes, the egress is fine and the browser is unnecessary. If it fails
+with "the fallback browser is switched off", the site is challenging this
+network and only a different egress (or `always`) will help.
 
 **The edge gateway has its own timeout.** Koyeb cuts a request at 100s and
 returns `504 error code: 504`. Any provider path must finish inside that. A
@@ -363,6 +406,7 @@ is exactly the pool they reject; OVH in particular is heavily challenged. The
 
 ```
 METAX_PROVIDER_PROXY=socks5://user:pass@host:1080   # applied to every provider
+METAX_BROWSER_MODE=auto                              # auto | off | always
 METAX_CHROMIUM_NO_SANDBOX=1                          # set by the Dockerfile
 METAX_BROWSER_LANG=ja-JP                             # default already
 METAX_ANTIBOT_DEBUG=1                                # log which strategy ran

@@ -60,6 +60,15 @@ const (
 	// interstitial to every profile, so once it is clear that this egress is
 	// being challenged, the whole budget belongs to the browser.
 	challengeStreakLimit = 2
+
+	// probeTimeout bounds the boot-time check that decides whether the browser
+	// is needed at all. It runs once, off the request path.
+	probeTimeout = 12 * time.Second
+
+	// probeKeyword is the sample the boot probe searches for. Any stable
+	// number works: what matters is that the request reaches the page Cloudflare
+	// protects, so the answer reflects the egress rather than a special case.
+	probeKeyword = "SSIS-033"
 )
 
 var (
@@ -78,6 +87,8 @@ var (
 	_                 mt.BrowserWarmer        = (*JavLibrary)(nil)
 	_                 mt.BrowserKeeper        = (*JavLibrary)(nil)
 	_                 mt.BrowserReporter      = (*JavLibrary)(nil)
+	_                 mt.BrowserProber        = (*JavLibrary)(nil)
+	_                 mt.BrowserAllowedSetter = (*JavLibrary)(nil)
 	_                 mt.RequestTimeoutSetter = (*JavLibrary)(nil)
 )
 
@@ -97,11 +108,19 @@ type JavLibrary struct {
 	// Once it passes challengeStreakLimit the provider skips its own TLS
 	// fingerprint rotation and hands the request straight to the browser.
 	challenges atomic.Int32
+	// browserAllowed is the server's verdict on whether this deployment may
+	// start Chromium at all. When the egress already passes a plain request
+	// there is nothing for the browser to do, and its 300 MB is the most
+	// expensive thing in the process.
+	browserAllowed atomic.Bool
+	detailMu       sync.RWMutex
+	detail         string
 }
 
 func New() *JavLibrary {
 	u, _ := url.Parse(defaultURL)
 	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority, cookieJar: newFingerprintCookieJar()}
+	p.browserAllowed.Store(true)
 	p.rebuildClientLocked()
 	return p
 }
@@ -109,6 +128,7 @@ func New() *JavLibrary {
 func newForTest(base string, client *http.Client) *JavLibrary {
 	u, _ := url.Parse(base)
 	p := &JavLibrary{baseURL: u, timeout: defaultTimeout, priority: Priority, cookieJar: newFingerprintCookieJar()}
+	p.browserAllowed.Store(true)
 	if client != nil {
 		c := *client
 		c.CheckRedirect = p.checkRedirect
@@ -315,18 +335,24 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 	// rotation is skipped: every profile gets the same interstitial, so the
 	// only way through is the browser, and it needs the time.
 	var resp *http.Response
-	if p.challenges.Load() >= challengeStreakLimit {
-		deadline := time.Now().Add(p.totalFetchBudget())
+	deadline := time.Now().Add(p.totalFetchBudget())
+	if p.browserAllowed.Load() && p.challenges.Load() >= challengeStreakLimit {
 		resp, err = p.fetchWithChromium(req, deadline)
 		if err == nil {
 			p.challenges.Store(0)
 			return resp, nil
 		}
 	} else {
-		deadline := time.Now().Add(p.totalFetchBudget())
 		resp, err = p.fetchWithFingerprintRotation(req, deadline)
 		if err != nil && isCloudflareChallenge(err) {
 			p.challenges.Add(1)
+			if !p.browserAllowed.Load() {
+				// The server decided this egress does not need a browser, but
+				// the site is challenging us now. Say exactly that instead of
+				// failing with a bare challenge error, because the fix is a
+				// deployment decision, not a retry.
+				return nil, fmt.Errorf("javlibrary: GET %s is behind a Cloudflare JavaScript challenge but the fallback browser is switched off (%s); set METAX_BROWSER_MODE=always, provide a fresh cf_clearance via COOKIES, or use an egress Cloudflare does not score: %w", raw, p.browserReason(), err)
+			}
 			resp, browserErr := p.fetchWithChromium(req, deadline)
 			if browserErr == nil {
 				p.challenges.Store(0)
@@ -429,6 +455,9 @@ func (p *JavLibrary) requestTimeout() time.Duration {
 // budget: the request timed out before the challenge even began. Starting it
 // at boot moves that cost to startup, where nobody is waiting.
 func (p *JavLibrary) WarmupBrowser(ctx context.Context) error {
+	if !p.browserAllowed.Load() {
+		return nil
+	}
 	p.browserMu.Lock()
 	fetcher := p.browserFetcherLocked(p.requestTimeout())
 	p.browserMu.Unlock()
@@ -443,6 +472,9 @@ func (p *JavLibrary) WarmupBrowser(ctx context.Context) error {
 // The supervisor restarts it in the background instead, so requests always
 // find a browser already running.
 func (p *JavLibrary) KeepBrowser(ctx context.Context) error {
+	if !p.browserAllowed.Load() {
+		return nil
+	}
 	p.browserMu.Lock()
 	fetcher := p.browserFetcherLocked(p.requestTimeout())
 	p.browserMu.Unlock()
@@ -452,9 +484,10 @@ func (p *JavLibrary) KeepBrowser(ctx context.Context) error {
 // BrowserStatus reports the fallback browser state for the status endpoint.
 // It never blocks on an in-flight scrape.
 func (p *JavLibrary) BrowserStatus() mt.BrowserStatus {
+	allowed := p.browserAllowed.Load()
 	fetcher := p.fetcher.Load()
 	if fetcher == nil {
-		return mt.BrowserStatus{}
+		return mt.BrowserStatus{Disabled: !allowed, Reason: p.browserReason()}
 	}
 	status := fetcher.BrowserStatus()
 	return mt.BrowserStatus{
@@ -465,6 +498,107 @@ func (p *JavLibrary) BrowserStatus() mt.BrowserStatus {
 		Restarts:   status.Restarts,
 		LastStart:  time.Duration(status.StartupTime) * time.Millisecond,
 		LastError:  status.LastError,
+		Disabled:   !allowed,
+		Reason:     p.browserReason(),
+	}
+}
+
+// SetBrowserAllowed records the server's decision about the fallback browser.
+//
+// Not starting Chromium is the single biggest win available on a small
+// instance: the resident browser costs 200-400 MB, which on a 512 MB machine is
+// the whole allowance. When the egress passes a plain TLS request there is
+// nothing for the browser to do, so it is switched off rather than kept warm.
+func (p *JavLibrary) SetBrowserAllowed(allowed bool, reason string) {
+	p.browserAllowed.Store(allowed)
+	p.detailMu.Lock()
+	p.detail = reason
+	p.detailMu.Unlock()
+	if allowed {
+		return
+	}
+	p.challenges.Store(0)
+	p.browserMu.Lock()
+	fetcher := p.fetcher.Load()
+	p.browserMu.Unlock()
+	if fetcher != nil {
+		fetcher.DisableBrowserFallback()
+	}
+}
+
+func (p *JavLibrary) browserReason() string {
+	p.detailMu.RLock()
+	defer p.detailMu.RUnlock()
+	return p.detail
+}
+
+// ProbeBrowserNeed answers one question: does a plain TLS request get the real
+// page from this egress, or a challenge?
+//
+// It is deliberately conservative. Only a clear "real content, no challenge"
+// switches the browser off; a timeout, a TLS error or an unexpected status keeps
+// the browser, because the alternative is a deployment that silently lost its
+// only way through.
+func (p *JavLibrary) ProbeBrowserNeed(ctx context.Context) (bool, string) {
+	u := *p.baseURL
+	u.Path = "/cn/vl_searchbyid.php"
+	q := url.Values{}
+	q.Set("keyword", probeKeyword)
+	u.RawQuery = q.Encode()
+
+	probeCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(probeCtx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return true, "probe request could not be built: " + err.Error()
+	}
+	profile := javLibraryFingerprintProfiles[0]
+	req.Header.Set("User-Agent", profile.userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", p.baseURL.String()+"/")
+
+	p.clientMu.RLock()
+	proxyURL := p.proxyURL
+	p.clientMu.RUnlock()
+	options := []tlsclient.HttpClientOption{
+		tlsclient.WithTimeoutSeconds(max(1, int(probeTimeout.Seconds()))),
+		tlsclient.WithClientProfile(profile.profile),
+		tlsclient.WithNotFollowRedirects(),
+	}
+	if proxyURL != "" {
+		options = append(options, tlsclient.WithProxyUrl(proxyURL))
+	}
+	if p.cookieJar != nil {
+		options = append(options, tlsclient.WithCookieJar(p.cookieJar))
+	}
+	client, err := tlsclient.NewHttpClient(tlsclient.NewNoopLogger(), options...)
+	if err != nil {
+		return true, "probe client could not be created: " + err.Error()
+	}
+	defer client.CloseIdleConnections()
+
+	resp, err := p.doFingerprintRequest(client, req, profile.userAgent)
+	if err != nil {
+		return true, "probe request failed: " + err.Error()
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+	if isChallengeDetail(string(body)) || isChallengeDetail(resp.Header.Get("Cf-Mitigated")) {
+		return true, fmt.Sprintf("a plain TLS request was served a challenge (HTTP %d)", resp.StatusCode)
+	}
+	switch {
+	case resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotAcceptable:
+		return true, fmt.Sprintf("a plain TLS request was rejected with %s", resp.Status)
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		return false, fmt.Sprintf("a plain TLS request got %s without a challenge", resp.Status)
+	case resp.StatusCode == http.StatusNotFound:
+		// The sample number is gone, but the request reached the origin and
+		// was not challenged, which is the only thing being asked here.
+		return false, "a plain TLS request reached the origin (HTTP 404 on the sample), no challenge"
+	default:
+		return true, fmt.Sprintf("unexpected probe status %s, keeping the browser", resp.Status)
 	}
 }
 
@@ -537,6 +671,9 @@ func remainingSleep(deadline time.Time, d time.Duration) bool {
 }
 
 func (p *JavLibrary) fetchWithChromium(original *http.Request, deadline time.Time) (*http.Response, error) {
+	if !p.browserAllowed.Load() {
+		return nil, fmt.Errorf("javlibrary: the fallback browser is switched off for this deployment (%s)", p.browserReason())
+	}
 	p.clientMu.RLock()
 	proxyURL, cookies := p.proxyURL, p.cookies
 	p.clientMu.RUnlock()

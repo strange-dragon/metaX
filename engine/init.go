@@ -6,11 +6,19 @@ import (
 	"flag"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/strange-dragon/metaX/common/fetch"
+	"github.com/strange-dragon/metaX/internal/antibot"
 	mt "github.com/strange-dragon/metaX/provider"
+)
+
+const (
+	// browserProbeTimeout bounds the boot probe. It runs in the background, but
+	// a hung probe would delay the browser start behind it.
+	browserProbeTimeout = 15 * time.Second
 )
 
 func (e *Engine) init() *Engine {
@@ -96,27 +104,51 @@ func (e *Engine) initMovieProviders() {
 	}
 }
 
-// warmBrowsers starts the fallback browsers at boot and keeps them running.
+// warmBrowsers decides, per provider, whether a fallback browser is needed and
+// then either supervises it or switches it off.
 //
-// A provider behind a JavaScript challenge cannot answer its first request
-// until Chromium is running, and on a small cloud instance that cold start
-// takes longer than the whole request budget. Starting it at boot means the
-// first scrape finds a browser already waiting instead of timing out.
+// The browser exists for one reason: to execute a JavaScript challenge. When the
+// egress already passes (a residential proxy, an IP Cloudflare does not score, a
+// valid cf_clearance cookie) a plain TLS request returns the real page and the
+// browser is nothing but 200-400 MB of resident memory. On a 512 MB instance
+// that memory is the difference between running and being OOM-killed, so the
+// decision is made from evidence: providers that can tell are asked once at
+// boot, and only a clear "challenged" answer keeps the browser.
 //
-// Providers that implement BrowserKeeper are not warmed once but supervised:
-// if the browser is killed later (memory pressure on a 512 MB instance), the
-// keeper restarts it in the background, so no request ever pays a cold start.
+// METAX_BROWSER_MODE overrides the decision: "auto" (default) probes, "off"
+// never starts a browser, "always" skips the probe and starts it.
 func (e *Engine) warmBrowsers() {
-	if os.Getenv("METAX_WARMUP_BROWSER") == "0" {
-		return
-	}
 	if flag.Lookup("test.v") != nil {
 		// Unit tests must never spawn a browser.
 		return
 	}
+	mode := BrowserMode()
 	providers := e.GetMovieProviders()
+	names := make([]string, 0, len(providers))
+	for name := range providers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	// Decide synchronously, start asynchronously. A request that arrived while
+	// the probe was still running would find browserAllowed=true and start the
+	// very browser the probe is about to switch off — the probe costs a couple
+	// of seconds at boot, which is cheaper than paying 300 MB for a race.
+	wanted := make([]mt.Provider, 0, len(names))
+	for _, name := range names {
+		provider := providers[name]
+		_, isKeeper := provider.(mt.BrowserKeeper)
+		_, isWarmer := provider.(mt.BrowserWarmer)
+		if !isKeeper && !isWarmer {
+			continue
+		}
+		if e.browserNeeded(provider, mode) {
+			wanted = append(wanted, provider)
+		}
+	}
+
 	go func() {
-		for _, provider := range providers {
+		for _, provider := range wanted {
 			if keeper, ok := provider.(mt.BrowserKeeper); ok {
 				go e.keepBrowser(provider, keeper)
 				continue
@@ -136,6 +168,50 @@ func (e *Engine) warmBrowsers() {
 			e.logger.Printf("Browser ready for %s after %s", provider.Name(), time.Since(start).Round(time.Second))
 		}
 	}()
+}
+
+// BrowserMode resolves METAX_BROWSER_MODE. It is re-exported here so routes and
+// tools report the same decision the engine made.
+func BrowserMode() string { return antibot.BrowserMode() }
+
+// browserNeeded applies the mode to one provider and reports whether its
+// browser should be started.
+func (e *Engine) browserNeeded(provider mt.Provider, mode string) bool {
+	setter, canSet := provider.(mt.BrowserAllowedSetter)
+
+	if mode == antibot.BrowserModeOff {
+		if canSet {
+			setter.SetBrowserAllowed(false, "METAX_BROWSER_MODE=off")
+		}
+		e.logger.Printf("Fallback browser for %s is off (METAX_BROWSER_MODE=off)", provider.Name())
+		return false
+	}
+	if mode == antibot.BrowserModeAlways {
+		if canSet {
+			setter.SetBrowserAllowed(true, "METAX_BROWSER_MODE=always")
+		}
+		return true
+	}
+
+	prober, ok := provider.(mt.BrowserProber)
+	if !ok {
+		return true
+	}
+	// Say so before the probe: it runs during boot, so a slow start should be
+	// explained by the log rather than look like a hang.
+	e.logger.Printf("Probing whether %s needs the fallback browser", provider.Name())
+	ctx, cancel := context.WithTimeout(context.Background(), browserProbeTimeout)
+	required, detail := prober.ProbeBrowserNeed(ctx)
+	cancel()
+	if canSet {
+		setter.SetBrowserAllowed(required, detail)
+	}
+	if required {
+		e.logger.Printf("Fallback browser required for %s: %s", provider.Name(), detail)
+		return true
+	}
+	e.logger.Printf("Fallback browser not needed for %s: %s; Chromium will not be started", provider.Name(), detail)
+	return false
 }
 
 // keepBrowser runs a provider's browser supervisor and reports when the

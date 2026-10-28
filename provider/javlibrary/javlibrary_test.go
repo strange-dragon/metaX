@@ -1,6 +1,7 @@
 package javlibrary
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -295,5 +296,89 @@ func TestTotalFetchBudgetHonoursOverride(t *testing.T) {
 	p := New()
 	if got := p.totalFetchBudget(); got != 25*time.Second {
 		t.Fatalf("totalFetchBudget = %s, want the 25s override", got)
+	}
+}
+
+// When the server has proved the egress is not challenged, the browser must not
+// appear anywhere: no warm-up, no supervisor, no fallback attempt. On a 512 MB
+// instance its memory is the whole allowance.
+func TestBrowserAllowedFalseSwitchesFallbackOff(t *testing.T) {
+	p := New()
+	p.SetBrowserAllowed(false, "a plain TLS request got 200 OK without a challenge")
+
+	status := p.BrowserStatus()
+	if !status.Disabled {
+		t.Error("BrowserStatus.Disabled = false, want true after the server switched it off")
+	}
+	if status.Reason == "" {
+		t.Error("BrowserStatus.Reason is empty, want the reason the status endpoint reports")
+	}
+	if status.Running {
+		t.Error("BrowserStatus.Running = true, want false")
+	}
+
+	if err := p.WarmupBrowser(context.Background()); err != nil {
+		t.Fatalf("WarmupBrowser = %v, want nil so the boot log stays quiet", err)
+	}
+	if err := p.KeepBrowser(context.Background()); err != nil {
+		t.Fatalf("KeepBrowser = %v, want nil so no supervisor is started", err)
+	}
+	if fetcher := p.fetcher.Load(); fetcher != nil {
+		t.Fatal("a fetcher was created even though the browser is off")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, defaultURL+"/cn/vl_searchbyid.php?keyword=SSIS-033", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.fetchWithChromium(req, time.Now().Add(30*time.Second)); err == nil {
+		t.Fatal("fetchWithChromium succeeded, want a refusal while the browser is off")
+	} else if !strings.Contains(err.Error(), "switched off") {
+		t.Fatalf("error = %v, want it to say the browser is switched off", err)
+	}
+}
+
+func TestBrowserAllowedDefaultsToOn(t *testing.T) {
+	p := New()
+	if status := p.BrowserStatus(); status.Disabled {
+		t.Fatal("a provider that was never told otherwise must allow its browser")
+	}
+}
+
+// The boot probe decides whether 300 MB of browser is spent. It must call a
+// real page "no browser needed" and a challenge page "needed", and it must err
+// towards keeping the browser when it cannot tell.
+func TestProbeBrowserNeedDecidesFromTheResponse(t *testing.T) {
+	cases := []struct {
+		name     string
+		status   int
+		body     string
+		wantNeed bool
+	}{
+		{"real page", http.StatusOK, `<html><head><title>SSIS-033 JavLibrary</title></head><body><div class="video">x</div></body></html>`, false},
+		{"challenge 403", http.StatusForbidden, `<html><head><title>Just a moment...</title></head><body>cf-chl-</body></html>`, true},
+		{"challenge 200", http.StatusOK, `<html><head><title>Just a moment...</title></head><body></body></html>`, true},
+		{"not found", http.StatusNotFound, `<html><body>no such title</body></html>`, false},
+		{"server error", http.StatusBadGateway, `<html><body>bad gateway</body></html>`, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+				w.WriteHeader(tc.status)
+				_, _ = io.WriteString(w, tc.body)
+			}))
+			defer srv.Close()
+
+			p := newForTest(srv.URL, nil)
+			required, detail := p.ProbeBrowserNeed(context.Background())
+			if required != tc.wantNeed {
+				t.Fatalf("ProbeBrowserNeed = %v (%s), want %v", required, detail, tc.wantNeed)
+			}
+			if detail == "" {
+				t.Error("detail is empty; the boot log and the status endpoint need it")
+			}
+		})
 	}
 }

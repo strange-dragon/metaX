@@ -173,6 +173,20 @@ func (f *Fetcher) Close() {
 	f.stopBrowserLocked()
 }
 
+// DisableBrowserFallback switches the browser off for good: the supervisor
+// stops restarting it and no later request starts one.
+//
+// Closing alone would not do it. The supervisor exists precisely to restart a
+// browser that disappeared, so a Close from outside would be read as a crash
+// and answered with a fresh Chromium a second later. The flag has to be set
+// first.
+func (f *Fetcher) DisableBrowserFallback() {
+	f.mu.Lock()
+	f.opts.DisableBrowser = true
+	f.mu.Unlock()
+	f.Close()
+}
+
 // browserWarmupTimeout is generous on purpose: warming up happens off the
 // request path, where a slow cold start costs nothing but boot time. It is
 // still bounded, because a start that is in flight makes later requests wait:
@@ -954,6 +968,14 @@ func (f *Fetcher) KeepWarm(ctx context.Context) error {
 	}
 	backoff := time.Second
 	for {
+		f.mu.Lock()
+		disabled = f.opts.DisableBrowser
+		f.mu.Unlock()
+		if disabled {
+			// DisableBrowserFallback was called while this loop was running.
+			f.Close()
+			return nil
+		}
 		if err := f.WarmBrowser(ctx); err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()

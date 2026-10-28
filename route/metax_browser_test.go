@@ -30,6 +30,12 @@ func TestMetaXBrowserStatusReportsBrowserProviders(t *testing.T) {
 	if running, _ := javlibrary["running"].(bool); running {
 		t.Errorf("running=%v want false in tests", javlibrary["running"])
 	}
+	// The mode explains the state: "auto" means the server decided from a probe,
+	// "off"/"always" means an operator decided. Without it a disabled browser is
+	// indistinguishable from a broken one.
+	if mode, _ := javlibrary["mode"].(string); mode == "" {
+		t.Errorf("mode is missing from the browser status: %v", javlibrary)
+	}
 	for _, secretKey := range []string{"cookie", "cookies", "token", "proxy"} {
 		if _, exists := javlibrary[secretKey]; exists {
 			t.Errorf("browser status exposes secret field %q: %v", secretKey, javlibrary)
