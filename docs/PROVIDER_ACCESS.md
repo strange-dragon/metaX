@@ -246,6 +246,42 @@ automation helps; they need a residential/Japanese egress.
 `?rest_route=/wp/v2/works&slug=...` query form is served normally — that is what
 `dahlia/core` uses now.
 
+### Hosted fetchers and free web proxies evaluated (2026-10-28)
+
+JavLibrary is the one target where a resident Chromium is not enough: the
+interstitial loops for the whole 40 s budget and the request ends in
+`context deadline exceeded (title="Just a moment...", status=200)`. The browser
+is healthy at that point — `/v1/metax/browser` reports `running: true` with a
+1.5 s cold start and no restarts — so the block follows the egress, not the
+client. Offloading the fetch to a hosted renderer was measured rather than
+assumed:
+
+| Service | Verdict | Detail |
+| --- | --- | --- |
+| WebPipe (`api.web2json.ai`), free tier | **does not work** | answers `422` in ~0.4 s: "该网站启用了 Cloudflare 机器人验证（Bot Management），服务器 IP 被识别为机房 IP 而被拦截" — the same answer for the `f101w.com` mirror and for `javlibrary.com` |
+| ProxyOrb | **not applicable** | a browse-in-your-own-browser web proxy: no API, no proxy endpoint to point a client at |
+| WebPipe residential pool (`use_proxy`) | **paid tier only** | `403 代理池功能需要付费套餐（Hobby 及以上）` |
+
+The original domain sits behind the same wall as the mirror, so switching
+`defaultURL` away from `f101w.com` buys nothing. A hosted renderer also does not
+create an egress the operator does not already have: with a paid pool it is
+"residential proxy + hosted browser", which is the same thing
+`METAX_PROVIDER_PROXY` provides with one fewer hop and no per-page billing.
+
+Free-tier WebPipe keeps one narrow use: it accepts a `proxy` argument, so
+`metax-webpipe-probe -proxy-url http://user:pass@host:port -url <page>` can check
+a newly bought residential proxy against this site without redeploying anything.
+Note that argument is `http(s)`-only.
+
+What a proxy for this target has to be:
+
+- **residential or mobile**, Japan if there is a choice; datacenter ASNs are
+  exactly what Cloudflare already rejects here
+- **`user:pass` authentication, not IP allowlisting** — the Koyeb egress rotates
+  across 17 addresses
+- `http(s)://` or `socks5://`; `JavLibrary.SetProxy` accepts all three, and the
+  value is reused by both the TLS client and Chromium's `--proxy-server`
+
 ### Live status (2026-10-28, macOS, this network, no proxy)
 
 `go run ./cmd/metax-livecheck -timeout 50s`: **13 ok, 18 failed, 12 skipped**.
