@@ -272,6 +272,25 @@ is acceptable: the container is the isolation boundary.
 server; 256 MB will be OOM-killed mid-challenge. Expect 200-400 MB RSS right
 after a challenge clears.
 
+**Cold start is a request-killer.** Chromium took close to a minute to open its
+DevTools endpoint on a shared instance, and the browser path has no way to
+absorb that: the request budget is spent before the challenge even starts. Two
+things follow from it:
+
+- `startBrowserLocked` is bounded by `METAX_CHROMIUM_START_TIMEOUT` (default
+  45s) and reports what Chromium printed, so a failed start is an error instead
+  of a request that hangs until the gateway answers 504
+- providers implementing `mt.BrowserWarmer` are warmed at boot. `engine.init`
+  starts their browser in the background, so the first scrape finds it ready.
+  Disable with `METAX_WARMUP_BROWSER=0`; the log line to look for is
+  `Browser ready for JavLibrary after 52s`
+
+**The edge gateway has its own timeout.** Koyeb cuts a request at 100s and
+returns `504 error code: 504`. Any provider path must finish inside that, which
+is why one page fetch is budgeted at `max(2 x provider timeout, 45s)` and the
+TLS rotation stops at the first challenge instead of retrying four profiles that
+were all going to see the same interstitial.
+
 ### Which cloud region fixes what
 
 Changing region only helps the hard geo blocks, and only if the region matches

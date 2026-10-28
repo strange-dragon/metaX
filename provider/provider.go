@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"time"
@@ -95,6 +96,13 @@ type RequestTimeoutSetter interface {
 type ProxySetter interface {
 	// SetProxy sets http or socks5 proxy for HTTP requests.
 	SetProxy(proxyURL string) error
+}
+
+// BrowserWarmer is implemented by providers whose fetch path needs a headless
+// browser. The server calls it once at boot so the cold start, which can take
+// a minute on a small cloud instance, is not paid by the first request.
+type BrowserWarmer interface {
+	WarmupBrowser(ctx context.Context) error
 }
 
 type Config interface {

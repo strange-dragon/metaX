@@ -1,9 +1,12 @@
 package engine
 
 import (
+	"context"
+	"flag"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/strange-dragon/metaX/common/fetch"
 	mt "github.com/strange-dragon/metaX/provider"
@@ -14,6 +17,7 @@ func (e *Engine) init() *Engine {
 	e.initFetcher()
 	e.initActorProviders()
 	e.initMovieProviders()
+	e.warmBrowsers()
 	return e
 }
 
@@ -89,6 +93,40 @@ func (e *Engine) initMovieProviders() {
 			append(e.movieHostProviders.
 				GetOrDefault(host, nil), provider))
 	}
+}
+
+// warmBrowsers starts the fallback browser for providers that need one.
+//
+// A provider behind a JavaScript challenge cannot answer its first request
+// until Chromium is running, and on a small cloud instance that cold start
+// takes longer than the whole request budget. Doing it at boot means the first
+// scrape finds a browser already waiting instead of timing out.
+func (e *Engine) warmBrowsers() {
+	if os.Getenv("METAX_WARMUP_BROWSER") == "0" {
+		return
+	}
+	if flag.Lookup("test.v") != nil {
+		// Unit tests must never spawn a browser.
+		return
+	}
+	providers := e.GetMovieProviders()
+	go func() {
+		for _, provider := range providers {
+			warmer, ok := provider.(mt.BrowserWarmer)
+			if !ok {
+				continue
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+			start := time.Now()
+			err := warmer.WarmupBrowser(ctx)
+			cancel()
+			if err != nil {
+				e.logger.Printf("Warm up browser for %s: %v", provider.Name(), err)
+				continue
+			}
+			e.logger.Printf("Browser ready for %s after %s", provider.Name(), time.Since(start).Round(time.Second))
+		}
+	}()
 }
 
 // applyEnvProxy hands every provider the proxy named by METAX_PROVIDER_PROXY.

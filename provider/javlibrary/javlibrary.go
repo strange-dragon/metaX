@@ -344,6 +344,33 @@ func (p *JavLibrary) Close() error {
 	return nil
 }
 
+// WarmupBrowser starts the shared headless browser before the first request.
+//
+// JavLibrary cannot be read without clearing a Cloudflare challenge, and on a
+// small cloud instance the browser's cold start alone outlasted the request
+// budget: the request timed out before the challenge even began. Starting it
+// at boot moves that cost to startup, where nobody is waiting.
+func (p *JavLibrary) WarmupBrowser(ctx context.Context) error {
+	p.browserMu.Lock()
+	defer p.browserMu.Unlock()
+	if p.fetcher == nil {
+		p.clientMu.RLock()
+		timeout, proxyURL, cookies := p.timeout, p.proxyURL, p.cookies
+		p.clientMu.RUnlock()
+		if timeout <= 0 {
+			timeout = defaultTimeout
+		}
+		p.fetcher = antibot.New(antibot.Options{
+			Timeout:         max(2*timeout, 45*time.Second),
+			ProxyURL:        proxyURL,
+			Cookies:         cookies,
+			AllowURL:        p.validOrigin,
+			SkipFingerprint: true,
+		})
+	}
+	return p.fetcher.WarmBrowser(ctx)
+}
+
 // fingerprintProfile pairs a TLS ClientHello profile with a matching browser User-Agent.
 // Browser profiles are tried in order. A 403/406 triggers a one-second pause and the
 // next profile, while a shared cookie jar preserves upstream challenge cookies.

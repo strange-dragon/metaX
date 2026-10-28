@@ -149,6 +149,34 @@ func (f *Fetcher) Close() {
 	f.stopBrowserLocked()
 }
 
+// browserWarmupTimeout is generous on purpose: warming up happens off the
+// request path, where a slow cold start costs nothing but boot time.
+const browserWarmupTimeout = 3 * time.Minute
+
+// WarmBrowser starts the fallback browser before the first request needs it.
+//
+// Cold start is the expensive part: on a 512 MB shared instance Chromium took
+// close to a minute to open its DevTools endpoint, which no per-request timeout
+// can absorb. Paying that at boot is what lets the first scrape succeed.
+func (f *Fetcher) WarmBrowser(ctx context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.browser.ctx != nil {
+		return nil
+	}
+	timeout := browserWarmupTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		if left := time.Until(deadline); left > 0 && left < timeout {
+			timeout = left
+		}
+	}
+	if err := f.startBrowserLocked(f.opts, timeout); err != nil {
+		return err
+	}
+	debugf("browser warmed up in advance")
+	return nil
+}
+
 // Do performs req with browser TLS fingerprints, rotating profiles on a
 // rejection, then falls back to Chromium when every profile is challenged.
 // The returned response body is buffered and already closed for reuse.
@@ -548,7 +576,7 @@ func (f *Fetcher) fetchWithBrowser(original *http.Request, opts Options) (*http.
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if err := f.startBrowserLocked(opts); err != nil {
+	if err := f.startBrowserLocked(opts, min(chromiumStartupTimeout(), opts.Timeout)); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(f.browser.ctx, opts.Timeout)
@@ -713,7 +741,7 @@ func waitForDocumentClear(ctx context.Context, timeout time.Duration) (documentS
 	}
 }
 
-func (f *Fetcher) startBrowserLocked(opts Options) error {
+func (f *Fetcher) startBrowserLocked(opts Options, startupTimeout time.Duration) error {
 	proxyKey := opts.ProxyURL
 	if f.browser.ctx != nil {
 		if f.browser.proxyKey == proxyKey {
@@ -728,20 +756,68 @@ func (f *Fetcher) startBrowserLocked(opts Options) error {
 	if proxyKey != "" {
 		execOpts = append(execOpts, chromedp.ProxyServer(proxyKey))
 	}
+	// Keep what Chromium prints so a container that cannot start it reports
+	// why instead of just timing out.
+	var chromeLog bytes.Buffer
+	execOpts = append(execOpts, chromedp.CombinedOutput(&chromeLog))
+
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), execOpts...)
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
-	// Do not wrap the first Run in a timeout context: chromedp ties the
-	// browser process lifetime to it, so cancelling would kill Chromium.
-	if err := chromedp.Run(browserCtx); err != nil {
+	// Run the first navigation-less target creation in a goroutine so a browser
+	// that never opens its DevTools endpoint can be abandoned. A container with
+	// too little memory can leave this hanging for minutes, which the edge
+	// gateway then reports as a 504 instead of a useful error.
+	started := make(chan error, 1)
+	go func() { started <- chromedp.Run(browserCtx) }()
+	if startupTimeout <= 0 {
+		startupTimeout = chromiumStartupTimeout()
+	}
+	select {
+	case err := <-started:
+		if err != nil {
+			browserCancel()
+			allocCancel()
+			if displayStop != nil {
+				displayStop()
+			}
+			return fmt.Errorf("start Chromium: %w%s", err, chromiumLogTail(chromeLog.String()))
+		}
+	case <-time.After(startupTimeout):
 		browserCancel()
 		allocCancel()
 		if displayStop != nil {
 			displayStop()
 		}
-		return fmt.Errorf("start Chromium: %w", err)
+		return fmt.Errorf("start Chromium: no DevTools endpoint after %s%s", startupTimeout, chromiumLogTail(chromeLog.String()))
 	}
 	f.browser = browserState{ctx: browserCtx, stop: browserCancel, alloc: allocCancel, display: displayStop, proxyKey: proxyKey}
 	return nil
+}
+
+// chromiumStartupTimeout bounds how long the fallback browser may take to come
+// up. Override with METAX_CHROMIUM_START_TIMEOUT when a slow instance needs
+// longer.
+func chromiumStartupTimeout() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("METAX_CHROMIUM_START_TIMEOUT")); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+	}
+	return 45 * time.Second
+}
+
+// chromiumLogTail formats the last few lines of Chromium's own output for an
+// error message, because "timed out" alone does not say whether the browser ran
+// out of memory, could not create its sandbox or failed to reach the network.
+func chromiumLogTail(log string) string {
+	log = strings.TrimSpace(log)
+	if log == "" {
+		return " (Chromium printed nothing)"
+	}
+	if len(log) > 600 {
+		log = log[len(log)-600:]
+	}
+	return " (Chromium said: " + truncateCollapse(log, 600) + ")"
 }
 
 func (f *Fetcher) stopBrowserLocked() {
