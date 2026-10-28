@@ -14,7 +14,7 @@ func TestWordPressMetadataMapping(t *testing.T) {
 	var detailRequested bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/top/wp-json/wp/v2/works":
+		case isWorksREST(r):
 			if got := r.URL.Query().Get("slug"); got != "mgold123" {
 				t.Errorf("REST slug = %q, want mgold123", got)
 			}
@@ -86,7 +86,7 @@ func TestWordPressMetadataMapping(t *testing.T) {
 
 func TestWordPressMetadataRejectsNonExactSlug(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/wp-json/") {
+		if isWorksREST(r) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprint(w, `[{"slug":"mgold1234"}]`)
 			return

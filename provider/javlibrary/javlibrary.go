@@ -6,33 +6,24 @@
 package javlibrary
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"os/exec"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/strange-dragon/metaX/internal/antibot"
 
 	"github.com/PuerkitoBio/goquery"
 	fhttp "github.com/bogdanfinn/fhttp"
 	fhttpcookiejar "github.com/bogdanfinn/fhttp/cookiejar"
 	tlsclient "github.com/bogdanfinn/tls-client"
 	"github.com/bogdanfinn/tls-client/profiles"
-	"github.com/chromedp/cdproto/browser"
-	"github.com/chromedp/cdproto/cdp"
-	"github.com/chromedp/cdproto/emulation"
-	"github.com/chromedp/cdproto/fetch"
-	"github.com/chromedp/cdproto/network"
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
 	"github.com/lib/pq"
 	"golang.org/x/net/publicsuffix"
 	"golang.org/x/text/language"
@@ -69,21 +60,17 @@ var (
 )
 
 type JavLibrary struct {
-	baseURL            *url.URL
-	cookieJar          fhttp.CookieJar
-	clientMu           sync.RWMutex
-	client             *http.Client
-	timeout            time.Duration
-	proxyURL           string
-	cookies            string
-	browserMu          sync.Mutex
-	browserCtx         context.Context
-	browserStop        context.CancelFunc
-	allocStop          context.CancelFunc
-	virtualDisplayStop context.CancelFunc
-	browserProxy       string
-	priorityMu         sync.RWMutex
-	priority           float64
+	baseURL    *url.URL
+	cookieJar  fhttp.CookieJar
+	clientMu   sync.RWMutex
+	client     *http.Client
+	timeout    time.Duration
+	proxyURL   string
+	cookies    string
+	browserMu  sync.Mutex
+	fetcher    *antibot.Fetcher
+	priorityMu sync.RWMutex
+	priority   float64
 }
 
 func New() *JavLibrary {
@@ -326,139 +313,6 @@ func isCloudflareChallenge(err error) bool {
 	return strings.Contains(text, "just a moment") || strings.Contains(text, "请稍候") || strings.Contains(text, "cf-chl-")
 }
 
-// fetchWithChromium executes JavLibrary's JavaScript challenge in a local
-// browser. Chromium is started lazily and reused; one tab at a time shares its
-// clearance-cookie jar. The fallback is intentionally only used after a
-// Cloudflare challenge, not for ordinary requests.
-func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, error) {
-	p.browserMu.Lock()
-	defer p.browserMu.Unlock()
-
-	p.clientMu.RLock()
-	timeout, proxyURL, cookieHeader := p.timeout, p.proxyURL, p.cookies
-	p.clientMu.RUnlock()
-	if timeout <= 0 {
-		timeout = defaultTimeout
-	}
-	if err := p.startBrowserLocked(proxyURL); err != nil {
-		return nil, err
-	}
-	ctx, cancel := context.WithTimeout(p.browserCtx, timeout)
-	defer cancel()
-	var (
-		finalURL string
-		title    string
-		html     string
-		statusMu sync.Mutex
-		status   int
-	)
-	chromedp.ListenTarget(p.browserCtx, func(event any) {
-		switch e := event.(type) {
-		case *network.EventResponseReceived:
-			if e.Type == network.ResourceTypeDocument {
-				statusMu.Lock()
-				status = int(e.Response.Status)
-				statusMu.Unlock()
-			}
-		case *fetch.EventRequestPaused:
-			paused := e
-			go func() {
-				if paused.ResourceType == network.ResourceTypeDocument {
-					target, err := url.Parse(paused.Request.URL)
-					if err != nil || !p.validOrigin(target) && !isCloudflareChallengeOrigin(target) {
-						_ = chromedp.Run(p.browserCtx, fetch.FailRequest(paused.RequestID, network.ErrorReasonBlockedByClient))
-						return
-					}
-				}
-				_ = chromedp.Run(p.browserCtx, fetch.ContinueRequest(paused.RequestID))
-			}()
-		}
-	})
-	runStage := func(stage string, actions ...chromedp.Action) error {
-		if err := chromedp.Run(ctx, actions...); err != nil {
-			return fmt.Errorf("%s: %w", stage, err)
-		}
-		return nil
-	}
-	if err := runStage("enable network", network.Enable()); err != nil {
-		return nil, err
-	}
-	if err := runStage("prepare Chromium browser identity", chromedp.ActionFunc(func(ctx context.Context) error {
-		c := chromedp.FromContext(ctx)
-		_, _, _, userAgent, _, err := browser.GetVersion().Do(cdp.WithExecutor(ctx, c.Browser))
-		if err != nil {
-			return err
-		}
-		userAgent = strings.Replace(userAgent, "HeadlessChrome/", "Chrome/", 1)
-		if err := emulation.SetUserAgentOverride(userAgent).Do(ctx); err != nil {
-			return err
-		}
-		_, err = page.AddScriptToEvaluateOnNewDocument(`Object.defineProperty(Navigator.prototype, "webdriver", {get: () => undefined});`).Do(ctx)
-		return err
-	})); err != nil {
-		return nil, err
-	}
-	if err := runStage("enable same-origin navigation guard", fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}})); err != nil {
-		return nil, err
-	}
-	var cookieActions []chromedp.Action
-	for _, cookie := range parseCookieHeader(cookieHeader) {
-		cookieActions = append(cookieActions, network.SetCookie(cookie.Name, cookie.Value).WithURL(original.URL.String()).WithPath("/"))
-	}
-	if len(cookieActions) > 0 {
-		if err := runStage("set configured cookies", cookieActions...); err != nil {
-			return nil, err
-		}
-	}
-	if err := runStage("navigate", chromedp.Navigate(original.URL.String())); err != nil {
-		return nil, err
-	}
-	if err := runStage("wait for challenge", chromedp.PollFunction(`() => document.readyState === "complete" && !/just a moment|checking your browser|请稍候/i.test(document.title)`, new(bool), chromedp.WithPollingTimeout(timeout))); err != nil {
-		var diagnostic struct {
-			URL   string `json:"url"`
-			Title string `json:"title"`
-			HTML  string `json:"html"`
-		}
-		diagnosticCtx, diagnosticCancel := context.WithTimeout(p.browserCtx, 3*time.Second)
-		diagnosticErr := chromedp.Run(diagnosticCtx, chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &diagnostic))
-		diagnosticCancel()
-		preview := strings.Join(strings.Fields(diagnostic.HTML), " ")
-		if len(preview) > 1200 {
-			preview = preview[:1200] + "…"
-		}
-		return nil, fmt.Errorf("%w (challenge state: url=%q title=%q status=%d diagnostic_error=%v body=%q)", err, diagnostic.URL, diagnostic.Title, status, diagnosticErr, preview)
-	}
-	if err := runStage("capture page", chromedp.Evaluate(`({url: location.href, title: document.title, html: document.documentElement.outerHTML})`, &struct {
-		URL   *string `json:"url"`
-		Title *string `json:"title"`
-		HTML  *string `json:"html"`
-	}{URL: &finalURL, Title: &title, HTML: &html})); err != nil {
-		return nil, err
-	}
-	parsedFinal, err := url.Parse(finalURL)
-	if err != nil || !p.validOrigin(parsedFinal) {
-		return nil, fmt.Errorf("Chromium ended at unexpected URL %q", finalURL)
-	}
-	if isCloudflareChallenge(fmt.Errorf("%s", title)) || strings.TrimSpace(html) == "" {
-		return nil, fmt.Errorf("Chromium did not clear the Cloudflare challenge (title %q)", title)
-	}
-	statusMu.Lock()
-	statusCode := status
-	statusMu.Unlock()
-	if statusCode != http.StatusOK {
-		preview := strings.Join(strings.Fields(html), " ")
-		if len(preview) > 1200 {
-			preview = preview[:1200] + "…"
-		}
-		return nil, fmt.Errorf("Chromium page returned HTTP status %d (title %q, body %q)", statusCode, title, preview)
-	}
-	return &http.Response{
-		Status: "200 OK", StatusCode: http.StatusOK,
-		Header: http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
-		Body:   io.NopCloser(strings.NewReader(html)), Request: original,
-	}, nil
-}
-
 func isCloudflareChallengeOrigin(u *url.URL) bool {
 	return u != nil && u.Scheme == "https" && u.Port() == "" && u.User == nil && strings.EqualFold(u.Hostname(), "challenges.cloudflare.com")
 }
@@ -475,105 +329,17 @@ func parseCookieHeader(raw string) []*http.Cookie {
 	return req.Cookies()
 }
 
-func (p *JavLibrary) startBrowserLocked(proxyURL string) error {
-	if p.browserCtx != nil {
-		if p.browserProxy == proxyURL {
-			return nil
-		}
-		p.browserStop()
-		p.allocStop()
-		if p.virtualDisplayStop != nil {
-			p.virtualDisplayStop()
-		}
-		p.browserCtx = nil
-		p.browserStop = nil
-		p.allocStop = nil
-		p.virtualDisplayStop = nil
+// Close releases the Chromium fallback. A long-lived server would otherwise
+// keep a headless browser and its temporary profile alive after the last
+// scrape, which on a developer machine looks like a stray Chrome process.
+func (p *JavLibrary) Close() error {
+	p.browserMu.Lock()
+	defer p.browserMu.Unlock()
+	if p.fetcher != nil {
+		p.fetcher.Close()
+		p.fetcher = nil
 	}
-	executable := strings.TrimSpace(os.Getenv("METAX_CHROMIUM_BIN"))
-	if executable == "" {
-		for _, candidate := range []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"} {
-			if found, err := exec.LookPath(candidate); err == nil {
-				executable = found
-				break
-			}
-		}
-	}
-	if executable == "" {
-		return errors.New("Chromium executable not found (set METAX_CHROMIUM_BIN or install chromium)")
-	}
-	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
-	var display string
-	var displayStop context.CancelFunc
-	if runtime.GOOS != "darwin" && os.Getenv("DISPLAY") == "" {
-		var err error
-		display, displayStop, err = startVirtualDisplay()
-		if err != nil {
-			return fmt.Errorf("start virtual display for Chromium: %w", err)
-		}
-	}
-	opts = append(opts,
-		chromedp.ExecPath(executable),
-		chromedp.Flag("headless", false),
-		chromedp.Flag("enable-automation", false),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-	)
-	if display != "" {
-		opts = append(opts, chromedp.Env("DISPLAY="+display))
-	}
-	if proxyURL != "" {
-		opts = append(opts, chromedp.ProxyServer(proxyURL))
-	}
-	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
-	// Do not use a temporary timeout context for the first Run. chromedp binds
-	// the allocated browser process to that context, so cancelling it after
-	// startup would terminate Chromium and cancel every later tab operation.
-	err := chromedp.Run(browserCtx)
-	if err != nil {
-		browserCancel()
-		allocCancel()
-		if displayStop != nil {
-			displayStop()
-		}
-		return fmt.Errorf("start Chromium: %w", err)
-	}
-	p.browserCtx = browserCtx
-	p.browserStop = browserCancel
-	p.allocStop = allocCancel
-	p.virtualDisplayStop = displayStop
-	p.browserProxy = proxyURL
 	return nil
-}
-
-func startVirtualDisplay() (string, context.CancelFunc, error) {
-	xvfb, err := exec.LookPath("Xvfb")
-	if err != nil {
-		return "", nil, errors.New("Xvfb is required for headed Chromium when DISPLAY is unset")
-	}
-	displayNumber := 100 + os.Getpid()%500
-	display := fmt.Sprintf(":%d", displayNumber)
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, xvfb, display, "-screen", "0", "1280x800x24", "-nolisten", "tcp", "-ac")
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return "", nil, fmt.Errorf("launch Xvfb: %w", err)
-	}
-	go func() { _ = cmd.Wait() }()
-	socket := fmt.Sprintf("/tmp/.X11-unix/X%d", displayNumber)
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(socket); err == nil {
-			return display, cancel, nil
-		}
-		select {
-		case <-ctx.Done():
-			return "", nil, errors.New("Xvfb exited before its display became ready")
-		case <-time.After(50 * time.Millisecond):
-		}
-	}
-	cancel()
-	return "", nil, errors.New("timed out waiting for Xvfb display")
 }
 
 // fingerprintProfile pairs a TLS ClientHello profile with a matching browser User-Agent.
@@ -594,6 +360,40 @@ var javLibraryFingerprintProfiles = []fingerprintProfile{
 	{name: "Chrome 133", profile: profiles.Chrome_133, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"},
 	{name: "Chrome 144", profile: profiles.Chrome_144, userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"},
 	{name: "Firefox 135", profile: profiles.Firefox_135, userAgent: "Mozilla/5.0 (X11; Linux x86_64; rv:135.0) Gecko/20100101 Firefox/135.0"},
+}
+
+// fetchWithChromium renders the request in the shared headless browser.
+//
+// The provider keeps its own TLS fingerprint rotation for the cheap path, but
+// the browser fallback is the shared implementation. A private copy used to live
+// here and drifted out of date: it opened a visible window and overrode the UA
+// through CDP, both of which make Cloudflare fail the challenge forever.
+func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, error) {
+	p.clientMu.RLock()
+	timeout, proxyURL, cookies := p.timeout, p.proxyURL, p.cookies
+	p.clientMu.RUnlock()
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	p.browserMu.Lock()
+	defer p.browserMu.Unlock()
+	if p.fetcher == nil {
+		p.fetcher = antibot.New(antibot.Options{
+			Timeout:  timeout,
+			ProxyURL: proxyURL,
+			Cookies:  cookies,
+			AllowURL: p.validOrigin,
+		})
+	} else {
+		p.fetcher.SetOptions(func(opts *antibot.Options) {
+			opts.Timeout = timeout
+			opts.ProxyURL = proxyURL
+			opts.Cookies = cookies
+		})
+	}
+	req := original.Clone(original.Context())
+	req.Header.Set("Accept-Language", antibot.BrowserLanguage())
+	return p.fetcher.Do(req)
 }
 
 func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http.Response, error) {

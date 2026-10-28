@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 )
@@ -12,7 +11,7 @@ import (
 func TestWordPressSearchUsesExactRESTSlug(t *testing.T) {
 	var detailRequested bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/top/wp-json/wp/v2/works" {
+		if !isWorksREST(r) {
 			detailRequested = true
 			http.NotFound(w, r)
 			return
@@ -76,7 +75,7 @@ func TestWordPressSearchUsesExactRESTSlug(t *testing.T) {
 func TestWordPressSearchRejectsNonExactSlug(t *testing.T) {
 	var detailRequested bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/wp-json/") {
+		if isWorksREST(r) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprint(w, `[{"slug":"fns257sp"}]`)
 			return

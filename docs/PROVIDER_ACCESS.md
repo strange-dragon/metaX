@@ -184,3 +184,73 @@ Implementation rules:
 - Logs should record that a cookie/proxy was configured, not the secret value.
 - Cookies expire; a failed scrape after a previously successful run should be
   re-checked with a fresh value before treating it as a parser regression.
+
+## Shared anti-bot fetch layer (`internal/antibot`)
+
+Providers whose live sites reject plain Go HTTP clients (Jav321 today, JavLibrary
+partially) go through one shared fetcher:
+
+1. Browser TLS fingerprints via `tls-client` (Chrome 146 first, then older
+   Chrome/Firefox), rotating on 403/challenge responses.
+2. A **headless** Chromium fallback for JavaScript challenges.
+
+Browser policy, because scraping must never disturb the operator's desktop:
+
+- Chromium always starts headless (`--headless=new`). No window is created, no
+  focus is stolen, and the run works the same on a laptop or a headless server.
+- Every launch uses a throwaway `--user-data-dir` created by chromedp under the
+  system temp directory, so the local Chrome profile, cookies and logins are
+  never read or written.
+- The browser process is stopped on `Close()`; long-lived providers must
+  implement `io.Closer`, otherwise a headless Chrome can outlive the request.
+- `METAX_CHROMIUM_HEADED=1` is the only way to get a visible window, for
+  debugging a challenge by hand. On Linux without `DISPLAY` that path starts
+  Xvfb so the window still stays off a real screen.
+- `METAX_ANTIBOT_DEBUG=1` prints which strategy answered a request.
+
+### How a Cloudflare challenge is cleared headlessly
+
+The working recipe, verified against f101w.com (JavLibrary), JavDB and JavDB's
+search pages on 2026-10-28:
+
+1. Real Chrome, `--headless=new`, GPU left enabled.
+2. The UA is passed as a **launch flag** (`--user-agent=`), never through CDP.
+   `Emulation.setUserAgentOverride` is detectable: under it the challenge reloads
+   every ~7 seconds and never clears, while the same browser with the launch flag
+   clears it in 5-8 seconds. The UA version must match the binary because Chrome
+   derives `Sec-CH-UA` from its build.
+3. `--lang=ja-JP` (override with `METAX_BROWSER_LANG`), so `navigator.language`,
+   `Accept-Language` and the page content agree.
+4. No in-page JavaScript patches. They are unnecessary once 1-3 hold, and a
+   patched `navigator.plugins` is itself a fingerprint.
+5. The challenge reloads the document while validating, so the wait loop must
+   re-evaluate from scratch; `chromedp.PollFunction` aborts with
+   "Inspected target navigated or closed (-32000)" on the first reload.
+
+### Hosts that need a proxy, not a parser
+
+These answer a real browser with a firewall or geo block. No amount of browser
+automation helps; they need a residential/Japanese egress.
+
+| Site | Answer | Why |
+| --- | --- | --- |
+| prestige-av.com | 403 "not available in your region" | Hard geo block |
+| faleno.jp | 403 on `/top/works/*` and on any REST call | Host WAF; the homepage alone loads |
+| fc2ppvdb.com | 403 / "Access denied" | Cloudflare firewall rule (error 1020) |
+| freejavbt.com | 503 "Web Page Blocked" | Upstream network block |
+| fc2club.top | TLS reset | Upstream network block |
+| iqqr5.org | CF `urlblock` | Cloudflare firewall rule |
+
+`DAHLIA` and `FALENO` additionally expose a WordPress REST API. The pretty
+`/wp-json/wp/v2/works` path is blocked by the host WAF, but the equivalent
+`?rest_route=/wp/v2/works&slug=...` query form is served normally — that is what
+`dahlia/core` uses now.
+
+### Live status (2026-10-28, macOS, this network, no proxy)
+
+`go run ./cmd/metax-livecheck -timeout 50s`: **13 ok, 18 failed, 12 skipped**.
+Skipped means the harness has no sample number or the sample uses a format the
+provider never accepts, so it says nothing about the provider. Of the failures
+most are the proxy-only hosts above, plus wrong sample numbers on the amateur
+labels (C0930/H0930/H4610/Gcolle/Pcolaco/PACOPACOMAMA/MURAMURA return 404 for
+the shared sample).

@@ -27,7 +27,12 @@ go.work.sum
 
 # Local build output
 /metax-server
+/metax-livecheck
+/metax-browserprobe
 /dist/
+
+# Local agent workspace data
+/.workbuddy/
 
 # env file
 .env

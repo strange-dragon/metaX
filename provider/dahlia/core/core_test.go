@@ -36,7 +36,7 @@ func TestGetMovieInfoByURLVerifiesExactSlug(t *testing.T) {
 			var detailRequested bool
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch {
-				case strings.HasPrefix(r.URL.Path, "/wp-json/wp/v2/works"):
+				case isWorksREST(r):
 					w.Header().Set("Content-Type", "application/json")
 					_, _ = fmt.Fprint(w, tt.restBody)
 				case r.URL.Path == "/works/target/":
@@ -72,4 +72,11 @@ func TestGetMovieInfoByURLVerifiesExactSlug(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isWorksREST matches both WordPress REST URL shapes: the pretty permalink path
+// and the ?rest_route= query form the provider uses to get past the host WAF.
+func isWorksREST(r *http.Request) bool {
+	return strings.HasSuffix(r.URL.Path, "/wp-json/wp/v2/works") ||
+		r.URL.Query().Get("rest_route") == "/wp/v2/works"
 }

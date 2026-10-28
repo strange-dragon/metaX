@@ -6,7 +6,7 @@
 package jav321
 
 import (
-	"crypto/tls"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,19 +14,22 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/lib/pq"
+	"golang.org/x/net/html"
 	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/strange-dragon/metaX/common/parser"
 	"github.com/strange-dragon/metaX/model"
 	mt "github.com/strange-dragon/metaX/provider"
-	"github.com/strange-dragon/metaX/provider/httpretry"
+	"github.com/strange-dragon/metaX/internal/antibot"
 )
 
 const (
@@ -35,12 +38,19 @@ const (
 	defaultURL     = "https://www.jav321.com"
 	defaultTimeout = 20 * time.Second
 	maxPageBytes   = 8 << 20
+	userAgent      = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+
+	// maxTransientAttempts bounds retries for 408/429/503/504 responses. Retries
+	// cannot turn a hard block into content, so the attempt count stays small.
+	maxTransientAttempts = 3
 )
 
 var (
 	ErrMovieNotFound = errors.New("jav321: movie not found")
 	movieNumberRE    = regexp.MustCompile(`(?i)^(?:[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*|[A-Z]{2,12}[0-9]{2,12}|FC2[-_]?PPV[-_]?[0-9]+)$`)
 	numberInTitleRE  = regexp.MustCompile(`(?i)(FC2[-_]?PPV[-_]?[0-9]+|[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*)`)
+	runtimeMinutesRE = regexp.MustCompile(`(?i)(\d+)\s*(?:min|minutes?|分)`)
+	previewImageRE   = regexp.MustCompile(`(?i)jp-(\d+)\.jpg$`)
 )
 
 var (
@@ -49,16 +59,23 @@ var (
 	_ mt.Fetcher              = (*Jav321)(nil)
 	_ mt.ProxySetter          = (*Jav321)(nil)
 	_ mt.RequestTimeoutSetter = (*Jav321)(nil)
+	_ mt.ConfigSetter         = (*Jav321)(nil)
 )
 
 // Jav321 implements the metaX movie Provider contract for jav321.com.
+//
+// The site is reachable from most networks, but its edge protection answers
+// plain Go clients with a Cloudflare challenge from some egress IPs. All
+// requests therefore go through the shared antibot layer, which rotates browser
+// TLS fingerprints and falls back to Chromium for interactive challenges.
 type Jav321 struct {
 	baseURL *url.URL
 
-	clientMu sync.RWMutex
-	client   *http.Client
+	stateMu  sync.RWMutex
 	timeout  time.Duration
 	proxyURL string
+	cookies  string
+	fetcher  *antibot.Fetcher
 
 	priorityMu sync.RWMutex
 	priority   float64
@@ -67,15 +84,15 @@ type Jav321 struct {
 func New() *Jav321 {
 	u, _ := url.Parse(defaultURL)
 	p := &Jav321{baseURL: u, timeout: defaultTimeout, priority: Priority}
-	p.rebuildClientLocked()
+	p.rebuildFetcherLocked()
 	return p
 }
 
-func newForTest(base string, client *http.Client) *Jav321 {
+func newForTest(base string, fetcher *antibot.Fetcher) *Jav321 {
 	u, _ := url.Parse(base)
-	p := &Jav321{baseURL: u, timeout: defaultTimeout, priority: Priority, client: client}
-	if p.client == nil {
-		p.rebuildClientLocked()
+	p := &Jav321{baseURL: u, timeout: defaultTimeout, priority: Priority, fetcher: fetcher}
+	if p.fetcher == nil {
+		p.rebuildFetcherLocked()
 	}
 	return p
 }
@@ -129,7 +146,7 @@ func (p *Jav321) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if !p.allowedHost(u.Hostname()) {
 		return "", fmt.Errorf("jav321: unexpected detail host %q", u.Hostname())
 	}
-	if !p.allowedRedirectURL(u) {
+	if !p.allowedURL(u) {
 		return "", fmt.Errorf("jav321: unexpected detail origin %q", u.String())
 	}
 	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
@@ -149,7 +166,10 @@ func (p *Jav321) allowedHost(host string) bool {
 		(base == "www.jav321.com" && host == "jav321.com")
 }
 
-func (p *Jav321) allowedRedirectURL(u *url.URL) bool {
+func (p *Jav321) allowedURL(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
 	if !p.allowedHost(u.Hostname()) {
 		return false
 	}
@@ -173,13 +193,13 @@ func (p *Jav321) allowedRedirectURL(u *url.URL) bool {
 }
 
 func (p *Jav321) SetRequestTimeout(timeout time.Duration) {
-	p.clientMu.Lock()
-	defer p.clientMu.Unlock()
+	p.stateMu.Lock()
+	defer p.stateMu.Unlock()
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
 	p.timeout = timeout
-	p.rebuildClientLocked()
+	p.rebuildFetcherLocked()
 }
 
 func (p *Jav321) SetProxy(proxyURL string) error {
@@ -195,88 +215,207 @@ func (p *Jav321) SetProxy(proxyURL string) error {
 			return fmt.Errorf("jav321: unsupported proxy scheme %q", u.Scheme)
 		}
 	}
-	p.clientMu.Lock()
-	defer p.clientMu.Unlock()
+	p.stateMu.Lock()
+	defer p.stateMu.Unlock()
 	p.proxyURL = proxyURL
-	p.rebuildClientLocked()
+	p.rebuildFetcherLocked()
 	return nil
 }
 
-func (p *Jav321) rebuildClientLocked() {
-	var transport *http.Transport
-	if baseTransport, ok := http.DefaultTransport.(*http.Transport); ok {
-		transport = baseTransport.Clone()
-	} else {
-		transport = &http.Transport{Proxy: http.ProxyFromEnvironment}
-	}
-	transport.Proxy = http.ProxyFromEnvironment
-	// Match Amane's scraper HTTP behavior: some Jav321 deployments present an
-	// invalid certificate, so do not let certificate-name/chain issues prevent metadata scraping.
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} // #nosec G402
-	if p.proxyURL != "" {
-		if proxyURL, err := url.Parse(p.proxyURL); err == nil {
-			transport.Proxy = http.ProxyURL(proxyURL)
+// SetConfig accepts BASE_URL and COOKIES/COOKIE, matching the configuration
+// convention documented in docs/PROVIDER_ACCESS.md.
+func (p *Jav321) SetConfig(config mt.Config) error {
+	p.stateMu.Lock()
+	defer p.stateMu.Unlock()
+
+	if config.Has("base_url") {
+		raw, err := config.GetString("base_url")
+		if err != nil {
+			return fmt.Errorf("jav321: read base_url: %w", err)
 		}
+		u, err := p.parseBaseURL(raw)
+		if err != nil {
+			return err
+		}
+		p.baseURL = u
+	}
+	for _, key := range []string{"cookies", "cookie"} {
+		if !config.Has(key) {
+			continue
+		}
+		value, err := config.GetString(key)
+		if err != nil {
+			return fmt.Errorf("jav321: read %s: %w", key, err)
+		}
+		if strings.ContainsAny(value, "\r\n") {
+			return fmt.Errorf("jav321: %s must not contain CR/LF", key)
+		}
+		p.cookies = strings.TrimSpace(value)
+		break
+	}
+	p.rebuildFetcherLocked()
+	return nil
+}
+
+func (p *Jav321) parseBaseURL(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("jav321: empty base_url")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("jav321: parse base_url: %w", err)
+	}
+	if u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return nil, fmt.Errorf("jav321: base_url must be a bare https origin, got %q", raw)
+	}
+	if path := strings.TrimSuffix(u.Path, "/"); path != "" {
+		return nil, fmt.Errorf("jav321: base_url must not contain a path, got %q", raw)
+	}
+	if !p.allowedHost(u.Hostname()) {
+		return nil, fmt.Errorf("jav321: unsupported base_url host %q", u.Hostname())
+	}
+	u.Path = ""
+	return u, nil
+}
+
+// rebuildFetcherLocked replaces the fetch layer. Callers must hold stateMu.
+func (p *Jav321) rebuildFetcherLocked() {
+	if p.fetcher != nil {
+		p.fetcher.Close()
 	}
 	timeout := p.timeout
 	if timeout <= 0 {
 		timeout = defaultTimeout
 	}
-	p.client = &http.Client{
-		Transport: httpretry.WrapTransport(transport),
-		Timeout:   timeout,
-	}
+	p.fetcher = antibot.New(antibot.Options{
+		Timeout:      timeout,
+		ProxyURL:     p.proxyURL,
+		Cookies:      p.cookies,
+		AllowURL:     p.allowedURL,
+		MaxBodyBytes: maxPageBytes,
+	})
 }
 
-func (p *Jav321) httpClient() *http.Client {
-	p.clientMu.RLock()
-	defer p.clientMu.RUnlock()
-	return p.client
+func (p *Jav321) currentFetcher() *antibot.Fetcher {
+	p.stateMu.RLock()
+	defer p.stateMu.RUnlock()
+	return p.fetcher
 }
 
 func (p *Jav321) Fetch(rawURL string) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	req, err := p.newRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	return p.send(req)
+}
+
+func (p *Jav321) newRequest(method, rawURL string, body io.Reader) (*http.Request, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("jav321: parse URL: %w", err)
+	}
+	if !p.allowedURL(u) {
+		return nil, fmt.Errorf("jav321: refusing request to unexpected origin %q", rawURL)
+	}
+	req, err := http.NewRequest(method, u.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("jav321: create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "ja,en;q=0.8,zh;q=0.6")
 	req.Header.Set("Referer", p.baseURL.String()+"/")
-
-	resp, err := p.httpClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("jav321: GET %s: %w", rawURL, err)
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		_ = resp.Body.Close()
-		return nil, fmt.Errorf("%w: %s", ErrMovieNotFound, rawURL)
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		_ = resp.Body.Close()
-		return nil, fmt.Errorf("jav321: GET %s: unexpected HTTP status %s", rawURL, resp.Status)
-	}
-	return resp, nil
+	return req, nil
 }
 
-func (p *Jav321) getHTML(rawURL string) (*goquery.Document, error) {
+// send performs the request through the antibot layer, retrying transient
+// statuses. Challenge detection, TLS rotation and the Chromium fallback are
+// handled by that layer.
+func (p *Jav321) send(req *http.Request) (*http.Response, error) {
+	fetcher := p.currentFetcher()
+	if fetcher == nil {
+		return nil, errors.New("jav321: fetch layer is not initialised")
+	}
+	var lastErr error
+	for attempt := 1; attempt <= maxTransientAttempts; attempt++ {
+		if attempt > 1 {
+			if err := sleepContext(req.Context(), time.Duration(attempt-1)*500*time.Millisecond); err != nil {
+				return nil, err
+			}
+		}
+		resp, err := fetcher.Do(req)
+		if err != nil {
+			lastErr = err
+			if antibot.IsChallengeError(err) {
+				return nil, fmt.Errorf("jav321: GET %s blocked by edge protection: %w", req.URL, err)
+			}
+			continue
+		}
+		switch {
+		case resp.StatusCode == http.StatusNotFound:
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("%w: %s", ErrMovieNotFound, req.URL)
+		case resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices:
+			return resp, nil
+		case isTransientStatus(resp.StatusCode):
+			_ = resp.Body.Close()
+			lastErr = fmt.Errorf("jav321: GET %s: unexpected HTTP status %s", req.URL, resp.Status)
+		default:
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("jav321: GET %s: unexpected HTTP status %s", req.URL, resp.Status)
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("jav321: request attempts exhausted")
+	}
+	return nil, lastErr
+}
+
+func isTransientStatus(status int) bool {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests,
+		http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func sleepContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (p *Jav321) getDocument(rawURL string) (*goquery.Document, string, error) {
 	resp, err := p.Fetch(rawURL)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxPageBytes+1))
 	if err != nil {
-		return nil, fmt.Errorf("jav321: read response: %w", err)
+		return nil, "", fmt.Errorf("jav321: read response: %w", err)
 	}
 	if len(body) > maxPageBytes {
-		return nil, fmt.Errorf("jav321: response exceeds %d bytes", maxPageBytes)
+		return nil, "", fmt.Errorf("jav321: response exceeds %d bytes", maxPageBytes)
+	}
+	finalURL := rawURL
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
 	}
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
 	if err != nil {
-		return nil, fmt.Errorf("jav321: parse HTML: %w", err)
+		return nil, "", fmt.Errorf("jav321: parse HTML: %w", err)
 	}
-	return doc, nil
+	return doc, finalURL, nil
 }
 
 func (p *Jav321) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
@@ -295,97 +434,99 @@ func (p *Jav321) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc, err := p.getHTML(rawURL)
+	doc, finalURL, err := p.getDocument(rawURL)
 	if err != nil {
 		return nil, err
 	}
+	homepage := rawURL
+	if _, err := p.ParseMovieIDFromURL(finalURL); err == nil {
+		homepage = finalURL
+	}
+	return p.parseDetail(doc, id, homepage)
+}
 
-	title := cleanText(doc.Find("div.panel-heading h3").First().Text())
+// parseDetail maps a Jav321 detail document.
+//
+// The live layout is a Bootstrap panel: a <h3> carrying the title followed by a
+// nested <small> that repeats the compressed number and the cast, a metadata
+// block of <b>label</b> value pairs, a video panel, and one free-text
+// description panel.
+func (p *Jav321) parseDetail(doc *goquery.Document, id, homepage string) (*model.MovieInfo, error) {
+	heading := doc.Find("div.panel-heading h3").First()
+	if heading.Length() == 0 {
+		return nil, ErrMovieNotFound
+	}
+	title := cleanText(stripSelection(heading, "small").Text())
 	if title == "" {
 		return nil, ErrMovieNotFound
 	}
-	number := id
-	if match := numberInTitleRE.FindString(cleanText(doc.Find("div.panel-heading h3 small").First().Text())); match != "" {
-		number = strings.ToUpper(match)
+
+	fields := readLabeledFields(doc)
+
+	number := firstNonEmpty(fields["品番"])
+	if match := numberInTitleRE.FindString(number); match != "" {
+		number = match
 	}
-	if match := numberInTitleRE.FindString(title); match != "" {
-		number = strings.ToUpper(match)
+	number = strings.ToUpper(strings.TrimSpace(number))
+	if number == "" {
+		number = id
 	}
 	displayTitle := removeLeadingNumber(title, number)
-	if displayTitle == title && number != "" {
-		displayTitle = cleanText(regexp.MustCompile(`(?i)`+regexp.QuoteMeta(number)).ReplaceAllString(title, " "))
-	}
 	if displayTitle == "" {
 		displayTitle = title
 	}
 
-	actors := collectTexts(doc, "b", "出演者", "a")
-	studio := collectTexts(doc, "b", "メーカー", "a")
-	genres := collectTexts(doc, "b", "ジャンル", "a")
-	releaseText := collectFollowingText(doc, "配信開始日")
-	runtimeText := collectFollowingText(doc, "収録時間")
-	plot := cleanText(doc.Find("div.panel-body div.row div.col-md-12").First().Text())
-	images := doc.Find("img")
-	var cover, thumb string
-	images.Each(func(_ int, image *goquery.Selection) {
-		raw := attrOrFirst(image, "data-src", "data-original", "src")
-		resolved := resolveImageURL(p.baseURL, raw)
-		if resolved == "" {
-			return
-		}
-		filename := strings.ToLower(path.Base(raw))
-		if !strings.HasPrefix(filename, strings.ToLower(id)) {
-			return
-		}
-		switch {
-		case strings.Contains(filename, "pl.jpg"):
-			cover = resolved
-		case strings.Contains(filename, "ps.jpg") && thumb == "":
-			thumb = resolved
-		case strings.Contains(filename, "jp-"):
-			// Preview galleries are exposed separately from the package cover.
-		}
-	})
+	images := collectImages(doc, p.baseURL, id, number)
+	cover := images.cover
+	thumb := images.thumb
+	previews := images.previews
+	if videoURL := attrValue(doc.Find("video source[src]").First(), "src"); videoURL != "" {
+		images.previewVideo = resolveURL(p.baseURL, videoURL)
+	}
 	if cover == "" {
-		cover = resolveImageURL(p.baseURL, attrOrFirst(images.First(), "data-src", "data-original", "src"))
+		// The player poster is the package cover on pages that omit the <img>.
+		cover = preferLargeCover(resolveImageURL(p.baseURL, attrValue(doc.Find("video[poster]").First(), "poster")))
+	}
+	if cover == "" && thumb != "" {
+		// Pages that only expose the sample image still have a usable cover.
+		cover = preferLargeCover(thumb)
+	}
+	if cover == "" {
+		cover = resolveImageURL(p.baseURL, attrValue(doc.Find("meta[property='og:image']").First(), "content"))
+	}
+	if cover == "" {
+		return nil, fmt.Errorf("jav321: detail page %s has no cover image", homepage)
 	}
 	if thumb == "" {
 		thumb = cover
 	}
-	var previews []string
-	images.Each(func(_ int, image *goquery.Selection) {
-		raw := attrOrFirst(image, "data-src", "data-original", "src")
-		filename := strings.ToLower(path.Base(raw))
-		if strings.HasPrefix(filename, strings.ToLower(id)) && strings.Contains(filename, "jp-") {
-			previews = appendUnique(previews, resolveImageURL(p.baseURL, raw))
-		}
-	})
-	if cover == "" {
-		cover = resolveURL(p.baseURL, attrValue(doc.Find("meta[property='og:image']").First(), "content"))
-	}
-	if cover == "" {
-		return nil, fmt.Errorf("jav321: detail page %s has no cover image", rawURL)
-	}
 
 	info := &model.MovieInfo{
-		ID:            number,
-		Number:        number,
-		Title:         displayTitle,
-		Summary:       plot,
-		Provider:      p.Name(),
-		Homepage:      rawURL,
-		Maker:         firstNonEmpty(studio),
-		Actors:        pq.StringArray(actors),
-		Genres:        pq.StringArray(genres),
-		CoverURL:      cover,
-		ThumbURL:      thumb,
-		PreviewImages: pq.StringArray(previews),
+		ID:              number,
+		Number:          number,
+		Title:           displayTitle,
+		Summary:         detailSummary(doc),
+		Provider:        p.Name(),
+		Homepage:        homepage,
+		Maker:           firstNonEmpty(fields["メーカー"]),
+		Label:           firstNonEmpty(fields["レーベル"]),
+		Series:          seriesName(doc),
+		Actors:          pq.StringArray(fields["出演者"]),
+		Genres:          pq.StringArray(fields["ジャンル"]),
+		CoverURL:        cover,
+		BigCoverURL:     cover,
+		ThumbURL:        thumb,
+		PreviewImages:   pq.StringArray(previews),
+		PreviewVideoURL: images.previewVideo,
 	}
-	if strings.TrimSpace(releaseText) != "" {
-		info.ReleaseDate = parser.ParseDate(releaseText)
+	if score := parser.ParseScore(firstNonEmpty(fields["平均評価"])); score > 0 {
+		info.Score = score
 	}
-	if strings.TrimSpace(runtimeText) != "" {
-		info.Runtime = parser.ParseRuntime(runtimeText)
+	if release := firstNonEmpty(fields["配信開始日"]); release != "" {
+		info.ReleaseDate = parser.ParseDate(release)
+	}
+	if runtime := firstNonEmpty(fields["収録時間"]); runtime != "" {
+		info.Runtime = parseRuntimeMinutes(runtime)
 	}
 	if !info.IsValid() {
 		return nil, ErrMovieNotFound
@@ -412,27 +553,30 @@ func (p *Jav321) SearchMovie(keyword string) ([]*model.MovieSearchResult, error)
 // site-specific slug (for example SSIS-033 -> /video/ssis00033), not the
 // catalog number, so constructing /video/{input} directly misses valid works.
 func (p *Jav321) searchDetail(keyword string) (*model.MovieInfo, error) {
-	u := *p.baseURL
-	u.Path = path.Join(u.Path, "search")
+	searchURL := *p.baseURL
+	searchURL.Path = path.Join(searchURL.Path, "search")
 	form := url.Values{"sn": {keyword}}
-	req, err := http.NewRequest(http.MethodPost, u.String(), strings.NewReader(form.Encode()))
+	req, err := p.newRequest(http.MethodPost, searchURL.String(), strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("jav321: create search request: %w", err)
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
-	req.Header.Set("Referer", p.baseURL.String()+"/")
-	resp, err := p.httpClient().Do(req)
+	resp, err := p.send(req)
 	if err != nil {
+		if errors.Is(err, ErrMovieNotFound) {
+			return nil, ErrMovieNotFound
+		}
 		return nil, fmt.Errorf("jav321: search %q: %w", keyword, err)
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("jav321: search %q: unexpected HTTP status %s", keyword, resp.Status)
+	finalURL := ""
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
 	}
-	finalURL := resp.Request.URL.String()
-	_, err = p.ParseMovieIDFromURL(finalURL)
-	if err != nil {
+	_ = resp.Body.Close()
+	if finalURL == "" {
+		return nil, ErrMovieNotFound
+	}
+	if _, err := p.ParseMovieIDFromURL(finalURL); err != nil {
 		return nil, ErrMovieNotFound
 	}
 	info, err := p.GetMovieInfoByURL(finalURL)
@@ -449,13 +593,176 @@ func sameCatalogNumber(a, b string) bool {
 	return compact(a) == compact(b)
 }
 
-func resolveImageURL(base *url.URL, raw string) string {
-	resolved := resolveURL(base, raw)
-	resolved = strings.Replace(resolved, "pics.dmm.co.jp//", "pics.dmm.co.jp/", 1)
-	if strings.HasPrefix(strings.ToLower(resolved), "http://pics.dmm.co.jp/") {
-		return "https://" + strings.TrimPrefix(resolved, "http://")
+// readLabeledFields walks <b>label</b> value pairs inside the metadata panel.
+// Values may be plain text, anchors, or a mix; every value is deduplicated.
+func readLabeledFields(doc *goquery.Document) map[string][]string {
+	fields := make(map[string][]string)
+	var container *goquery.Selection
+	doc.Find("b").EachWithBreak(func(_ int, node *goquery.Selection) bool {
+		if strings.Contains(cleanText(node.Text()), "品番") {
+			container = node.Parent()
+			return false
+		}
+		return true
+	})
+	if container == nil {
+		container = doc.Selection
 	}
-	return resolved
+	current := ""
+	container.Contents().Each(func(_ int, node *goquery.Selection) {
+		raw := node.Get(0)
+		if raw == nil {
+			return
+		}
+		if raw.Type == html.ElementNode && raw.Data == "b" {
+			current = strings.TrimSuffix(cleanText(node.Text()), ":")
+			current = strings.TrimSuffix(current, "：")
+			if current != "" {
+				if _, ok := fields[current]; !ok {
+					fields[current] = nil
+				}
+			}
+			return
+		}
+		if current == "" {
+			return
+		}
+		value := cleanLabelValue(node.Text())
+		if value == "" {
+			return
+		}
+		fields[current] = appendUnique(fields[current], value)
+	})
+	return fields
+}
+
+func cleanLabelValue(raw string) string {
+	raw = cleanText(raw)
+	raw = strings.TrimLeft(raw, ":： ")
+	// The metadata panel concatenates a label, its value and the next label in
+	// one text run when the value is not an anchor; cut at the next label.
+	for _, label := range []string{"出演者", "メーカー", "品番", "配信開始日", "収録時間", "ジャンル", "お気に入り登録数", "平均評価", "レーベル", "シリーズ"} {
+		if idx := strings.Index(raw, label); idx > 0 {
+			raw = raw[:idx]
+		}
+	}
+	return strings.TrimSpace(raw)
+}
+
+// detailSummary returns the site's free-text description. The first
+// col-md-12 panel holds the video player and ad slots, so panels containing
+// media or scripts are skipped.
+func detailSummary(doc *goquery.Document) string {
+	var summary string
+	doc.Find("div.panel-body div.row div.col-md-12").EachWithBreak(func(_ int, node *goquery.Selection) bool {
+		if node.Find("video, img, script, iframe, ins, source").Length() > 0 {
+			return true
+		}
+		text := cleanText(node.Text())
+		if len([]rune(text)) < 20 {
+			return true
+		}
+		summary = text
+		return false
+	})
+	return summary
+}
+
+func seriesName(doc *goquery.Document) string {
+	var name string
+	doc.Find("div.panel-heading a[href^='/snp/']").EachWithBreak(func(_ int, node *goquery.Selection) bool {
+		if text := cleanText(node.Text()); text != "" {
+			name = text
+			return false
+		}
+		return true
+	})
+	return name
+}
+
+type imageSet struct {
+	cover        string
+	thumb        string
+	previews     []string
+	previewVideo string
+}
+
+// collectImages separates the package cover (pl.jpg), the thumbnail (ps.jpg)
+// and the numbered gallery images (jp-N.jpg). Samples of other works use the
+// same suffixes on other pages, so entries are matched against the current
+// number when one is known.
+func collectImages(doc *goquery.Document, base *url.URL, id, number string) imageSet {
+	var set imageSet
+	prefixes := []string{}
+	for _, candidate := range []string{id, number} {
+		if compact := compactNumber(candidate); compact != "" {
+			prefixes = appendUnique(prefixes, compact)
+		}
+	}
+	matches := func(filename string) bool {
+		if len(prefixes) == 0 {
+			return true
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(filename, prefix) {
+				return true
+			}
+		}
+		return false
+	}
+	type preview struct {
+		order int
+		url   string
+	}
+	var previews []preview
+	doc.Find("img").Each(func(_ int, image *goquery.Selection) {
+		raw := attrOrFirst(image, "data-src", "data-original", "src")
+		resolved := resolveImageURL(base, raw)
+		if resolved == "" {
+			return
+		}
+		filename := strings.ToLower(path.Base(raw))
+		if !matches(filename) {
+			return
+		}
+		switch {
+		case strings.Contains(filename, "pl.jpg"):
+			if set.cover == "" {
+				set.cover = resolved
+			}
+		case strings.Contains(filename, "ps.jpg"):
+			if set.thumb == "" {
+				set.thumb = resolved
+			}
+		default:
+			if match := previewImageRE.FindStringSubmatch(filename); match != nil {
+				order, _ := strconv.Atoi(match[1])
+				previews = append(previews, preview{order: order, url: resolved})
+			}
+		}
+	})
+	sort.SliceStable(previews, func(i, j int) bool { return previews[i].order < previews[j].order })
+	for _, item := range previews {
+		set.previews = appendUnique(set.previews, item.url)
+	}
+	return set
+}
+
+// compactNumber reduces a catalog number to the alphanumeric form used in image
+// file names (SSIS-033 -> ssis033, ssis00033 -> ssis00033).
+func compactNumber(number string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(number) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func preferLargeCover(cover string) string {
+	cover = strings.Replace(cover, "ps.jpg", "pl.jpg", 1)
+	return cover
 }
 
 func removeLeadingNumber(title, number string) string {
@@ -469,32 +776,37 @@ func removeLeadingNumber(title, number string) string {
 	return cleanText(rest)
 }
 
-func collectTexts(doc *goquery.Document, labelSelector, label, valueSelector string) []string {
-	var results []string
-	doc.Find(labelSelector).Each(func(_ int, node *goquery.Selection) {
-		if !strings.Contains(cleanText(node.Text()), label) {
-			return
-		}
-		node.Parent().Find(valueSelector).Each(func(_ int, value *goquery.Selection) {
-			if text := cleanText(value.Text()); text != "" {
-				results = appendUnique(results, text)
-			}
-		})
-	})
-	return results
+// stripSelection returns a copy of sel with the matching descendants removed.
+func stripSelection(sel *goquery.Selection, selector string) *goquery.Selection {
+	clone := sel.Clone()
+	clone.Find(selector).Remove()
+	return clone
 }
 
-func collectFollowingText(doc *goquery.Document, label string) string {
-	var result string
-	doc.Find("b").EachWithBreak(func(_ int, node *goquery.Selection) bool {
-		if !strings.Contains(cleanText(node.Text()), label) {
-			return true
+func parseRuntimeMinutes(raw string) int {
+	raw = cleanText(raw)
+	if raw == "" {
+		return 0
+	}
+	if match := runtimeMinutesRE.FindStringSubmatch(raw); match != nil {
+		if minutes, err := strconv.Atoi(match[1]); err == nil {
+			return minutes
 		}
-		result = cleanText(node.Parent().Text())
-		result = strings.TrimLeft(strings.TrimSpace(strings.TrimPrefix(result, label)), ":： ")
-		return false
-	})
-	return result
+	}
+	return parser.ParseRuntime(raw)
+}
+
+func resolveImageURL(base *url.URL, raw string) string {
+	resolved := resolveURL(base, raw)
+	if resolved == "" {
+		return ""
+	}
+	resolved = strings.ReplaceAll(resolved, "pics.dmm.co.jp//", "pics.dmm.co.jp/")
+	resolved = strings.ReplaceAll(resolved, "p.dmm.co.jp//", "p.dmm.co.jp/")
+	if strings.HasPrefix(strings.ToLower(resolved), "http://") {
+		return "https://" + resolved[len("http://"):]
+	}
+	return resolved
 }
 
 func cleanText(value string) string {
@@ -537,6 +849,9 @@ func firstNonEmpty(values []string) string {
 }
 
 func appendUnique(values []string, value string) []string {
+	if value == "" {
+		return values
+	}
 	for _, existing := range values {
 		if existing == value {
 			return values

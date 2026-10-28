@@ -13,6 +13,7 @@ import (
 	"golang.org/x/text/language"
 
 	"github.com/strange-dragon/metaX/common/parser"
+	"github.com/strange-dragon/metaX/internal/antibot"
 	"github.com/strange-dragon/metaX/model"
 	"github.com/strange-dragon/metaX/provider/internal/scraper"
 )
@@ -28,9 +29,17 @@ type Core struct {
 	// Values
 	DefaultPriority float64
 	DefaultName     string
+
+	// transport routes every scrape through the shared anti-bot layer: these
+	// sites answer a plain Go client with a Cloudflare 403.
+	transport *antibot.Transport
 }
 
 func (core *Core) Init() *Core {
+	core.transport = antibot.NewTransport(antibot.Options{
+		Timeout:  45 * time.Second,
+		AllowURL: core.allowedURL,
+	})
 	core.Scraper = scraper.NewDefaultScraper(
 		core.DefaultName,
 		core.BaseURL,
@@ -38,31 +47,103 @@ func (core *Core) Init() *Core {
 		language.Japanese,
 		scraper.WithCookies(core.BaseURL, []*http.Cookie{
 			{Name: "modal", Value: "off"},
-		}))
+		}),
+		// The browser fallback needs longer than colly's default client timeout.
+		scraper.WithRequestTimeout(60*time.Second),
+		scraper.WithTransport(core.transport))
 	return core
+}
+
+// allowedURL keeps redirects and browser navigation inside the provider origin.
+// The base URL is the reference, so a test server on http://127.0.0.1 works the
+// same way as the production https origin.
+func (core *Core) allowedURL(u *url.URL) bool {
+	if u == nil || u.User != nil {
+		return false
+	}
+	base, err := url.Parse(core.BaseURL)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Scheme, base.Scheme) &&
+		strings.EqualFold(u.Hostname(), base.Hostname()) &&
+		effectivePort(u) == effectivePort(base)
+}
+
+// SetProxy mirrors the proxy onto the anti-bot transport.
+func (core *Core) SetProxy(proxyURL string) error {
+	if err := core.Scraper.SetProxy(proxyURL); err != nil {
+		return err
+	}
+	core.transport.SetOptions(func(opts *antibot.Options) { opts.ProxyURL = proxyURL })
+	return nil
+}
+
+// SetRequestTimeout keeps the transport in step with the scraper.
+func (core *Core) SetRequestTimeout(timeout time.Duration) {
+	core.Scraper.SetRequestTimeout(timeout)
+	core.transport.SetOptions(func(opts *antibot.Options) { opts.Timeout = timeout })
+}
+
+// Close releases the browser the transport may have started.
+func (core *Core) Close() error {
+	if core.transport != nil {
+		core.transport.Close()
+	}
+	return nil
 }
 
 func (core *Core) NormalizeMovieID(id string) string { return strings.ToLower(id) }
 
+// restWorksEndpoint builds the WordPress REST URL for one work slug.
+//
+// Both hosts sit behind a WAF that answers the pretty /wp-json/ path with 403
+// for foreign traffic, while the equivalent ?rest_route= query form is served
+// normally. Everything else about the payload is identical.
+func (core *Core) restWorksEndpoint(id string) string {
+	// WordPress slugs are lowercase, so a catalog number such as "DLDSS-325"
+	// has to be normalized before it can match.
+	return strings.TrimRight(core.BaseURL, "/") + "/?rest_route=/wp/v2/works&slug=" +
+		url.QueryEscape(core.NormalizeMovieID(id))
+}
+
 // verifyMovieSlug checks the WordPress REST API before scraping the detail
 // page. A missing slug may otherwise redirect to an unrelated work page.
 func (core *Core) verifyMovieSlug(id string) error {
-	endpoint := strings.TrimRight(core.BaseURL, "/") + "/wp-json/wp/v2/works?slug=" + url.QueryEscape(id)
+	endpoint := core.restWorksEndpoint(id)
 	c := core.ClonedCollector()
 	c.ParseHTTPErrorResponse = true
 	var slugs []struct {
 		Slug string `json:"slug"`
 	}
-	var decodeErr error
+	var (
+		decodeErr error
+		// The REST route sits behind the host's WAF, which answers foreign
+		// traffic with 403 even when the work page itself is public. That is a
+		// limitation of the lookup, not a missing work, so the detail page
+		// stays the authority.
+		unavailable bool
+	)
 	c.OnResponse(func(r *colly.Response) {
-		if r.StatusCode < http.StatusOK || r.StatusCode >= http.StatusMultipleChoices {
+		switch {
+		case r.StatusCode == http.StatusForbidden,
+			r.StatusCode == http.StatusUnauthorized,
+			r.StatusCode == http.StatusTooManyRequests,
+			r.StatusCode >= http.StatusInternalServerError:
+			unavailable = true
+			return
+		case r.StatusCode < http.StatusOK || r.StatusCode >= http.StatusMultipleChoices:
 			decodeErr = fmt.Errorf("work slug lookup returned HTTP %d", r.StatusCode)
 			return
 		}
 		decodeErr = json.Unmarshal(r.Body, &slugs)
 	})
 	if err := c.Visit(endpoint); err != nil {
-		return err
+		// A transport-level failure is also a lookup limitation.
+		unavailable = true
+	}
+	if unavailable {
+		return nil
 	}
 	if decodeErr != nil {
 		return decodeErr
@@ -270,7 +351,7 @@ type wpWork struct {
 }
 
 func (core *Core) fetchWordPressWork(id string) (*wpWork, error) {
-	endpoint := strings.TrimRight(core.BaseURL, "/") + "/wp-json/wp/v2/works?slug=" + url.QueryEscape(id)
+	endpoint := core.restWorksEndpoint(id)
 	c := core.ClonedCollector()
 	c.ParseHTTPErrorResponse = true
 	var works []wpWork
