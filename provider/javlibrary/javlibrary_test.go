@@ -261,7 +261,7 @@ func TestChromiumFallbackLoadsLocalFixtureWhenAvailable(t *testing.T) {
 	p := newForTest(server.URL, server.Client())
 	request, err := http.NewRequest(http.MethodGet, server.URL+"/fixture", nil)
 	require.NoError(t, err)
-	resp, err := p.fetchWithChromium(request)
+	resp, err := p.fetchWithChromium(request, time.Now().Add(time.Minute))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)

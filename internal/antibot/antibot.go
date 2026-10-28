@@ -171,13 +171,27 @@ func (f *Fetcher) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	var lastErr error
-	for i, profile := range opts.Profiles {
+	profiles := opts.Profiles
+	if len(profiles) == 0 {
+		profiles = DefaultProfiles
+	}
+	for i, profile := range profiles {
 		if i > 0 {
 			if err := sleepContext(req.Context(), 800*time.Millisecond); err != nil {
 				return nil, err
 			}
 		}
-		resp, payload, finalURL, err := f.attemptFingerprint(req, body, profile, opts)
+		// Share what is left of the caller's deadline across the attempts that
+		// are still to come. Without this, four profiles times a per-attempt
+		// timeout turn one 20s request into a 100s hang and the Chromium
+		// fallback never gets a turn.
+		attemptOpts := opts
+		attemptOpts.Timeout = attemptBudget(req.Context(), opts.Timeout, len(profiles)-i, fingerprintShare)
+		if attemptOpts.Timeout < time.Second {
+			lastErr = errDeadlineExhausted
+			break
+		}
+		resp, payload, finalURL, err := f.attemptFingerprint(req, body, profile, attemptOpts)
 		if err != nil {
 			lastErr = err
 			f.recordFailure(profile.Name + ": " + err.Error())
@@ -187,7 +201,13 @@ func (f *Fetcher) Do(req *http.Request) (*http.Response, error) {
 		if LooksLikeChallenge(stdResp.StatusCode, stdResp.Header, payload) {
 			lastErr = fmt.Errorf("%s: HTTP %d challenge page", profile.Name, stdResp.StatusCode)
 			f.recordFailure(lastErr.Error())
-			continue
+			// A JavaScript challenge is answered by executing it, not by
+			// shaking a different TLS handshake at it: every remaining profile
+			// returns the same interstitial. Rotating anyway just burns the
+			// budget the browser needs — on a 0.1 vCPU instance four profiles
+			// spent 60s and left Chromium 20s, which is not enough to clear
+			// Cloudflare. Stop here and let the browser have the rest.
+			break
 		}
 		if isRejected(stdResp.StatusCode) {
 			lastErr = fmt.Errorf("%s: rejected with HTTP %d", profile.Name, stdResp.StatusCode)
@@ -201,12 +221,50 @@ func (f *Fetcher) Do(req *http.Request) (*http.Response, error) {
 	if opts.DisableBrowser {
 		return nil, f.exhaustedError("browser fallback disabled", lastErr)
 	}
-	resp, err := f.fetchWithBrowser(req, opts)
+	browserOpts := opts
+	browserOpts.Timeout = attemptBudget(req.Context(), opts.Timeout, 1, 1)
+	if browserOpts.Timeout < time.Second {
+		return nil, f.exhaustedError("no time left for the Chromium fallback", lastErr)
+	}
+	resp, err := f.fetchWithBrowser(req, browserOpts)
 	if err == nil {
 		debugf("headless Chromium answered %s %s (%d bytes)", req.Method, req.URL, resp.ContentLength)
 		return resp, nil
 	}
 	return nil, f.exhaustedError(fmt.Sprintf("Chromium fallback failed: %v", err), lastErr)
+}
+
+// fingerprintShare is the fraction of the remaining deadline the TLS profile
+// attempts may spend. The rest is reserved for the Chromium fallback, which is
+// the only strategy that can clear a challenge and therefore must not be
+// starved by profiles that were always going to be rejected.
+const fingerprintShare = 0.6
+
+// errDeadlineExhausted reports that the caller's deadline left no room for
+// another attempt.
+var errDeadlineExhausted = errors.New("antibot: request deadline exhausted before the browser fallback")
+
+// attemptBudget returns how long one strategy attempt may run. It is the
+// configured per-attempt timeout, further capped by the caller's remaining
+// deadline split across the attempts still to come and the strategy's share of
+// that budget. A context without a deadline keeps the configured timeout.
+func attemptBudget(ctx context.Context, limit time.Duration, remaining int, share float64) time.Duration {
+	if limit <= 0 {
+		limit = 20 * time.Second
+	}
+	if remaining < 1 {
+		remaining = 1
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return limit
+	}
+	left := time.Until(deadline)
+	if left <= 0 {
+		return 0
+	}
+	perAttempt := time.Duration(float64(left) * share / float64(remaining))
+	return min(limit, perAttempt)
 }
 
 // debugf traces which strategy answered a request. It is off unless

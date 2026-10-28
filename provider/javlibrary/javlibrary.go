@@ -284,10 +284,11 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 	// JavLibrary rejects generic Go TLS fingerprints. Use a browser-profiled
 	// client for the first request, then rotate profiles only when the origin
 	// returns 403/406, matching Amane's request strategy.
-	resp, err := p.fetchWithFingerprintRotation(req)
+	deadline := time.Now().Add(p.totalFetchBudget())
+	resp, err := p.fetchWithFingerprintRotation(req, deadline)
 	if err != nil {
 		if isCloudflareChallenge(err) {
-			resp, browserErr := p.fetchWithChromium(req)
+			resp, browserErr := p.fetchWithChromium(req, deadline)
 			if browserErr == nil {
 				return resp, nil
 			}
@@ -368,13 +369,41 @@ var javLibraryFingerprintProfiles = []fingerprintProfile{
 // the browser fallback is the shared implementation. A private copy used to live
 // here and drifted out of date: it opened a visible window and overrode the UA
 // through CDP, both of which make Cloudflare fail the challenge forever.
-func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, error) {
+// totalFetchBudget is the wall clock one page fetch may take. The provider
+// timeout bounds a single attempt, but a fetch may legitimately need several:
+// four TLS profiles and then a Chromium navigation. Unbounded, a handshake that
+// hangs instead of failing turns one request into a multi-minute hang — on a
+// 0.1 vCPU Koyeb instance four profiles at the 20s timeout had not even reached
+// the browser after 90 seconds.
+func (p *JavLibrary) totalFetchBudget() time.Duration {
 	p.clientMu.RLock()
-	timeout, proxyURL, cookies := p.timeout, p.proxyURL, p.cookies
+	per := p.timeout
 	p.clientMu.RUnlock()
-	if timeout <= 0 {
-		timeout = defaultTimeout
+	if per <= 0 {
+		per = defaultTimeout
 	}
+	return max(2*per, 30*time.Second)
+}
+
+// remainingSleep sleeps until at most d has passed, but never past the
+// deadline. It reports whether the deadline is still ahead.
+func remainingSleep(deadline time.Time, d time.Duration) bool {
+	left := time.Until(deadline)
+	if left <= 0 {
+		return false
+	}
+	time.Sleep(min(d, left))
+	return time.Until(deadline) > 0
+}
+
+func (p *JavLibrary) fetchWithChromium(original *http.Request, deadline time.Time) (*http.Response, error) {
+	p.clientMu.RLock()
+	proxyURL, cookies := p.proxyURL, p.cookies
+	p.clientMu.RUnlock()
+	// Chromium is the last strategy and the only one that can clear a
+	// challenge, so it keeps whatever is left of the budget. A five second
+	// floor covers the process start on a slow instance.
+	timeout := max(time.Until(deadline), 5*time.Second)
 	p.browserMu.Lock()
 	defer p.browserMu.Unlock()
 	if p.fetcher == nil {
@@ -396,7 +425,7 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request) (*http.Response, 
 	return p.fetcher.Do(req)
 }
 
-func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http.Response, error) {
+func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request, deadline time.Time) (*http.Response, error) {
 	p.clientMu.RLock()
 	timeout, proxyURL := p.timeout, p.proxyURL
 	p.clientMu.RUnlock()
@@ -411,12 +440,25 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 
 	var lastError error
 	var failures []string
-	for i, fingerprint := range javLibraryFingerprintProfiles {
-		if i > 0 {
-			time.Sleep(time.Second)
+	profiles := javLibraryFingerprintProfiles
+	for i, fingerprint := range profiles {
+		if i > 0 && !remainingSleep(deadline, time.Second) {
+			failures = append(failures, "deadline reached before the remaining TLS profiles were tried")
+			break
+		}
+		// Split the fingerprint stage's share of the remaining budget across
+		// the profiles that are left, so one hanging handshake cannot consume
+		// the time the Chromium fallback needs.
+		attemptTimeout := timeout
+		if left := time.Until(deadline); left > 0 {
+			attemptTimeout = min(attemptTimeout, time.Duration(float64(left)*0.5/float64(len(profiles)-i)))
+		}
+		if attemptTimeout < time.Second {
+			failures = append(failures, "deadline reached before the remaining TLS profiles were tried")
+			break
 		}
 		options := []tlsclient.HttpClientOption{
-			tlsclient.WithTimeoutSeconds(max(1, int(timeout.Seconds()))),
+			tlsclient.WithTimeoutSeconds(max(1, int(attemptTimeout.Seconds()))),
 			tlsclient.WithClientProfile(fingerprint.profile),
 			tlsclient.WithNotFollowRedirects(),
 		}
@@ -440,15 +482,22 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 			continue
 		}
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotAcceptable {
-			failures = append(failures, fingerprintFailureDetail(fingerprint.name, resp))
+			detail := fingerprintFailureDetail(fingerprint.name, resp)
+			failures = append(failures, detail)
 			_ = resp.Body.Close()
+			// Every remaining profile answers a JavaScript challenge with the
+			// same interstitial, so rotating past it only eats the budget the
+			// Chromium fallback needs.
+			if isChallengeDetail(detail) {
+				break
+			}
 			continue
 		}
 		return resp, nil
 	}
 	if len(failures) > 0 {
 		detail := strings.Join(failures, "; ")
-		if strings.Contains(strings.ToLower(detail), `"just a moment`) || strings.Contains(strings.ToLower(detail), "cf-chl-") {
+		if isChallengeDetail(detail) {
 			return nil, fmt.Errorf("Cloudflare JavaScript challenge rejected every browser TLS profile; Go does not execute the challenge page. Configure a fresh COOKIES value containing cf_clearance from the same egress IP, or use an egress network that passes the challenge (%s)", detail)
 		}
 		return nil, fmt.Errorf("browser fingerprint attempts exhausted: %s", detail)
@@ -457,6 +506,19 @@ func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request) (*http
 		lastError = errors.New("all browser fingerprint attempts failed")
 	}
 	return nil, lastError
+}
+
+// isChallengeDetail reports whether a recorded failure is a JavaScript
+// challenge page rather than a real rejection. Only the former is immune to TLS
+// profile rotation, and only the former is worth handing to the browser.
+func isChallengeDetail(detail string) bool {
+	lower := strings.ToLower(detail)
+	for _, marker := range []string{"just a moment", "cf-chl-", "challenge-platform", "checking your browser"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func fingerprintFailureDetail(name string, resp *http.Response) string {
