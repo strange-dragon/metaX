@@ -84,6 +84,10 @@ type Options struct {
 	// DisableBrowser disables the Chromium fallback, for tests and minimal
 	// deployments.
 	DisableBrowser bool
+	// SkipFingerprint sends the request straight to the browser. Callers that
+	// already rotated their own TLS profiles use it so the challenge is not
+	// retried by a rotation that was always going to fail again.
+	SkipFingerprint bool
 }
 
 // Fetcher performs fingerprint-rotating requests with an optional Chromium
@@ -175,47 +179,50 @@ func (f *Fetcher) Do(req *http.Request) (*http.Response, error) {
 	if len(profiles) == 0 {
 		profiles = DefaultProfiles
 	}
-	for i, profile := range profiles {
-		if i > 0 {
-			if err := sleepContext(req.Context(), 800*time.Millisecond); err != nil {
-				return nil, err
+	// Callers that already ran their own TLS profiles (javlibrary does) must not
+	// pay for a second rotation here: that is another four attempts at a timeout
+	// each, which is how a single page fetch reached 100s.
+	if !opts.SkipFingerprint {
+		for i, profile := range profiles {
+			if i > 0 {
+				if err := sleepContext(req.Context(), 800*time.Millisecond); err != nil {
+					return nil, err
+				}
 			}
+			// Share what is left of the caller's deadline across the attempts
+			// that are still to come. Without this, four profiles times a
+			// per-attempt timeout turn one 20s request into a 100s hang and the
+			// Chromium fallback never gets a turn.
+			attemptOpts := opts
+			attemptOpts.Timeout = attemptBudget(req.Context(), opts.Timeout, len(profiles)-i, fingerprintShare)
+			if attemptOpts.Timeout < time.Second {
+				lastErr = errDeadlineExhausted
+				break
+			}
+			resp, payload, finalURL, err := f.attemptFingerprint(req, body, profile, attemptOpts)
+			if err != nil {
+				lastErr = err
+				f.recordFailure(profile.Name + ": " + err.Error())
+				continue
+			}
+			stdResp := responseWithBody(resp, payload, finalURL)
+			if LooksLikeChallenge(stdResp.StatusCode, stdResp.Header, payload) {
+				lastErr = fmt.Errorf("%s: HTTP %d challenge page", profile.Name, stdResp.StatusCode)
+				f.recordFailure(lastErr.Error())
+				// A JavaScript challenge is answered by executing it, not by
+				// shaking a different TLS handshake at it: every remaining
+				// profile returns the same interstitial. Rotating anyway just
+				// burns the budget the browser needs.
+				break
+			}
+			if isRejected(stdResp.StatusCode) {
+				lastErr = fmt.Errorf("%s: rejected with HTTP %d", profile.Name, stdResp.StatusCode)
+				f.recordFailure(lastErr.Error())
+				continue
+			}
+			debugf("%s answered %s %s with HTTP %d", profile.Name, req.Method, req.URL, stdResp.StatusCode)
+			return stdResp, nil
 		}
-		// Share what is left of the caller's deadline across the attempts that
-		// are still to come. Without this, four profiles times a per-attempt
-		// timeout turn one 20s request into a 100s hang and the Chromium
-		// fallback never gets a turn.
-		attemptOpts := opts
-		attemptOpts.Timeout = attemptBudget(req.Context(), opts.Timeout, len(profiles)-i, fingerprintShare)
-		if attemptOpts.Timeout < time.Second {
-			lastErr = errDeadlineExhausted
-			break
-		}
-		resp, payload, finalURL, err := f.attemptFingerprint(req, body, profile, attemptOpts)
-		if err != nil {
-			lastErr = err
-			f.recordFailure(profile.Name + ": " + err.Error())
-			continue
-		}
-		stdResp := responseWithBody(resp, payload, finalURL)
-		if LooksLikeChallenge(stdResp.StatusCode, stdResp.Header, payload) {
-			lastErr = fmt.Errorf("%s: HTTP %d challenge page", profile.Name, stdResp.StatusCode)
-			f.recordFailure(lastErr.Error())
-			// A JavaScript challenge is answered by executing it, not by
-			// shaking a different TLS handshake at it: every remaining profile
-			// returns the same interstitial. Rotating anyway just burns the
-			// budget the browser needs — on a 0.1 vCPU instance four profiles
-			// spent 60s and left Chromium 20s, which is not enough to clear
-			// Cloudflare. Stop here and let the browser have the rest.
-			break
-		}
-		if isRejected(stdResp.StatusCode) {
-			lastErr = fmt.Errorf("%s: rejected with HTTP %d", profile.Name, stdResp.StatusCode)
-			f.recordFailure(lastErr.Error())
-			continue
-		}
-		debugf("%s answered %s %s with HTTP %d", profile.Name, req.Method, req.URL, stdResp.StatusCode)
-		return stdResp, nil
 	}
 
 	if opts.DisableBrowser {

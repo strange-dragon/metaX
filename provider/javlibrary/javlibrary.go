@@ -6,6 +6,7 @@
 package javlibrary
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -382,7 +383,10 @@ func (p *JavLibrary) totalFetchBudget() time.Duration {
 	if per <= 0 {
 		per = defaultTimeout
 	}
-	return max(2*per, 30*time.Second)
+	// The floor matters more than the multiple: clearing a challenge needs
+	// Chromium to start, execute Cloudflare's script and navigate, which took
+	// over 20s on a shared vCPU even though it takes 5-8s on a laptop.
+	return max(2*per, 45*time.Second)
 }
 
 // remainingSleep sleeps until at most d has passed, but never past the
@@ -408,21 +412,28 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request, deadline time.Tim
 	defer p.browserMu.Unlock()
 	if p.fetcher == nil {
 		p.fetcher = antibot.New(antibot.Options{
-			Timeout:  timeout,
-			ProxyURL: proxyURL,
-			Cookies:  cookies,
-			AllowURL: p.validOrigin,
+			Timeout:         timeout,
+			ProxyURL:        proxyURL,
+			Cookies:         cookies,
+			AllowURL:        p.validOrigin,
+			SkipFingerprint: true,
 		})
 	} else {
 		p.fetcher.SetOptions(func(opts *antibot.Options) {
 			opts.Timeout = timeout
 			opts.ProxyURL = proxyURL
 			opts.Cookies = cookies
+			opts.SkipFingerprint = true
 		})
 	}
 	req := original.Clone(original.Context())
 	req.Header.Set("Accept-Language", antibot.BrowserLanguage())
-	return p.fetcher.Do(req)
+	// The TLS profiles were already tried above, so the fetcher goes straight
+	// to the browser. The context carries the remaining budget so nothing in
+	// this path can outlive the deadline the caller set.
+	ctx, cancel := context.WithTimeout(req.Context(), timeout)
+	defer cancel()
+	return p.fetcher.Do(req.WithContext(ctx))
 }
 
 func (p *JavLibrary) fetchWithFingerprintRotation(original *http.Request, deadline time.Time) (*http.Response, error) {
