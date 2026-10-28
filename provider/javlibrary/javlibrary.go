@@ -12,10 +12,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/strange-dragon/metaX/internal/antibot"
@@ -42,6 +44,22 @@ const (
 	defaultURL     = "https://www.f101w.com"
 	defaultTimeout = 20 * time.Second
 	maxPageBytes   = 8 << 20
+
+	// maxPageBudget caps one page fetch. The engine's global provider timeout
+	// is a per-request timeout and gets doubled below, but a reverse proxy in
+	// front of the server (Koyeb, Cloud Run, nginx) usually cuts the connection
+	// at 100s no matter what the application wants. A detail lookup needs two
+	// pages — the search page and then the article — so one page has to fit in
+	// roughly half of that or the caller sees a gateway 504 instead of an error
+	// it can act on.
+	maxPageBudget = 40 * time.Second
+
+	// challengeStreakLimit is how many consecutive challenge pages make the
+	// provider stop trying TLS fingerprints. A JavaScript challenge cannot be
+	// answered by a different ClientHello: the origin returns the same
+	// interstitial to every profile, so once it is clear that this egress is
+	// being challenged, the whole budget belongs to the browser.
+	challengeStreakLimit = 2
 )
 
 var (
@@ -72,6 +90,10 @@ type JavLibrary struct {
 	fetcher    *antibot.Fetcher
 	priorityMu sync.RWMutex
 	priority   float64
+	// challenges counts consecutive fetches that ended on a challenge page.
+	// Once it passes challengeStreakLimit the provider skips its own TLS
+	// fingerprint rotation and hands the request straight to the browser.
+	challenges atomic.Int32
 }
 
 func New() *JavLibrary {
@@ -285,17 +307,38 @@ func (p *JavLibrary) Fetch(raw string) (*http.Response, error) {
 	// JavLibrary rejects generic Go TLS fingerprints. Use a browser-profiled
 	// client for the first request, then rotate profiles only when the origin
 	// returns 403/406, matching Amane's request strategy.
-	deadline := time.Now().Add(p.totalFetchBudget())
-	resp, err := p.fetchWithFingerprintRotation(req, deadline)
-	if err != nil {
-		if isCloudflareChallenge(err) {
+	//
+	// Once several fetches in a row have ended on a challenge page the
+	// rotation is skipped: every profile gets the same interstitial, so the
+	// only way through is the browser, and it needs the time.
+	var resp *http.Response
+	if p.challenges.Load() >= challengeStreakLimit {
+		deadline := time.Now().Add(p.totalFetchBudget())
+		resp, err = p.fetchWithChromium(req, deadline)
+		if err == nil {
+			p.challenges.Store(0)
+			return resp, nil
+		}
+	} else {
+		deadline := time.Now().Add(p.totalFetchBudget())
+		resp, err = p.fetchWithFingerprintRotation(req, deadline)
+		if err != nil && isCloudflareChallenge(err) {
+			p.challenges.Add(1)
 			resp, browserErr := p.fetchWithChromium(req, deadline)
 			if browserErr == nil {
+				p.challenges.Store(0)
 				return resp, nil
 			}
 			return nil, fmt.Errorf("javlibrary: GET %s blocked by Cloudflare; Chromium fallback failed: %w (initial Go request: %v)", raw, browserErr, err)
 		}
-		return nil, fmt.Errorf("javlibrary: GET %s with browser fingerprints: %w", raw, err)
+		if err == nil {
+			// A plain TLS fingerprint got through, so this egress is not being
+			// challenged at the moment and the rotation is worth keeping.
+			p.challenges.Store(0)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("javlibrary: GET %s: %w", raw, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		_ = resp.Body.Close()
@@ -413,7 +456,19 @@ func (p *JavLibrary) totalFetchBudget() time.Duration {
 	// The floor matters more than the multiple: clearing a challenge needs
 	// Chromium to start, execute Cloudflare's script and navigate, which took
 	// over 20s on a shared vCPU even though it takes 5-8s on a laptop.
-	return max(2*per, 45*time.Second)
+	//
+	// The ceiling matters even more. The engine passes its global timeout
+	// (60s) to every provider, so the doubling produced a 120s page budget —
+	// longer than the 100s a reverse proxy allows a response to take. A detail
+	// lookup spends two of those budgets, so every javlibrary request ended as
+	// a gateway 504 with no error at all.
+	budget := max(2*per, 45*time.Second)
+	if raw := strings.TrimSpace(os.Getenv("METAX_JAVLIBRARY_BUDGET")); raw != "" {
+		if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+			return d
+		}
+	}
+	return min(budget, maxPageBudget)
 }
 
 // remainingSleep sleeps until at most d has passed, but never past the
@@ -432,9 +487,14 @@ func (p *JavLibrary) fetchWithChromium(original *http.Request, deadline time.Tim
 	proxyURL, cookies := p.proxyURL, p.cookies
 	p.clientMu.RUnlock()
 	// Chromium is the last strategy and the only one that can clear a
-	// challenge, so it keeps whatever is left of the budget. A five second
-	// floor covers the process start on a slow instance.
-	timeout := max(time.Until(deadline), 5*time.Second)
+	// challenge, so it keeps whatever is left of the budget. It must not
+	// invent extra time, though: overrunning the caller's deadline turns a
+	// useful error into a gateway 504.
+	timeout := time.Until(deadline)
+	if timeout < 8*time.Second {
+		return nil, fmt.Errorf("javlibrary: only %s of the page budget left, not enough to run the browser", timeout.Round(time.Second))
+	}
+	timeout = min(timeout, maxPageBudget)
 	p.browserMu.Lock()
 	defer p.browserMu.Unlock()
 	if p.fetcher == nil {

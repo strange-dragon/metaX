@@ -268,3 +268,32 @@ func TestChromiumFallbackLoadsLocalFixtureWhenAvailable(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(body), "browser fallback fixture")
 }
+
+// A reverse proxy in front of the server (Koyeb, Cloud Run, nginx) cuts the
+// connection at 100s. A detail lookup spends one page budget on the search
+// page and another on the article, and the engine hands the provider a 60s
+// global timeout, which the doubling turned into a 120s page budget — so every
+// request ended as a gateway 504 instead of an error the caller could read.
+func TestTotalFetchBudgetFitsUnderGatewayTimeout(t *testing.T) {
+	p := New()
+	p.SetRequestTimeout(60 * time.Second)
+
+	budget := p.totalFetchBudget()
+	if budget > maxPageBudget {
+		t.Fatalf("page budget %s exceeds the %s ceiling", budget, maxPageBudget)
+	}
+	if two := 2 * budget; two >= 100*time.Second {
+		t.Fatalf("two pages would take %s, which is past the 100s gateway timeout", two)
+	}
+	if budget < 20*time.Second {
+		t.Fatalf("page budget %s is too short to clear a challenge", budget)
+	}
+}
+
+func TestTotalFetchBudgetHonoursOverride(t *testing.T) {
+	t.Setenv("METAX_JAVLIBRARY_BUDGET", "25s")
+	p := New()
+	if got := p.totalFetchBudget(); got != 25*time.Second {
+		t.Fatalf("totalFetchBudget = %s, want the 25s override", got)
+	}
+}

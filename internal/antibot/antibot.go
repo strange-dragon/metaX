@@ -98,6 +98,11 @@ type Fetcher struct {
 	jar      fhttp.CookieJar
 	browser  browserState
 	failures []string
+	// starting is non-nil while a Chromium cold start is in flight. Requests
+	// that arrive during the warm-up wait on it for a bounded time instead of
+	// blocking on the fetcher lock or starting a second browser.
+	starting chan struct{}
+	startErr error
 }
 
 type browserState struct {
@@ -150,19 +155,37 @@ func (f *Fetcher) Close() {
 }
 
 // browserWarmupTimeout is generous on purpose: warming up happens off the
-// request path, where a slow cold start costs nothing but boot time.
-const browserWarmupTimeout = 3 * time.Minute
+// request path, where a slow cold start costs nothing but boot time. It is
+// still bounded, because a start that is in flight makes later requests wait:
+// three minutes of that would look like an outage.
+const browserWarmupTimeout = 90 * time.Second
 
 // WarmBrowser starts the fallback browser before the first request needs it.
 //
 // Cold start is the expensive part: on a 512 MB shared instance Chromium took
 // close to a minute to open its DevTools endpoint, which no per-request timeout
 // can absorb. Paying that at boot is what lets the first scrape succeed.
+//
+// The start runs without the fetcher lock held, otherwise every request that
+// arrives during the warm-up would sit in an untimed mutex wait — which the
+// edge gateway then reports as a 504 with no error at all.
 func (f *Fetcher) WarmBrowser(ctx context.Context) error {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.browser.ctx != nil {
+		f.mu.Unlock()
 		return nil
+	}
+	if waiter := f.starting; waiter != nil {
+		f.mu.Unlock()
+		select {
+		case <-waiter:
+			f.mu.Lock()
+			err := f.startErr
+			f.mu.Unlock()
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	timeout := browserWarmupTimeout
 	if deadline, ok := ctx.Deadline(); ok {
@@ -170,11 +193,41 @@ func (f *Fetcher) WarmBrowser(ctx context.Context) error {
 			timeout = left
 		}
 	}
-	if err := f.startBrowserLocked(f.opts, timeout); err != nil {
+	opts := f.opts
+	waiter := make(chan struct{})
+	f.starting = waiter
+	f.mu.Unlock()
+
+	err := f.startBrowserLocked(opts, timeout)
+
+	f.mu.Lock()
+	f.startErr = err
+	f.starting = nil
+	close(waiter)
+	f.mu.Unlock()
+	if err != nil {
 		return err
 	}
 	debugf("browser warmed up in advance")
 	return nil
+}
+
+// awaitBrowserStart waits for an in-flight Chromium cold start to settle,
+// bounded by ctx so a request never outlives its own budget waiting for a
+// browser that may never come up.
+func (f *Fetcher) awaitBrowserStart(ctx context.Context) error {
+	f.mu.Lock()
+	waiter := f.starting
+	f.mu.Unlock()
+	if waiter == nil {
+		return nil
+	}
+	select {
+	case <-waiter:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("waited for the browser cold start: %w", ctx.Err())
+	}
 }
 
 // Do performs req with browser TLS fingerprints, rotating profiles on a
@@ -573,13 +626,31 @@ func sleepContext(ctx context.Context, delay time.Duration) error {
 // fetchWithBrowser renders req in Chromium so an interactive challenge can
 // run, then captures the resulting document.
 func (f *Fetcher) fetchWithBrowser(original *http.Request, opts Options) (*http.Response, error) {
+	if err := f.awaitBrowserStart(original.Context()); err != nil {
+		return nil, err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if err := f.startBrowserLocked(opts, min(chromiumStartupTimeout(), opts.Timeout)); err != nil {
+	if err := f.startBrowserLocked(opts, startShareOfTimeout(opts.Timeout)); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(f.browser.ctx, opts.Timeout)
+	// The navigation budget must come out of what is left of the caller's
+	// deadline, not out of the configured timeout. The browser context is
+	// detached from the request, so using opts.Timeout here let a cold start
+	// plus a navigation run to nearly twice the caller's budget — which is how
+	// a request that the provider thought was capped at 40s still reached a
+	// 100s gateway timeout.
+	navigation := opts.Timeout
+	if deadline, ok := original.Context().Deadline(); ok {
+		if left := time.Until(deadline); left < navigation {
+			navigation = left
+		}
+	}
+	if navigation < 3*time.Second {
+		return nil, fmt.Errorf("browser: only %s left of the request budget, not enough to load the page", navigation.Round(time.Second))
+	}
+	ctx, cancel := context.WithTimeout(f.browser.ctx, navigation)
 	defer cancel()
 
 	var (
@@ -792,6 +863,15 @@ func (f *Fetcher) startBrowserLocked(opts Options, startupTimeout time.Duration)
 	}
 	f.browser = browserState{ctx: browserCtx, stop: browserCancel, alloc: allocCancel, display: displayStop, proxyKey: proxyKey}
 	return nil
+}
+
+// startShareOfTimeout is how much of a request's own budget may go into a
+// cold start when the browser was not warmed up. Spending all of it starting
+// Chromium leaves nothing to load the page, so the request fails having proved
+// only that the browser can start.
+func startShareOfTimeout(timeout time.Duration) time.Duration {
+	share := time.Duration(float64(timeout) * 0.7)
+	return max(min(chromiumStartupTimeout(), share), 5*time.Second)
 }
 
 // chromiumStartupTimeout bounds how long the fallback browser may take to come
