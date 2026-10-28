@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -692,6 +693,14 @@ func (f *Fetcher) fetchWithBrowser(original *http.Request, opts Options) (*http.
 		case *fetch.EventRequestPaused:
 			paused := e
 			go func() {
+				if blockedResource(paused.ResourceType) {
+					// No image, font or media byte is needed to read the
+					// article, and skipping them is what keeps the resident
+					// browser inside a small instance's memory: a gallery page
+					// alone is several megabytes of decode buffers.
+					_ = chromedp.Run(f.browser.ctx, fetch.FailRequest(paused.RequestID, network.ErrorReasonBlockedByClient))
+					return
+				}
 				if paused.ResourceType == network.ResourceTypeDocument {
 					target, err := url.Parse(paused.Request.URL)
 					if err != nil || !validRequestURL(target, opts.AllowURL) && !isChallengeHost(target) {
@@ -713,7 +722,15 @@ func (f *Fetcher) fetchWithBrowser(original *http.Request, opts Options) (*http.
 	if err := run("enable network", network.Enable()); err != nil {
 		return nil, err
 	}
-	if err := run("enable navigation guard", fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}})); err != nil {
+	patterns := []*fetch.RequestPattern{{URLPattern: "*", ResourceType: network.ResourceTypeDocument}}
+	if blockHeavyResources() {
+		patterns = append(patterns,
+			&fetch.RequestPattern{URLPattern: "*", ResourceType: network.ResourceTypeImage},
+			&fetch.RequestPattern{URLPattern: "*", ResourceType: network.ResourceTypeMedia},
+			&fetch.RequestPattern{URLPattern: "*", ResourceType: network.ResourceTypeFont},
+		)
+	}
+	if err := run("enable navigation guard", fetch.Enable().WithPatterns(patterns)); err != nil {
 		return nil, err
 	}
 	var cookieActions []chromedp.Action
@@ -1164,6 +1181,52 @@ func (t *Transport) Close() {
 	}
 }
 
+// blockHeavyResources reports whether the browser should refuse images,
+// fonts and media. Off via METAX_CHROMIUM_BLOCK_MEDIA=0.
+func blockHeavyResources() bool {
+	return strings.TrimSpace(os.Getenv("METAX_CHROMIUM_BLOCK_MEDIA")) != "0"
+}
+
+// blockedResource reports whether a paused request is one of the resource types
+// the scraper never reads. Stylesheets are deliberately not in this list: a
+// challenge can depend on computed layout.
+func blockedResource(kind network.ResourceType) bool {
+	if !blockHeavyResources() {
+		return false
+	}
+	switch kind {
+	case network.ResourceTypeImage, network.ResourceTypeMedia, network.ResourceTypeFont:
+		return true
+	}
+	return false
+}
+
+// lowMemoryChromium reports whether the browser should be launched with
+// settings that trade a little speed for a much smaller footprint. Default on
+// inside a container, where the instance usually has 512 MB for everything.
+// METAX_CHROMIUM_LOW_MEMORY=0 disables it.
+func lowMemoryChromium() bool {
+	switch strings.TrimSpace(os.Getenv("METAX_CHROMIUM_LOW_MEMORY")) {
+	case "0":
+		return false
+	case "1":
+		return true
+	}
+	return inContainer()
+}
+
+// chromiumJSHeapMB is the V8 heap ceiling for the browser's renderer. It is a
+// ceiling, not an allocation: pages use what they need. Lowering it only makes
+// a runaway script die instead of taking the whole instance with it.
+func chromiumJSHeapMB() int {
+	if raw := strings.TrimSpace(os.Getenv("METAX_CHROMIUM_JS_HEAP_MB")); raw != "" {
+		if mb, err := strconv.Atoi(raw); err == nil && mb >= 64 {
+			return mb
+		}
+	}
+	return 192
+}
+
 // BrowserLaunchOptions returns the shared Chromium launch flags together with a
 // cleanup function for any helper process it started.
 //
@@ -1214,6 +1277,21 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 			chromedp.Flag("disable-gpu", true),
 		)
 		debugf("container detected: launching Chromium with --no-sandbox --disable-dev-shm-usage")
+	}
+	if lowMemoryChromium() {
+		// One tab does not need one renderer process per site, and a renderer
+		// costs tens of megabytes before it renders anything. The heap ceiling
+		// turns a runaway challenge script into a failed renderer instead of an
+		// OOM kill of the whole container.
+		execOpts = append(execOpts,
+			chromedp.Flag("renderer-process-limit", 1),
+			chromedp.Flag("js-flags", fmt.Sprintf("--max-old-space-size=%d", chromiumJSHeapMB())),
+			chromedp.Flag("mute-audio", true),
+			chromedp.Flag("disable-audio-output", true),
+			chromedp.Flag("disable-extensions", true),
+			chromedp.Flag("disable-component-extensions-with-background-pages", true),
+		)
+		debugf("low-memory Chromium profile: single renderer, V8 heap %d MB, no extensions", chromiumJSHeapMB())
 	}
 	debugf("launching %q (headed=%v, ua=%q)", executable, headedRequested(), browserUserAgent(executable))
 	if !headedRequested() {

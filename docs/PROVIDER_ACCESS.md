@@ -299,6 +299,37 @@ idle. On a 512 MB instance that is most of the allowance, and the rest of the
 process may get OOM-killed instead. If that happens, either move to 1 GB or set
 `METAX_WARMUP_BROWSER=0` and accept a cold start per scrape.
 
+**Trimming the browser.** Three settings reduce the footprint without changing
+the challenge behaviour:
+
+- `METAX_CHROMIUM_BLOCK_MEDIA` (default on) fails every image, font and media
+  request in the browser path. The scrapers only read HTML, so this saves both
+  decode buffers and egress — a javlibrary gallery page is megabytes of images
+  that nobody parses. Stylesheets and scripts are kept: a challenge can depend
+  on computed layout.
+- `METAX_CHROMIUM_LOW_MEMORY` (default on inside a container) adds
+  `--renderer-process-limit=1`, `--mute-audio`, `--disable-audio-output` and a
+  V8 heap ceiling. One tab does not need a renderer per site.
+- `METAX_CHROMIUM_JS_HEAP_MB` (default 192) is that ceiling. It kills a runaway
+  challenge script instead of letting the renderer take the container with it.
+
+**Why not a lighter browser.** The obvious candidates were evaluated and
+rejected for this job, and the reason is the same in each case: Cloudflare's
+managed challenge is answered by executing JavaScript in a full rendering
+engine, so engines that skip rendering are exactly the ones that fail.
+
+| Option | Footprint | Clears a JS challenge |
+|---|---|---|
+| tls-client (already the first stage) | ~10-20 MB | no — no JS |
+| Lightpanda | 24-110 MB | no; its own benchmarks report ~59% of sites work and the failures are Cloudflare challenge pages |
+| Camoufox (Firefox, anti-detect) | 250 MB+ | yes, but heavier than Chromium and marked "highly experimental" upstream |
+| WebKit via Playwright | ~150 MB | unreliable; needs the Playwright driver image |
+| headless Chromium (this code) | 200-400 MB, less with the flags above | yes, 5-8s on a laptop |
+
+So the light answer is not a different browser, it is a different network path:
+a residential proxy with the existing tls-client stage, which costs one HTTP
+request instead of a browser.
+
 **The edge gateway has its own timeout.** Koyeb cuts a request at 100s and
 returns `504 error code: 504`. Any provider path must finish inside that. A
 javlibrary detail lookup spends *two* page budgets (search page, then article),
