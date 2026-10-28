@@ -1249,6 +1249,23 @@ func chromiumJSHeapMB() int {
 	return 192
 }
 
+// flagBool and flagString are the only two ways a launch flag may be set here.
+//
+// chromedp.Flag takes an interface{} and does not check it: an option whose
+// value is neither string nor bool is accepted, then rejected much later inside
+// Allocate with the opaque "invalid exec pool flag". That failure only happens
+// on a machine that actually launches a browser, so a wrong type passes every
+// local test and breaks the deployment — which is exactly how an int
+// renderer-process-limit shipped and kept the Koyeb browser from starting.
+// Narrowing the parameter type turns that class of bug into a compile error.
+func flagBool(name string, value bool) chromedp.ExecAllocatorOption {
+	return chromedp.Flag(name, value)
+}
+
+func flagString(name, value string) chromedp.ExecAllocatorOption {
+	return chromedp.Flag(name, value)
+}
+
 // BrowserLaunchOptions returns the shared Chromium launch flags together with a
 // cleanup function for any helper process it started.
 //
@@ -1266,13 +1283,13 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 	execOpts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	execOpts = append(execOpts,
 		chromedp.ExecPath(executable),
-		chromedp.Flag("enable-automation", false),
-		chromedp.Flag("disable-blink-features", "AutomationControlled"),
-		chromedp.Flag("no-first-run", true),
-		chromedp.Flag("no-default-browser-check", true),
-		chromedp.Flag("disable-background-networking", true),
-		chromedp.Flag("disable-renderer-backgrounding", true),
-		chromedp.Flag("disable-backgrounding-occluded-windows", true),
+		flagBool("enable-automation", false),
+		flagString("disable-blink-features", "AutomationControlled"),
+		flagBool("no-first-run", true),
+		flagBool("no-default-browser-check", true),
+		flagBool("disable-background-networking", true),
+		flagBool("disable-renderer-backgrounding", true),
+		flagBool("disable-backgrounding-occluded-windows", true),
 		// A real User-Agent is passed as a launch flag, never through CDP.
 		// Emulation.setUserAgentOverride leaves a trace Cloudflare reads, and a
 		// challenge under it never clears; the flag is indistinguishable from a
@@ -1280,10 +1297,10 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 		// Chrome derives Sec-CH-UA from the binary, not from this string.
 	)
 	if userAgent := browserUserAgent(executable); userAgent != "" {
-		execOpts = append(execOpts, chromedp.Flag("user-agent", userAgent))
+		execOpts = append(execOpts, flagString("user-agent", userAgent))
 	}
 	if language := BrowserLanguage(); language != "" {
-		execOpts = append(execOpts, chromedp.Flag("lang", language))
+		execOpts = append(execOpts, flagString("lang", language))
 	}
 	// Containers (Koyeb, Cloud Run, Kubernetes) do not grant Chromium what its
 	// sandbox needs: unprivileged user namespaces are blocked by the default
@@ -1294,9 +1311,9 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 	// the isolation boundary.
 	if inContainer() {
 		execOpts = append(execOpts,
-			chromedp.Flag("no-sandbox", true),
-			chromedp.Flag("disable-dev-shm-usage", true),
-			chromedp.Flag("disable-gpu", true),
+			flagBool("no-sandbox", true),
+			flagBool("disable-dev-shm-usage", true),
+			flagBool("disable-gpu", true),
 		)
 		debugf("container detected: launching Chromium with --no-sandbox --disable-dev-shm-usage")
 	}
@@ -1306,12 +1323,15 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 		// turns a runaway challenge script into a failed renderer instead of an
 		// OOM kill of the whole container.
 		execOpts = append(execOpts,
-			chromedp.Flag("renderer-process-limit", 1),
-			chromedp.Flag("js-flags", fmt.Sprintf("--max-old-space-size=%d", chromiumJSHeapMB())),
-			chromedp.Flag("mute-audio", true),
-			chromedp.Flag("disable-audio-output", true),
-			chromedp.Flag("disable-extensions", true),
-			chromedp.Flag("disable-component-extensions-with-background-pages", true),
+			// renderer-process-limit is an integer to Chromium but a string
+			// to chromedp; passing the int made Allocate refuse every flag
+			// with "invalid exec pool flag" and the browser never started.
+			flagString("renderer-process-limit", "1"),
+			flagString("js-flags", fmt.Sprintf("--max-old-space-size=%d", chromiumJSHeapMB())),
+			flagBool("mute-audio", true),
+			flagBool("disable-audio-output", true),
+			flagBool("disable-extensions", true),
+			flagBool("disable-component-extensions-with-background-pages", true),
 		)
 		debugf("low-memory Chromium profile: single renderer, V8 heap %d MB, no extensions", chromiumJSHeapMB())
 	}
@@ -1321,12 +1341,12 @@ func BrowserLaunchOptions() ([]chromedp.ExecAllocatorOption, func(), error) {
 		// which matters because legacy headless is trivially fingerprinted by
 		// Cloudflare. The window size keeps a desktop viewport in headless.
 		execOpts = append(execOpts,
-			chromedp.Flag("headless", "new"),
+			flagString("headless", "new"),
 			chromedp.WindowSize(1280, 900),
 		)
 		return execOpts, func() {}, nil
 	}
-	execOpts = append(execOpts, chromedp.Flag("headless", false))
+	execOpts = append(execOpts, flagBool("headless", false))
 	if runtime.GOOS != "darwin" && os.Getenv("DISPLAY") == "" {
 		display, stop, err := startVirtualDisplay()
 		if err != nil {
