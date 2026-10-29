@@ -45,6 +45,11 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
+// ErrRedirectRefused marks a redirect whose target the caller's AllowURL guard
+// rejects. It is deterministic: every fingerprint and the browser would refuse
+// the same target, so callers must not retry it.
+var ErrRedirectRefused = errors.New("antibot: refusing redirect to a disallowed origin")
+
 // DefaultMaxBodyBytes bounds a fetched document. Providers that need more can
 // raise Options.MaxBodyBytes.
 const DefaultMaxBodyBytes = 8 << 20
@@ -318,6 +323,14 @@ func (f *Fetcher) Do(req *http.Request) (*http.Response, error) {
 			}
 			resp, payload, finalURL, err := f.attemptFingerprint(req, body, profile, attemptOpts)
 			if err != nil {
+				// A refused redirect is an answer, not a transport failure: the
+				// origin sent a plain 30x to a host outside AllowURL, and every
+				// remaining profile plus the browser would be refused the same
+				// way. Returning now keeps a retired thumbnail from spending
+				// four TLS handshakes and a browser launch to learn nothing.
+				if errors.Is(err, ErrRedirectRefused) {
+					return nil, err
+				}
 				lastErr = err
 				f.recordFailure(profile.Name + ": " + err.Error())
 				continue
@@ -519,7 +532,7 @@ func (f *Fetcher) doFingerprint(client tlsclient.HttpClient, original *http.Requ
 		next := current.ResolveReference(reference)
 		if !validRequestURL(next, opts.AllowURL) {
 			_ = resp.Body.Close()
-			return nil, nil, fmt.Errorf("refusing redirect to unexpected origin %q", next)
+			return nil, nil, fmt.Errorf("%w: %q", ErrRedirectRefused, next)
 		}
 		_ = resp.Body.Close()
 		// 301/302/303 degrade a POST into a GET, matching browser and net/http
@@ -629,8 +642,14 @@ func LooksLikeChallenge(status int, header http.Header, body []byte) bool {
 
 // IsChallengeError reports whether err was produced by a challenge or block
 // page rather than a transport failure.
+//
+// A refused redirect is never a challenge: the origin answered with a plain
+// 302 to a host outside AllowURL, so the request cannot be completed no matter
+// how many fingerprints or browsers are tried. Checking it first keeps the
+// "chromium fallback" marker below from matching an error whose browser attempt
+// merely failed for the same deterministic reason.
 func IsChallengeError(err error) bool {
-	if err == nil {
+	if err == nil || errors.Is(err, ErrRedirectRefused) {
 		return false
 	}
 	text := strings.ToLower(err.Error())

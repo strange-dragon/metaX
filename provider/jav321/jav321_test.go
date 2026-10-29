@@ -273,3 +273,21 @@ func (testConfig) GetBool(string) (bool, error)              { return false, nil
 func (testConfig) GetInt64(string) (int64, error)            { return 0, nil }
 func (testConfig) GetFloat64(string) (float64, error)        { return 0, nil }
 func (testConfig) GetDuration(string) (time.Duration, error) { return 0, nil }
+
+// Only artwork may be reported as missing. A detail page that redirects off
+// site is a routing problem and has to keep surfacing as one.
+func TestIsArtworkURLDistinguishesCDNsFromTheSite(t *testing.T) {
+	p := New()
+	cases := map[string]bool{
+		"https://pics.dmm.co.jp/digital/video/ssis00001/ssis00001pl.jpg": true,
+		"https://p.dmm.co.jp/mono/actjpgs/nonoka_hana.jpg":               true,
+		"https://www.jav321.com/video/ssis00001":                         false,
+		"https://jav321.com/search":                                      false,
+		"https://imgsrc.dmm.com/pics/mono/movie/n/now_printing/x.jpg":    false,
+	}
+	for raw, want := range cases {
+		if got := p.isArtworkURL(raw); got != want {
+			t.Errorf("isArtworkURL(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}

@@ -333,7 +333,27 @@ func (p *Jav321) Fetch(rawURL string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p.send(req)
+	resp, err := p.send(req)
+	if err != nil && errors.Is(err, antibot.ErrRedirectRefused) && p.isArtworkURL(rawURL) {
+		// DMM answers a retired cover with a 302 to its "now printing"
+		// placeholder on imgsrc.dmm.com. That is a missing picture, not an
+		// edge block: saying so lets aggregation move on to the next provider
+		// instead of reporting the whole title as unreachable.
+		return nil, fmt.Errorf("%w: jav321 has no artwork for this title (%v)", mt.ErrImageNotFound, err)
+	}
+	return resp, err
+}
+
+// isArtworkURL reports whether rawURL points at one of the picture CDNs rather
+// than the site itself. Only artwork can be reported as missing, because a
+// detail page that redirects off-site is a real routing problem.
+func (p *Jav321) isArtworkURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	return p.allowedImageHost(host) && !p.allowedHost(host)
 }
 
 func (p *Jav321) newRequest(method, rawURL string, body io.Reader) (*http.Request, error) {
@@ -375,6 +395,11 @@ func (p *Jav321) send(req *http.Request) (*http.Response, error) {
 			lastErr = err
 			if antibot.IsChallengeError(err) {
 				return nil, fmt.Errorf("jav321: GET %s blocked by edge protection: %w", req.URL, err)
+			}
+			if errors.Is(err, antibot.ErrRedirectRefused) {
+				// Deterministic: no fingerprint or browser can follow a target
+				// the origin guard rejects, so retrying only burns the budget.
+				return nil, err
 			}
 			continue
 		}

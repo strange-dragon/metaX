@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"image"
+	"time"
 
 	"github.com/strange-dragon/metaX/common/number"
 	R "github.com/strange-dragon/metaX/constant"
@@ -53,6 +54,12 @@ const (
 	// JavDB's 292x438 covers (~128k) and the 800x538 DMM/JavBus artwork
 	// (~430k) those sites serve for the same title.
 	AggregateImageMinArea = 180_000
+	// AggregateImageBudget bounds the whole candidate walk. A provider that is
+	// behind an edge challenge spends its own timeout before failing, and four
+	// of those in a row would reach the 100s gateway limit the way JavLibrary
+	// once did. The budget is checked between candidates: a hung provider can
+	// still overrun it by one attempt, never by four.
+	AggregateImageBudget = 30 * time.Second
 )
 
 // GetAggregatedMovieImage walks candidates in the given order and returns the
@@ -68,7 +75,14 @@ func (e *Engine) GetAggregatedMovieImage(candidates []providerid.ProviderID, kin
 		bestArea int
 		firstErr error
 	)
-	for _, pid := range candidates {
+	deadline := time.Now().Add(AggregateImageBudget)
+	for i, pid := range candidates {
+		if i > 0 && time.Now().After(deadline) {
+			// Everything attempted so far failed or came back small, and the
+			// remaining candidates would not finish before the gateway cuts
+			// the request. Answer with what is at hand.
+			break
+		}
 		raw, info, err := e.getMovieArtwork(pid, kind == MovieImagePrimary)
 		if err != nil {
 			// Report the preferred provider's failure, not whichever provider
