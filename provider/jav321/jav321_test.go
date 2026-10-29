@@ -70,6 +70,12 @@ func TestNormalizeAndParseMovieID(t *testing.T) {
 	id, err := p.ParseMovieIDFromURL("https://www.jav321.com/video/ssis00033/")
 	require.NoError(t, err)
 	require.Equal(t, "SSIS00033", id)
+	// Some labels get a digit prefix in the slug to avoid a routing collision
+	// on the site (SDMM-031 -> /video/1sdmm00031). Rejecting the prefix made
+	// the provider answer 404 for works the site clearly has.
+	id, err = p.ParseMovieIDFromURL("https://www.jav321.com/video/1sdmm00031")
+	require.NoError(t, err)
+	require.Equal(t, "1SDMM00031", id)
 	_, err = p.ParseMovieIDFromURL("https://example.invalid/video/SSIS-033")
 	require.Error(t, err)
 	_, err = p.ParseMovieIDFromURL("https://www.jav321.com/search?q=SSIS-033")

@@ -47,7 +47,13 @@ const (
 
 var (
 	ErrMovieNotFound = errors.New("jav321: movie not found")
-	movieNumberRE    = regexp.MustCompile(`(?i)^(?:[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*|[A-Z]{2,12}[0-9]{2,12}|FC2[-_]?PPV[-_]?[0-9]+)$`)
+	// A detail slug is either <label><digits> (ssis00033) or, when the bare
+	// label would collide with an existing route, a short digit prefix glued in
+	// front of it (SDMM-031 -> 1sdmm00031). The prefix is part of the site's
+	// URL scheme, not of the catalog number, but it still has to be accepted
+	// here or every prefixed work is reported as missing even though the search
+	// redirected straight to its detail page.
+	movieNumberRE    = regexp.MustCompile(`(?i)^(?:[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*|[0-9]{1,3}[A-Z]{2,12}[0-9]{2,12}|[A-Z]{2,12}[0-9]{2,12}|FC2[-_]?PPV[-_]?[0-9]+)$`)
 	numberInTitleRE  = regexp.MustCompile(`(?i)(FC2[-_]?PPV[-_]?[0-9]+|[A-Z0-9]{1,16}[-_][A-Z0-9]{1,24}(?:[-_][A-Z0-9]+)*)`)
 	runtimeMinutesRE = regexp.MustCompile(`(?i)(\d+)\s*(?:min|minutes?|分)`)
 	previewImageRE   = regexp.MustCompile(`(?i)jp-(\d+)\.jpg$`)

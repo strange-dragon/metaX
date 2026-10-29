@@ -235,6 +235,7 @@ automation helps; they need a residential/Japanese egress.
 | Site | Answer | Why |
 | --- | --- | --- |
 | prestige-av.com | 403 "not available in your region" | Hard geo block |
+| www.dmm.co.jp (FANZA) | 307 → `special.fanza.jp/not-available-in-your-region/` | Geo block on datacenter egress; the block page has no `self.__next_f`, so the search parser reports `var 'self' does not contain key '__next_f'` — a misleading error for a geo block |
 | faleno.jp | 403 on `/top/works/*` and on any REST call | Host WAF; the homepage alone loads |
 | fc2ppvdb.com | 403 / "Access denied" | Cloudflare firewall rule (error 1020) |
 | freejavbt.com | 503 "Web Page Blocked" | Upstream network block |
