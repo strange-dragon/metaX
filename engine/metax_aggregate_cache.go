@@ -146,7 +146,7 @@ func aggregateCacheMaxFromEnv() int {
 
 var (
 	aggregateMovieCache   = newTTLCache[*AggregatedMovieInfo](aggregateCacheTTLFromEnv(), aggregateCacheMaxFromEnv())
-	aggregateResolveCache = newTTLCache[providerid.ProviderID](aggregateCacheTTLFromEnv(), aggregateCacheMaxFromEnv())
+	aggregateResolveCache = newTTLCache[[]providerid.ProviderID](aggregateCacheTTLFromEnv(), aggregateCacheMaxFromEnv())
 )
 
 func aggregateMovieCacheKey(pid providerid.ProviderID, lazy bool, category routing.Category, config routing.Config) string {
@@ -168,11 +168,12 @@ func aggregateNumberCacheKey(number string, lazy bool, category routing.Category
 	)
 }
 
-func aggregateResolveCacheKey(number string, category routing.Category, config routing.Config) string {
-	return fmt.Sprintf("resolve|%s|%s|%s",
+func aggregateResolveCacheKey(number string, category routing.Category, config routing.Config, limit int) string {
+	return fmt.Sprintf("resolve|%s|%s|%s|%d",
 		strings.ToLower(strings.TrimSpace(number)),
 		category.Canonical(),
 		config.Fingerprint(),
+		limit,
 	)
 }
 

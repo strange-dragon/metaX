@@ -72,7 +72,7 @@ When aggregation runs, the response keeps the existing `data` envelope and the e
 GET /v1/images/{primary|thumb|backdrop}/:provider/:id?category=:category&url=:url
 ```
 
-Images requested with `provider=MetaX` are resolved to a real provider before the stock image path runs. The resolution prefers the configured image provider and then falls back to route order, so the artwork returned by `primary`/`thumb`/`backdrop` matches the artwork in the merged detail. The plugin normally passes the image URL from the selected metadata; the `category` parameter is optional and is inferred from the catalog number when omitted.
+Images requested with `provider=MetaX` are resolved to a real provider before the stock image path runs. The resolution prefers the configured image provider and then falls back to route order, so the artwork returned by `primary`/`thumb`/`backdrop` matches the artwork in the merged detail. The candidates are tried in that order and the sharpest result wins, so a provider that has no image for the title, or whose image host refuses the request, does not break the image. The plugin normally passes the image URL from the selected metadata; the `category` parameter is optional and is inferred from the catalog number when omitted.
 
 ## Field source preference
 
@@ -86,6 +86,7 @@ Merged fields are filled in two independent passes, because artwork and metadata
 - Both passes fall back to route order for any field the preferred provider leaves empty or cannot answer at all. A provider that returns `not_found` or `error` simply does not appear, so the preference is never a hard requirement.
 - Set either variable to `off`, `none`, `route`, `default`, or an empty value to restore pure route-order merging for that group.
 - The preference also drives `MetaX` image resolution, so the same provider supplies both the merged `cover_url` and the bytes behind `/v1/images/primary/MetaX/:number`.
+- Image bytes are chosen by resolution, not only by preference: the image route walks up to 4 candidates, keeps the largest source image, and stops as soon as one is at least 180 000 pixels (between JavDB's 292×438 covers and the 800×538 artwork DMM and JavBus serve). A preferred provider therefore wins whenever it has artwork worth showing, and a title it does not carry — or artwork it cannot serve — falls through to the sharpest remaining source instead of returning nothing.
 - The default pair exists because the two sources fail in opposite ways in practice: Jav321's artwork comes from the DMM picture CDN, while JavDB's image host answers 403 to datacenter clients that are not in its allowlist; JavDB in turn has the more complete catalogue metadata. Provider names are matched case-insensitively; unregistered names are ignored.
 - `Jav321` fetches artwork from `pics.dmm.co.jp` and `p.dmm.co.jp` in addition to its own host. Detail URLs remain restricted to jav321 itself.
 

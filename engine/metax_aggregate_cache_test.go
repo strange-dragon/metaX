@@ -80,12 +80,12 @@ func init() {
 
 func resetAggregateCaches(ttl time.Duration) {
 	aggregateMovieCache = newTTLCache[*AggregatedMovieInfo](ttl, 16)
-	aggregateResolveCache = newTTLCache[providerid.ProviderID](ttl, 16)
+	aggregateResolveCache = newTTLCache[[]providerid.ProviderID](ttl, 16)
 }
 
 func restoreAggregateCaches() {
 	aggregateMovieCache = newTTLCache[*AggregatedMovieInfo](defaultAggregateCacheTTL, defaultAggregateCacheMax)
-	aggregateResolveCache = newTTLCache[providerid.ProviderID](defaultAggregateCacheTTL, defaultAggregateCacheMax)
+	aggregateResolveCache = newTTLCache[[]providerid.ProviderID](defaultAggregateCacheTTL, defaultAggregateCacheMax)
 }
 
 func TestTTLCacheReturnsValueBeforeExpiry(t *testing.T) {

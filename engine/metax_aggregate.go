@@ -287,20 +287,40 @@ func (e *Engine) getAggregatedMovieInfoByNumber(number string, category routing.
 // proxy route turns this identity into the primary/thumb/backdrop image, which
 // is why the image source has to be decided here as well as in the merge.
 func (e *Engine) ResolveAggregatedProviderID(number string, category routing.Category, config routing.Config) (providerid.ProviderID, error) {
-	key := aggregateResolveCacheKey(number, category, config)
-	return aggregateResolveCache.do(key, func() (providerid.ProviderID, error) {
-		return e.resolveAggregatedProviderID(number, category, config)
+	candidates, err := e.ResolveAggregatedProviderIDs(number, category, config, 1)
+	if err != nil {
+		return providerid.ProviderID{}, err
+	}
+	return candidates[0], nil
+}
+
+// ResolveAggregatedProviderIDs returns up to limit provider identities for a
+// catalog number in artwork order: the configured image provider first, then
+// route order. The image endpoint walks this chain so a title that the
+// preferred provider does not carry, or whose artwork that provider cannot
+// serve, still yields a real image from the next source.
+func (e *Engine) ResolveAggregatedProviderIDs(number string, category routing.Category, config routing.Config, limit int) ([]providerid.ProviderID, error) {
+	if limit <= 0 {
+		limit = 1
+	}
+	key := aggregateResolveCacheKey(number, category, config, limit)
+	return aggregateResolveCache.do(key, func() ([]providerid.ProviderID, error) {
+		candidates, err := e.resolveAggregatedProviderIDs(number, category, config, limit)
+		if err != nil {
+			return nil, err
+		}
+		return append([]providerid.ProviderID(nil), candidates...), nil
 	})
 }
 
-func (e *Engine) resolveAggregatedProviderID(number string, category routing.Category, config routing.Config) (providerid.ProviderID, error) {
+func (e *Engine) resolveAggregatedProviderIDs(number string, category routing.Category, config routing.Config, limit int) ([]providerid.ProviderID, error) {
 	number = strings.TrimSpace(number)
 	if number == "" {
-		return providerid.ProviderID{}, mt.ErrInvalidKeyword
+		return nil, mt.ErrInvalidKeyword
 	}
 	_, providers, err := e.aggregateRouteProviders(number, category, config)
 	if err != nil {
-		return providerid.ProviderID{}, err
+		return nil, err
 	}
 	providers = OrderByProviderPreference(providers, ActiveMergePreference().Image, func(name string) string {
 		return name
@@ -310,11 +330,35 @@ func (e *Engine) resolveAggregatedProviderID(number string, category routing.Cat
 	// catalog when possible so primary/thumb/backdrop fetches do not each
 	// trigger a provider search. A stale record merely yields a failed image
 	// until the next lazy detail refresh updates it.
-	if pid, ok := e.lookupProviderIDByNumber(number, providers); ok {
-		return pid, nil
+	candidates := make([]providerid.ProviderID, 0, limit)
+	seen := make(map[string]struct{}, limit)
+	add := func(pid providerid.ProviderID) bool {
+		folded := strings.ToLower(strings.TrimSpace(pid.Provider))
+		if _, exists := seen[folded]; exists {
+			return len(candidates) >= limit
+		}
+		seen[folded] = struct{}{}
+		candidates = append(candidates, pid)
+		return len(candidates) >= limit
+	}
+	for _, name := range providers {
+		if len(candidates) >= limit {
+			return candidates, nil
+		}
+		if pid, ok := e.lookupProviderIDByNumber(number, []string{name}); ok {
+			if add(pid) {
+				return candidates, nil
+			}
+		}
 	}
 
 	for _, name := range providers {
+		if len(candidates) >= limit {
+			break
+		}
+		if _, done := seen[strings.ToLower(strings.TrimSpace(name))]; done {
+			continue
+		}
 		results, err := e.SearchMovie(number, name, false)
 		if err != nil {
 			continue
@@ -322,11 +366,15 @@ func (e *Engine) resolveAggregatedProviderID(number string, category routing.Cat
 		for _, result := range results {
 			if result != nil && strings.EqualFold(result.Provider, name) &&
 				routing.SameNumber(result.Number, number) {
-				return providerid.ProviderID{Provider: result.Provider, ID: result.ID}, nil
+				add(providerid.ProviderID{Provider: result.Provider, ID: result.ID})
+				break
 			}
 		}
 	}
-	return providerid.ProviderID{}, mt.ErrInfoNotFound
+	if len(candidates) == 0 {
+		return nil, mt.ErrInfoNotFound
+	}
+	return candidates, nil
 }
 
 // aggregateRouteProviders resolves the provider chain for a category, with a

@@ -12,6 +12,7 @@ import (
 
 	R "github.com/strange-dragon/metaX/constant"
 	"github.com/strange-dragon/metaX/engine"
+	"github.com/strange-dragon/metaX/engine/providerid"
 	"github.com/strange-dragon/metaX/imageutil"
 	"github.com/strange-dragon/metaX/imageutil/badge"
 	mt "github.com/strange-dragon/metaX/provider"
@@ -77,9 +78,12 @@ func getImage(app *engine.Engine, typ imageType) gin.HandlerFunc {
 		app = requestApp
 
 		// The merged search candidate carries the reserved provider name.
-		// Resolve it to the route-first real provider before the stock image paths.
+		// Resolve it to real providers before the stock image paths: artwork is
+		// served from the configured image provider first, then route order, and
+		// the candidates below are tried in that order.
+		var candidates []providerid.ProviderID
 		if engine.IsAggregatedProvider(uri.Provider) {
-			resolved, resolveErr := app.ResolveAggregatedProviderID(uri.ID, routing.Category(query.Category), routing.ActiveConfig())
+			resolved, resolveErr := app.ResolveAggregatedProviderIDs(uri.ID, routing.Category(query.Category), routing.ActiveConfig(), engine.AggregateImageCandidateLimit)
 			if resolveErr != nil {
 				if stderrors.Is(resolveErr, routing.ErrUnknownCategory) || stderrors.Is(resolveErr, routing.ErrNoAvailableProvider) {
 					abortWithStatusMessage(c, http.StatusBadRequest, resolveErr)
@@ -88,8 +92,9 @@ func getImage(app *engine.Engine, typ imageType) gin.HandlerFunc {
 				abortWithError(c, resolveErr)
 				return
 			}
-			uri.Provider = resolved.Provider
-			uri.ID = resolved.ID
+			candidates = resolved
+			uri.Provider = resolved[0].Provider
+			uri.ID = resolved[0].ID
 		}
 
 		// TODO: how to handle providers that implement
@@ -109,19 +114,40 @@ func getImage(app *engine.Engine, typ imageType) gin.HandlerFunc {
 			img image.Image
 			err error
 		)
-		if query.URL != "" /* specified URL */ {
-			var provider mt.Provider
-			if isActorProvider {
-				provider = app.MustGetActorProviderByName(uri.Provider)
-			} else {
-				provider = app.MustGetMovieProviderByName(uri.Provider)
+		switch {
+		case len(candidates) > 0 && query.URL == "":
+			// Merged identity: pick the sharpest artwork across the candidate
+			// chain instead of trusting a single provider's image host.
+			img, err = app.GetAggregatedMovieImage(candidates, movieImageKind(typ), query.Ratio, query.Position)
+		case query.URL != "" /* specified URL */ :
+			// The bytes come from the caller-supplied URL, so resolution is
+			// irrelevant; walk the chain only to find a fetcher that accepts it.
+			fetchers := candidates
+			if len(fetchers) == 0 {
+				fetchers = []providerid.ProviderID{uri.AsProviderID()}
 			}
 			// query.Ratio should apply only to the primary images.
 			if typ != primaryImageType || query.Ratio < 0 {
 				query.Ratio = ratio
 			}
-			img, err = app.GetImageByURL(provider, query.URL, query.Ratio, query.Position, query.Auto)
-		} else if isActorProvider /* actor */ {
+			for _, pid := range fetchers {
+				var provider mt.Provider
+				if isActorProvider {
+					if !app.IsActorProvider(pid.Provider) {
+						continue
+					}
+					provider = app.MustGetActorProviderByName(pid.Provider)
+				} else {
+					if !app.IsMovieProvider(pid.Provider) {
+						continue
+					}
+					provider = app.MustGetMovieProviderByName(pid.Provider)
+				}
+				if img, err = app.GetImageByURL(provider, query.URL, query.Ratio, query.Position, query.Auto); err == nil {
+					break
+				}
+			}
+		case isActorProvider /* actor */ :
 			switch typ {
 			case primaryImageType:
 				img, err = app.GetActorPrimaryImage(uri.AsProviderID())
@@ -129,7 +155,7 @@ func getImage(app *engine.Engine, typ imageType) gin.HandlerFunc {
 				abortWithStatusMessage(c, http.StatusBadRequest, "unsupported image type")
 				return
 			}
-		} else /* movie */ {
+		default: /* movie */
 			switch typ {
 			case primaryImageType:
 				img, err = app.GetMoviePrimaryImage(uri.AsProviderID(), query.Ratio, query.Position)
@@ -168,3 +194,14 @@ func getImage(app *engine.Engine, typ imageType) gin.HandlerFunc {
 }
 
 const jpegImageMIMEType = "image/jpeg"
+
+func movieImageKind(typ imageType) engine.MovieImageKind {
+	switch typ {
+	case thumbImageType:
+		return engine.MovieImageThumb
+	case backdropImageType:
+		return engine.MovieImageBackdrop
+	default:
+		return engine.MovieImagePrimary
+	}
+}
