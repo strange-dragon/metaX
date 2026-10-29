@@ -50,7 +50,7 @@ var defaultSamples = map[string]string{
 	"freejavbt":        "SSIS-033",
 	"gcolle":           "SSIS-033",
 	"getchu":           "SSIS-033",
-	"giga":             "SSIS-033",
+	"giga":             "SPSF-83",
 	"h0930":            "SSIS-033",
 	"h4610":            "SSIS-033",
 	"heydouga":         "SSIS-033",
@@ -98,6 +98,7 @@ func main() {
 		noBrowser = flag.Bool("no-browser", false, "disable the Chromium fallback for -url")
 		conc      = flag.Int("concurrency", 4, "how many providers to probe at once")
 		egress    = flag.Bool("egress", false, "print the public egress address, ASN and country, then exit")
+		search    = flag.Bool("search", false, "probe the number-search path instead of the detail path")
 	)
 	flag.Parse()
 
@@ -157,7 +158,7 @@ func main() {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			results[i] = probe(ctx, factories[name], name, *id, *timeout)
+			results[i] = probe(ctx, factories[name], name, *id, *timeout, *search)
 		}(i, name)
 	}
 	wg.Wait()
@@ -210,7 +211,7 @@ func applyBrowserMode(p mt.MovieProvider) {
 	}
 }
 
-func probe(ctx context.Context, factory mt.MovieFactory, name, override string, timeout time.Duration) (res result) {
+func probe(ctx context.Context, factory mt.MovieFactory, name, override string, timeout time.Duration, searchMode bool) (res result) {
 	res = result{provider: name}
 	start := time.Now()
 	defer func() { res.elapsed = time.Since(start) }()
@@ -252,6 +253,25 @@ func probe(ctx context.Context, factory mt.MovieFactory, name, override string, 
 
 	done := make(chan error, 1)
 	go func() {
+		if searchMode {
+			searcher, ok := p.(mt.MovieSearcher)
+			if !ok {
+				done <- errors.New("provider does not implement number search")
+				return
+			}
+			results, err := searcher.SearchMovie(sample)
+			if err != nil {
+				done <- err
+				return
+			}
+			if len(results) == 0 {
+				done <- errors.New("search returned no results")
+				return
+			}
+			res.number, res.title = results[0].Number, results[0].Title
+			done <- nil
+			return
+		}
 		info, err := p.GetMovieInfoByID(p.NormalizeMovieID(sample))
 		if err != nil {
 			done <- err
@@ -265,15 +285,19 @@ func probe(ctx context.Context, factory mt.MovieFactory, name, override string, 
 		done <- nil
 	}()
 
+	stage := "detail"
+	if searchMode {
+		stage = "search"
+	}
 	select {
 	case err := <-done:
-		res.stage = "detail"
+		res.stage = stage
 		res.err = err
 	case <-ctx.Done():
-		res.stage = "detail"
+		res.stage = stage
 		res.err = ctx.Err()
 	case <-time.After(timeout + 10*time.Second):
-		res.stage = "detail"
+		res.stage = stage
 		res.err = errors.New("probe timed out")
 	}
 	return res

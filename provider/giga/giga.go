@@ -377,32 +377,51 @@ func normalizeNumber(value string) string {
 	return strings.NewReplacer("-", "", " ", "", "\t", "").Replace(value)
 }
 
+// searchURL targets /search/index.php. The site's `/search/` handler now
+// answers 302 to /top.php (since the 2026-10 rewrite), so the old
+// `/search/?keyword=` form silently returned the front page and produced zero
+// candidates.
 func (p *Giga) searchURL(keyword string) string {
 	u := *p.baseURL
-	u.Path = path.Join(u.Path, "search") + "/"
+	u.Path = path.Join("/", u.Path, "search", "index.php")
 	q := u.Query()
 	q.Set("keyword", keyword)
 	u.RawQuery = q.Encode()
 	return u.String()
 }
 
+// listNumberRE pulls the catalogue number out of a search-result card, where
+// it sits in full-width parentheses right after the title link: （SPSF-83）.
+var listNumberRE = regexp.MustCompile(`[（(]\s*([A-Za-z]{2,6})-?([0-9]{2,5})\s*[）)]`)
+
 func (p *Giga) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
 	keyword = p.NormalizeMovieKeyword(keyword)
 	if keyword == "" {
 		return nil, nil
 	}
-	doc, _, err := p.getHTML(p.searchURL(keyword))
+	doc, finalURL, err := p.getHTML(p.searchURL(keyword))
 	if err != nil {
 		return nil, err
 	}
-	var candidates []string
+	// An empty result page still answers 200 from /search/index.php, so a
+	// different final path means the session was bounced to the front page.
+	// Report that instead of returning a silent empty list.
+	if parsed, err := url.Parse(finalURL); err != nil || parsed.Path != "/search/index.php" {
+		return nil, fmt.Errorf("giga: search redirected to %q instead of the result page", finalURL)
+	}
+	type candidate struct {
+		homepage string
+		number   string
+	}
+	var candidates []candidate
 	seen := make(map[string]struct{})
-	doc.Find("div.thumBox a[href]").Each(func(_ int, a *goquery.Selection) {
-		href, _ := a.Attr("href")
-		if !strings.Contains(href, "/product/index.php") {
+	doc.Find("div.thumBox").Each(func(_ int, box *goquery.Selection) {
+		href, _ := box.Find("a[href*='/product/index.php']").First().Attr("href")
+		href = strings.TrimSpace(href)
+		if href == "" {
 			return
 		}
-		ref, err := url.Parse(strings.TrimSpace(href))
+		ref, err := url.Parse(href)
 		if err != nil {
 			return
 		}
@@ -414,28 +433,65 @@ func (p *Giga) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) {
 			return
 		}
 		seen[homepage] = struct{}{}
-		candidates = append(candidates, homepage)
-	})
-	results := make([]*model.MovieSearchResult, 0, 1)
-	query := normalizeNumber(keyword)
-	for _, homepage := range candidates {
-		info, err := p.GetMovieInfoByURL(homepage)
-		if err != nil {
-			if errors.Is(err, ErrMovieNotFound) {
-				continue
-			}
-			return nil, err
+		number := ""
+		if match := listNumberRE.FindStringSubmatch(box.Text()); match != nil {
+			number = match[1] + "-" + match[2]
 		}
-		if normalizeNumber(info.Number) != query {
+		candidates = append(candidates, candidate{homepage: homepage, number: number})
+	})
+	query := normalizeNumber(keyword)
+	results := make([]*model.MovieSearchResult, 0, 1)
+	// Fast path: the card already shows the number, so a match costs exactly
+	// one detail request instead of one per card.
+	for _, c := range candidates {
+		if c.number == "" || normalizeNumber(c.number) != query {
 			continue
 		}
-		result := info.ToSearchResult()
-		if result.IsValid() {
-			results = append(results, result)
+		result, err := p.searchResultFor(c.homepage, query)
+		if err != nil || result != nil {
+			if result != nil {
+				results = append(results, result)
+			}
+			return results, err
 		}
-		break
+	}
+	// Slow path: cards whose number could not be read, and numbers that only
+	// match on the detail page.
+	for _, c := range candidates {
+		if c.number != "" && normalizeNumber(c.number) != query {
+			continue
+		}
+		result, err := p.searchResultFor(c.homepage, query)
+		if err != nil {
+			return nil, err
+		}
+		if result != nil {
+			results = append(results, result)
+			break
+		}
 	}
 	return results, nil
+}
+
+// searchResultFor fetches one candidate and returns it only when its detail
+// number matches the query. A mismatch is not an error: the caller keeps
+// looking.
+func (p *Giga) searchResultFor(homepage, query string) (*model.MovieSearchResult, error) {
+	info, err := p.GetMovieInfoByURL(homepage)
+	if err != nil {
+		if errors.Is(err, ErrMovieNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if normalizeNumber(info.Number) != query {
+		return nil, nil
+	}
+	result := info.ToSearchResult()
+	if !result.IsValid() {
+		return nil, nil
+	}
+	return result, nil
 }
 
 func (p *Giga) GetMovieInfoByID(id string) (*model.MovieInfo, error) {

@@ -52,7 +52,7 @@ func ageGateServer(t *testing.T, handler http.Handler) (*httptest.Server, *int) 
 func TestSearchAndDetailParsingWithAgeGate(t *testing.T) {
 	var detailRequests int
 	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/search/" {
+		if r.URL.Path == "/search/index.php" {
 			require.Contains(t, r.Header.Get("Cookie"), "PHPSESSID=active-session")
 			_, _ = fmt.Fprint(w, searchFixture)
 			return
@@ -211,4 +211,41 @@ func TestNormalizeMovieKeyword(t *testing.T) {
 	p := New()
 	require.Equal(t, "ABC-123", p.NormalizeMovieKeyword(" ＡＢＣ-123 "))
 	require.True(t, strings.EqualFold(p.NormalizeMovieID("1001"), "1001"))
+}
+
+// TestSearchUsesCardNumberToAvoidExtraDetailRequests locks in the fast path:
+// the result card prints the number in full-width parentheses, so the search
+// must pick the matching card instead of fetching every card's detail page.
+func TestSearchUsesCardNumberToAvoidExtraDetailRequests(t *testing.T) {
+	var detailRequests int
+	mux := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/search/index.php":
+			_, _ = fmt.Fprint(w, `<html><body>
+<div class="col s6 m4 l3 center thumBox"><div class="pac_thum_box"><a href="/product/index.php?product_id=2001"><img src="/x.jpg"></a></div>
+<a href="/product/index.php?product_id=2001"><span style="font-weight:bold;">ABC-1234 Near match</span></a>（ABC-1234）<br /></div>
+<div class="col s6 m4 l3 center thumBox"><a href="/product/index.php?product_id=2002"><span style="font-weight:bold;">ABC-123 Exact title</span></a>（ABC-123）<br /></div>
+</body></html>`)
+		case "/product/index.php":
+			detailRequests++
+			number := "ABC-123"
+			if r.URL.Query().Get("product_id") == "2001" {
+				number = "ABC-1234"
+			}
+			_, _ = fmt.Fprint(w, detailFixture(number, "Title "+number))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	server, _ := ageGateServer(t, mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	results, err := p.SearchMovie("ABC-123")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, "2002", results[0].ID)
+	require.Equal(t, "ABC-123", results[0].Number)
+	require.Equal(t, 1, detailRequests,
+		"the card number should let the search skip the unrelated detail page")
 }
