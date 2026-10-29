@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -174,12 +175,18 @@ func TestGetAggregatedMovieImageSkipsCandidatesWithoutArtwork(t *testing.T) {
 	}
 }
 
-func TestGetAggregatedMovieImageReportsTheLastFailure(t *testing.T) {
+func TestGetAggregatedMovieImageReportsThePreferredProvidersFailure(t *testing.T) {
 	e := New(openAggregateTestDB(t))
 	_, err := e.GetAggregatedMovieImage([]providerid.ProviderID{
 		{Provider: imageAggregateMissingProvider, ID: "abp-image-4"},
+		{Provider: "NotARegisteredProvider", ID: "abp-image-4"},
 	}, MovieImagePrimary, -1, -1)
 	if err == nil {
 		t.Fatal("expected an error when no candidate can serve artwork")
+	}
+	// The first candidate is the one the caller expected artwork from, so its
+	// error has to survive instead of the last nothing-provider's.
+	if !strings.Contains(err.Error(), imageAggregateMissingProvider) {
+		t.Fatalf("error = %v, want it to name the preferred provider", err)
 	}
 }

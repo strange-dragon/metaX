@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"image"
 
 	"github.com/strange-dragon/metaX/common/number"
@@ -65,12 +66,17 @@ func (e *Engine) GetAggregatedMovieImage(candidates []providerid.ProviderID, kin
 		best     image.Image
 		bestInfo *model.MovieInfo
 		bestArea int
-		lastErr  error
+		firstErr error
 	)
 	for _, pid := range candidates {
 		raw, info, err := e.getMovieArtwork(pid, kind == MovieImagePrimary)
 		if err != nil {
-			lastErr = err
+			// Report the preferred provider's failure, not whichever provider
+			// happened to be tried last: the first candidate is the one the
+			// caller expects artwork from, so its error is the useful one.
+			if firstErr == nil {
+				firstErr = fmt.Errorf("%s: %w", pid.Provider, err)
+			}
 			continue
 		}
 		if area := imageArea(raw); area > bestArea {
@@ -81,8 +87,8 @@ func (e *Engine) GetAggregatedMovieImage(candidates []providerid.ProviderID, kin
 		}
 	}
 	if best == nil {
-		if lastErr != nil {
-			return nil, lastErr
+		if firstErr != nil {
+			return nil, firstErr
 		}
 		return nil, mt.ErrImageNotFound
 	}
