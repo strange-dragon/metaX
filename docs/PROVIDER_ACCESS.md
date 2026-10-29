@@ -227,6 +227,27 @@ search pages on 2026-10-28:
    re-evaluate from scratch; `chromedp.PollFunction` aborts with
    "Inspected target navigated or closed (-32000)" on the first reload.
 
+### Redirects that no strategy can follow (2026-10-29)
+
+Some origins answer with a plain 30x to a host the provider's origin guard
+rejects. DMM does this for artwork of retired titles: `pics.dmm.co.jp` 302s to
+`imgsrc.dmm.com/pics/mono/movie/n/now_printing/now_printing.jpg`, a placeholder
+rather than a picture.
+
+Rotating TLS fingerprints cannot change that answer, so `antibot` returns
+`ErrRedirectRefused` from the first attempt instead of trying the remaining
+profiles and the browser. The old path wrapped every strategy's error, so the
+text contained "Chromium fallback" and `IsChallengeError` reported a Cloudflare
+block for a title that simply has no picture left at DMM — 9.6s on MIDE-001,
+against 0.38s once the refusal is recognised.
+
+Jav321 maps the refusal to `ErrImageNotFound` when the URL is one of its
+picture CDNs, so an aggregated `MetaX` image request moves to the next provider
+instead of failing. A detail page that redirects off site keeps its original
+error: that is a routing problem, not a missing picture. The aggregated image
+walk also stops after `AggregateImageBudget` (30s) so four slow candidates
+cannot reach the 100s gateway limit.
+
 ### Hosts that need a proxy, not a parser
 
 These answer a real browser with a firewall or geo block. No amount of browser
