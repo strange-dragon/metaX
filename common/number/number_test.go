@@ -123,6 +123,17 @@ func TestTrim(t *testing.T) {
 		{"caribeancom-020317_001.mp4", "020317_001"},
 		{"caribeancompr-020317_001.mp4", "020317_001"},
 		{"caribbeancom-020317_001.mp4", "020317_001"},
+		// The separator must survive the maker strip. Caribbeancom and
+		// CaribbeancomPR publish independent sequences (JavDB 2026-10-29:
+		// 010123-001 and 010123_001 are different movies), so a filename that
+		// says dash has to reach Caribbeancom and one that says underscore has
+		// to reach CaribbeancomPR. Rewriting either one selects the wrong
+		// brand and answers with another movie's metadata.
+		{"Caribbeancom_020317-001.mp4", "020317-001"},
+		{"caribbeancom-020317-001.mp4", "020317-001"},
+		{"[Caribbeancom] 020317-001.mp4", "020317-001"},
+		{"CaribbeancomPR-020317_001.mp4", "020317_001"},
+		{"020317-001-caribbeancom.mp4", "020317-001"},
 		{"020317_001-caribbeancom.mp4", "020317_001"},
 		{"020317_001-caribbean 你好.mp4", "020317_001"},
 		{"020317_001-caribbean-fhd 你好.mp4", "020317_001"},
