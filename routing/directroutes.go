@@ -42,6 +42,12 @@ const (
 //     Shenzhen residential line as well as from the deployment): MGS, SOD,
 //     Prestige, FALENO, HEYZO, Caribbeancom, FC2PPVDB, JAVFREE, and the
 //     0930 family plus KIN8 and HeyDouga.
+//
+//     CaribbeancomPR belongs here too, but only on the datacenter side: a
+//     Shenzhen residential line gets 200 from caribbeancompr.com while Koyeb's
+//     `was` answers 403 on every attempt (5/5, ~0.5s each). The sibling
+//     caribbeancom.com is 403 from both. So neither Caribbean brand can serve
+//     the direct profile, and keeping PR routed only spends a fan-out slot.
 //   - Cloudflare JavaScript challenge: JavLibrary.
 //   - Site policy: FC2 now forces redirect.fc2.com/ekyc_auth.
 //   - Dead or unreachable: AVSOX, Freejavbt, FC2Club, fc2hub, IQQTV, AVE.
@@ -63,7 +69,6 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"Airav",
 		"TOKYO-HOT",
 		"1Pondo",
-		"CaribbeancomPR",
 		"10musume",
 		"DUGA",
 		"PACOPACOMAMA",
@@ -81,7 +86,6 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"FANZA",
 		"10musume",
 		"1Pondo",
-		"CaribbeancomPR",
 		"PACOPACOMAMA",
 		"MURAMURA",
 		"Gcolle",

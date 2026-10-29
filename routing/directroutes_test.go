@@ -9,8 +9,12 @@ import (
 // blockedProviders fail before any parser runs: GeoIP 403, a Cloudflare
 // challenge, FC2's eKYC redirect, or a site that is simply gone. Keeping them
 // in the direct table only spends a fan-out slot.
+//
+// CaribbeancomPR is blocked on the datacenter side only: a Shenzhen residential
+// line reaches caribbeancompr.com fine, Koyeb's `was` answers 403 every time.
+// The engine runs on the datacenter side, so it belongs here.
 var blockedProviders = []string{
-	"MGS", "SOD", "Prestige", "FALENO", "HEYZO", "Caribbeancom",
+	"MGS", "SOD", "Prestige", "FALENO", "HEYZO", "Caribbeancom", "CaribbeancomPR",
 	"FC2PPVDB", "JAVFREE", "JavLibrary", "FC2",
 	"H0930", "H4610", "C0930", "KIN8", "HeyDouga",
 	"AVSOX", "Freejavbt", "FC2Club", "fc2hub", "IQQTV", "AVE",
@@ -21,7 +25,7 @@ var blockedProviders = []string{
 // network requests, so they must stay routed.
 var idOnlyProviders = []string{
 	"1Pondo", "10musume", "PACOPACOMAMA", "MURAMURA",
-	"CaribbeancomPR", "MYWIFE", "TOKYO-HOT", "Pcolle", "Gcolle", "DUGA",
+	"MYWIFE", "TOKYO-HOT", "Pcolle", "Gcolle", "DUGA",
 }
 
 func TestRouteProfileFollowsProxyEnvironment(t *testing.T) {
