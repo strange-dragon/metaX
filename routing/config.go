@@ -72,7 +72,9 @@ func normalizeFingerprint(value string) string {
 }
 
 // LoadConfigFromEnv reads the route table selected by EnvRoutes or
-// EnvRoutesFile. Inline JSON wins over a file path.
+// EnvRoutesFile. Inline JSON wins over a file path. With neither set, the
+// built-in table is chosen by EnvRouteProfile: "direct" (datacenter-friendly,
+// the default when no proxy is configured) or "full" (every provider).
 func LoadConfigFromEnv() (Config, error) {
 	if raw := strings.TrimSpace(os.Getenv(EnvRoutes)); raw != "" {
 		return ParseConfig([]byte(raw))
@@ -80,7 +82,11 @@ func LoadConfigFromEnv() (Config, error) {
 	if path := strings.TrimSpace(os.Getenv(EnvRoutesFile)); path != "" {
 		return LoadConfig(path)
 	}
-	return DefaultConfig(), nil
+	profile, err := RouteProfile()
+	if err != nil {
+		return Config{}, err
+	}
+	return ConfigForProfile(profile), nil
 }
 
 // LoadConfig reads and validates a JSON route-table file.

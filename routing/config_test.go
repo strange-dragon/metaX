@@ -84,6 +84,7 @@ func TestLoadConfigFromEnvPrefersInlineJSONThenFileThenDefault(t *testing.T) {
 	}
 
 	t.Setenv(EnvRoutesFile, "")
+	t.Setenv(EnvRouteProfile, ProfileFull)
 	config, err = LoadConfigFromEnv()
 	if err != nil {
 		t.Fatalf("load default routing config: %v", err)
