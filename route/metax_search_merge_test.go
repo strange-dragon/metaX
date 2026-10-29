@@ -77,3 +77,47 @@ func TestPrependAggregatedCandidateLeavesUnidentifiableResultsAlone(t *testing.T
 		t.Fatalf("results without a number must not produce a merged candidate: %+v", got)
 	}
 }
+
+func TestPrependAggregatedCandidateUsesImageAndDetailPreferences(t *testing.T) {
+	results := []*model.MovieSearchResult{
+		{
+			Provider: "JavBus", ID: "javbus-id", Number: "ABP-123",
+			Title: "JavBus title", ThumbURL: "https://javbus.invalid/thumb.jpg",
+			CoverURL: "https://javbus.invalid/cover.jpg", Actors: pq.StringArray{"Actor A"},
+		},
+		{
+			Provider: "Jav321", ID: "jav321-id", Number: "ABP-123",
+			Title: "Jav321 title", ThumbURL: "https://jav321.invalid/thumb.jpg",
+			CoverURL: "https://jav321.invalid/cover.jpg", Actors: pq.StringArray{"Actor A", "Actor B"},
+		},
+		{
+			Provider: "JavDB", ID: "javdb-id", Number: "ABP-123", Title: "JavDB title",
+			ThumbURL: "https://javdb.invalid/thumb.jpg", CoverURL: "https://javdb.invalid/cover.jpg",
+			Score: 8.4, Actors: pq.StringArray{"Actor A"},
+		},
+	}
+
+	got := prependAggregatedCandidateWithPreference(results, engine.MergePreference{
+		Image: "Jav321", Detail: "JavDB",
+	})
+	merged := got[0]
+	if merged.Provider != engine.AggregatedProviderName || merged.ID != "ABP-123" {
+		t.Fatalf("merged identity = %s/%s, want MetaX/ABP-123", merged.Provider, merged.ID)
+	}
+	// The identity keeps the route-first result so the record still opens there.
+	if merged.Homepage != results[0].Homepage {
+		t.Fatalf("merged homepage = %q, want %q", merged.Homepage, results[0].Homepage)
+	}
+	if merged.Title != "JavDB title" || merged.Score != 8.4 {
+		t.Fatalf("merged detail = title %q score %v, want JavDB", merged.Title, merged.Score)
+	}
+	if merged.CoverURL != "https://jav321.invalid/cover.jpg" || merged.ThumbURL != "https://jav321.invalid/thumb.jpg" {
+		t.Fatalf("merged artwork = %q / %q, want Jav321", merged.CoverURL, merged.ThumbURL)
+	}
+	if len(merged.Actors) != 2 || merged.Actors[0] != "Actor A" || merged.Actors[1] != "Actor B" {
+		t.Fatalf("merged actors = %v, want deduplicated union in detail order", merged.Actors)
+	}
+	if len(got) != 4 {
+		t.Fatalf("result count = %d, want merged + three originals", len(got))
+	}
+}

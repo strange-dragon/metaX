@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/datatypes"
 
 	"github.com/strange-dragon/metaX/engine"
 	sdkerrors "github.com/strange-dragon/metaX/errors"
@@ -53,6 +54,15 @@ func searchMovieProvidersAggregated(app *engine.Engine, keyword string, provider
 }
 
 func prependAggregatedCandidate(results []*model.MovieSearchResult) []*model.MovieSearchResult {
+	return prependAggregatedCandidateWithPreference(results, engine.ActiveMergePreference())
+}
+
+// prependAggregatedCandidateWithPreference keeps the merged identity on the
+// first identified result so "open this record" and its homepage stay stable,
+// but fills title/actors/score from the preferred metadata provider and
+// artwork from the preferred image provider. Both preferences fall back to
+// result order, which is route order.
+func prependAggregatedCandidateWithPreference(results []*model.MovieSearchResult, pref engine.MergePreference) []*model.MovieSearchResult {
 	var base *model.MovieSearchResult
 	for _, result := range results {
 		if result != nil && strings.TrimSpace(result.Number) != "" {
@@ -66,9 +76,15 @@ func prependAggregatedCandidate(results []*model.MovieSearchResult) []*model.Mov
 	merged := *base
 	merged.Provider = engine.AggregatedProviderName
 	merged.ID = merged.Number
-	merged.Actors = append(merged.Actors[:0:0], merged.Actors...)
-	for _, result := range results {
-		if result == nil || result == base {
+	merged.Title = ""
+	merged.ThumbURL = ""
+	merged.CoverURL = ""
+	merged.Actors = nil
+	merged.Score = 0
+	merged.ReleaseDate = datatypes.Date{}
+
+	for _, result := range engine.OrderByProviderPreference(results, pref.Detail, searchResultProviderName) {
+		if result == nil {
 			continue
 		}
 		if strings.TrimSpace(merged.Title) == "" {
@@ -76,12 +92,6 @@ func prependAggregatedCandidate(results []*model.MovieSearchResult) []*model.Mov
 		}
 		if strings.TrimSpace(merged.Homepage) == "" {
 			merged.Homepage = result.Homepage
-		}
-		if strings.TrimSpace(merged.ThumbURL) == "" {
-			merged.ThumbURL = result.ThumbURL
-		}
-		if strings.TrimSpace(merged.CoverURL) == "" {
-			merged.CoverURL = result.CoverURL
 		}
 		if merged.Score == 0 {
 			merged.Score = result.Score
@@ -97,9 +107,27 @@ func prependAggregatedCandidate(results []*model.MovieSearchResult) []*model.Mov
 			merged.Actors = append(merged.Actors, actor)
 		}
 	}
+	for _, result := range engine.OrderByProviderPreference(results, pref.Image, searchResultProviderName) {
+		if result == nil {
+			continue
+		}
+		if strings.TrimSpace(merged.ThumbURL) == "" {
+			merged.ThumbURL = result.ThumbURL
+		}
+		if strings.TrimSpace(merged.CoverURL) == "" {
+			merged.CoverURL = result.CoverURL
+		}
+	}
 	out := make([]*model.MovieSearchResult, 0, len(results)+1)
 	out = append(out, &merged)
 	return append(out, results...)
+}
+
+func searchResultProviderName(result *model.MovieSearchResult) string {
+	if result == nil {
+		return ""
+	}
+	return result.Provider
 }
 
 func containsFold(values []string, target string) bool {

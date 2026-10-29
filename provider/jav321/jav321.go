@@ -27,9 +27,9 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/strange-dragon/metaX/common/parser"
+	"github.com/strange-dragon/metaX/internal/antibot"
 	"github.com/strange-dragon/metaX/model"
 	mt "github.com/strange-dragon/metaX/provider"
-	"github.com/strange-dragon/metaX/internal/antibot"
 )
 
 const (
@@ -172,11 +172,30 @@ func (p *Jav321) allowedHost(host string) bool {
 		(base == "www.jav321.com" && host == "jav321.com")
 }
 
+// imageHosts are the picture CDNs jav321 embeds in its pages. Artwork has to be
+// fetched from them so the image proxy can serve Jav321's own covers; detail
+// URLs are still constrained to jav321 by ParseMovieIDFromURL, which requires a
+// /video/{number} path on the site itself.
+var imageHosts = map[string]struct{}{
+	"pics.dmm.co.jp": {},
+	"p.dmm.co.jp":    {},
+}
+
+// allowedImageHost accepts the site plus the artwork CDNs it embeds.
+func (p *Jav321) allowedImageHost(host string) bool {
+	if p.allowedHost(host) {
+		return true
+	}
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	_, ok := imageHosts[host]
+	return ok
+}
+
 func (p *Jav321) allowedURL(u *url.URL) bool {
 	if u == nil {
 		return false
 	}
-	if !p.allowedHost(u.Hostname()) {
+	if !p.allowedImageHost(u.Hostname()) {
 		return false
 	}
 	if strings.EqualFold(p.baseURL.Scheme, "https") && !strings.EqualFold(u.Scheme, "https") {

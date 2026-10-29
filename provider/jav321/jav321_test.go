@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
-	mt "github.com/strange-dragon/metaX/provider"
 	"github.com/strange-dragon/metaX/internal/antibot"
+	mt "github.com/strange-dragon/metaX/provider"
 	"github.com/stretchr/testify/require"
 )
 
@@ -211,6 +212,30 @@ func TestNotFoundPageAndRegistration(t *testing.T) {
 func TestFetchRejectsUnexpectedOrigin(t *testing.T) {
 	_, err := New().Fetch("https://example.invalid/video/ssis00033")
 	require.Error(t, err)
+}
+
+// Artwork is hosted on the DMM picture CDN, so the origin guard has to admit it
+// while still refusing unrelated hosts.
+func TestFetchAllowsEmbeddedImageCDN(t *testing.T) {
+	p := New()
+	for _, rawURL := range []string{
+		"https://pics.dmm.co.jp/digital/video/ssis00033/ssis00033pl.jpg",
+		"https://p.dmm.co.jp/mono/actjpgs/example.jpg",
+		"https://www.jav321.com/digital/video/ssis00033/ssis00033pl.jpg",
+	} {
+		u, err := url.Parse(rawURL)
+		require.NoError(t, err)
+		require.True(t, p.allowedURL(u), rawURL)
+	}
+	for _, rawURL := range []string{
+		"https://evil.invalid/cover.jpg",
+		"https://c0.jdbstatic.com/covers/ss/SSIS-001.jpg",
+		"http://pics.dmm.co.jp/digital/video/ssis00033/ssis00033pl.jpg",
+	} {
+		u, err := url.Parse(rawURL)
+		require.NoError(t, err)
+		require.False(t, p.allowedURL(u), rawURL)
+	}
 }
 
 func TestSetConfigAppliesBaseURLAndCookies(t *testing.T) {

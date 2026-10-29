@@ -21,7 +21,7 @@ When a category is supplied, or a catalog number is confidently classified, the 
 ```
 
 - `MetaX` is a reserved provider name. It is not a registered provider package.
-- The merged candidate uses the first valid result's catalog number as its ID, then fills empty title, homepage, thumbnail, cover, score, release date, and actor fields from later results in route order. Actor names are deduplicated case-insensitively. This is a display merge only: selecting the candidate runs the full detail aggregation, so search stays cheap and does not fetch every provider's detail page.
+- The merged candidate uses the first valid result as its identity (catalog number, homepage), then fills detail fields from the configured detail provider and artwork from the configured image provider, each falling back to route order. Actor names are deduplicated case-insensitively. This is a display merge only: selecting the candidate runs the full detail aggregation, so search stays cheap and does not fetch every provider's detail page.
 - An explicit `provider` parameter remains a manual override and does not add the merged candidate.
 - The merged candidate is only added when a category route is used. Broad, unclassified search keeps the stock SDK response.
 - If the plugin enables provider filtering, its allowlist must include `MetaX`.
@@ -72,7 +72,22 @@ When aggregation runs, the response keeps the existing `data` envelope and the e
 GET /v1/images/{primary|thumb|backdrop}/:provider/:id?category=:category&url=:url
 ```
 
-Images requested with `provider=MetaX` are resolved to the route-first real provider before the stock image path runs. The plugin normally passes the image URL from the selected metadata; the `category` parameter is optional and is inferred from the catalog number when omitted.
+Images requested with `provider=MetaX` are resolved to a real provider before the stock image path runs. The resolution prefers the configured image provider and then falls back to route order, so the artwork returned by `primary`/`thumb`/`backdrop` matches the artwork in the merged detail. The plugin normally passes the image URL from the selected metadata; the `category` parameter is optional and is inferred from the catalog number when omitted.
+
+## Field source preference
+
+Merged fields are filled in two independent passes, because artwork and metadata fail independently:
+
+| Group | Fields | Env override | Default |
+| --- | --- | --- | --- |
+| Detail | `title`, `summary`, `director`, `actors`, `genres`, `maker`, `label`, `series`, `runtime`, `release_date`, `score`, preview-video URLs | `METAX_MERGE_DETAIL_PROVIDER` | `JavDB` |
+| Image | `cover_url`, `big_cover_url`, `thumb_url`, `big_thumb_url`, `preview_images` | `METAX_MERGE_IMAGE_PROVIDER` | `Jav321` |
+
+- Both passes fall back to route order for any field the preferred provider leaves empty or cannot answer at all. A provider that returns `not_found` or `error` simply does not appear, so the preference is never a hard requirement.
+- Set either variable to `off`, `none`, `route`, `default`, or an empty value to restore pure route-order merging for that group.
+- The preference also drives `MetaX` image resolution, so the same provider supplies both the merged `cover_url` and the bytes behind `/v1/images/primary/MetaX/:number`.
+- The default pair exists because the two sources fail in opposite ways in practice: Jav321's artwork comes from the DMM picture CDN, while JavDB's image host answers 403 to datacenter clients that are not in its allowlist; JavDB in turn has the more complete catalogue metadata. Provider names are matched case-insensitively; unregistered names are ignored.
+- `Jav321` fetches artwork from `pics.dmm.co.jp` and `p.dmm.co.jp` in addition to its own host. Detail URLs remain restricted to jav321 itself.
 
 ## Caching and request coalescing
 
@@ -129,9 +144,9 @@ The table is configurable at startup:
 2. Cross-provider lookup is enabled when `category` is explicit or the catalog number can be classified confidently. Unknown formats on the real-provider path return the selected provider's record and an explanatory `baseline_only` source entry instead of guessing a category. `MetaX` with an explicit but unknown category returns HTTP 400.
 3. Supplemental details are eligible only when their normalized catalog number matches the selected record. Normalization follows Amane's `fold_number`: case, spaces, and hyphens are ignored, underscores remain significant, and leading zeros are preserved. On top of that, the FC2 family is canonicalized because providers spell the same product differently (`FC2-123456`, `FC2PPV123456`, `FC2-PPV-123456`, `FC2_PPV_123456` all match). Bare numeric provider IDs do not match FC2 catalog numbers.
 
-4. Scalar descriptive fields use the first non-empty value in configured route order. Empty supplemental values never erase populated values.
-5. Actor, genre, and preview-image lists are stably deduplicated in route order. Image URL fields use the first non-empty value per field.
-6. Runtime and release date use the first available value in route order. Scores are not averaged across providers; the selected provider's score is retained when present, with a supplemental score used only if the selected score is empty.
+4. Scalar descriptive fields use the first non-empty value in *detail order*: the configured detail provider first, then configured route order. Empty supplemental values never erase populated values.
+5. Actor, genre, and preview-image lists are stably deduplicated in the order of their pass. Image URL fields use the first non-empty value per field in *image order*: the configured image provider first, then route order.
+6. Runtime and release date use the first available value in detail order. Scores are not averaged across providers; the selected provider's score is retained when present, with a supplemental score used only if the selected score is empty.
 7. A failed source is recorded independently and does not discard successful source records or the aggregate. A candidate whose detail number fails the identity gate is recorded as `identity_mismatch` and is not merged.
 
 ## What “source data” means here
@@ -170,7 +185,7 @@ Live results are evidence for the tested numbers only. Deterministic tests remai
 ## Current limits
 
 - Automatic classification follows the Amane-style number families implemented in metaX (censored catalog numbers, known uncensored prefixes and six-digit sequence IDs, FC2, Chinese MD/MKY, amateur prefixes, KIN8/Western studio-date IDs, and Getchu identifiers). For non-catalog identifiers, a small number of source-specific hints are used (ThePornDB, Getchu, FC2 marketplaces). Directory-only overrides and ambiguous identifiers are not guessed; the selected record is returned with a `baseline_only` source status.
-- Field-level preferences per individual metadata field, source/language variants, Amane's two-phase partial-source protocol, actor aggregation, and persistent raw HTTP payload capture are not implemented by this first pass.
+- Per-field preferences finer than the two groups above (metadata vs artwork), source/language variants, Amane's two-phase partial-source protocol, actor aggregation, and persistent raw HTTP payload capture are not implemented by this first pass.
 - The aggregation engine is part of this standalone server, not a separate Amane service.
 - The deterministic tests and server build run directly from this repository; this documentation alone is not verification.
 

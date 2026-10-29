@@ -280,9 +280,12 @@ func (e *Engine) getAggregatedMovieInfoByNumber(number string, category routing.
 	return nil, mt.ErrInfoNotFound
 }
 
-// ResolveAggregatedProviderID finds the route-first provider candidate for a
-// catalog number without fetching or merging details. Image endpoints only
-// need a real provider identity, so this avoids a full aggregation fan-out.
+// ResolveAggregatedProviderID finds the provider whose artwork should be served
+// for a catalog number without fetching or merging details. Image endpoints
+// only need a real provider identity, so this avoids a full aggregation
+// fan-out. The configured image preference is applied before route order: the
+// proxy route turns this identity into the primary/thumb/backdrop image, which
+// is why the image source has to be decided here as well as in the merge.
 func (e *Engine) ResolveAggregatedProviderID(number string, category routing.Category, config routing.Config) (providerid.ProviderID, error) {
 	key := aggregateResolveCacheKey(number, category, config)
 	return aggregateResolveCache.do(key, func() (providerid.ProviderID, error) {
@@ -299,6 +302,9 @@ func (e *Engine) resolveAggregatedProviderID(number string, category routing.Cat
 	if err != nil {
 		return providerid.ProviderID{}, err
 	}
+	providers = OrderByProviderPreference(providers, ActiveMergePreference().Image, func(name string) string {
+		return name
+	})
 
 	// Image requests only need a real provider identity. Reuse the local
 	// catalog when possible so primary/thumb/backdrop fetches do not each
@@ -361,10 +367,19 @@ func (e *Engine) aggregateRouteProviders(number string, category routing.Categor
 	return candidateCategory, providers, nil
 }
 
-// mergeMovieInfoInRouteOrder uses the first non-empty value in route order for
-// scalar fields and stable unions for list/image fields. Scores are intentionally
-// not averaged or replaced across providers because their scales may differ.
+// mergeMovieInfoInRouteOrder merges metadata and artwork with the configured
+// field preferences applied on top of route order.
 func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieInfo) *model.MovieInfo {
+	return mergeMovieInfoWithPreference(identity, infos, ActiveMergePreference())
+}
+
+// mergeMovieInfoWithPreference uses the first non-empty value in route order for
+// scalar fields and stable unions for list/image fields. Fields are filled in
+// two independent passes: metadata follows the detail preference and artwork
+// follows the image preference, each falling back to route order. Scores are
+// intentionally not averaged or replaced across providers because their scales
+// may differ.
+func mergeMovieInfoWithPreference(identity *model.MovieInfo, infos []*model.MovieInfo, pref MergePreference) *model.MovieInfo {
 	result := *identity
 	result.Actors = nil
 	result.PreviewImages = nil
@@ -385,17 +400,16 @@ func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieI
 	result.ReleaseDate = datatypes.Date{}
 	result.Score = identity.Score
 
-	for _, info := range infos {
+	detailOrder := OrderByProviderPreference(infos, pref.Detail, movieInfoProviderName)
+	imageOrder := OrderByProviderPreference(infos, pref.Image, movieInfoProviderName)
+
+	for _, info := range detailOrder {
 		if info == nil {
 			continue
 		}
 		firstNonEmpty(&result.Title, info.Title)
 		firstNonEmpty(&result.Director, info.Director)
 		firstNonEmpty(&result.Summary, info.Summary)
-		firstNonEmpty(&result.ThumbURL, info.ThumbURL)
-		firstNonEmpty(&result.BigThumbURL, info.BigThumbURL)
-		firstNonEmpty(&result.CoverURL, info.CoverURL)
-		firstNonEmpty(&result.BigCoverURL, info.BigCoverURL)
 		firstNonEmpty(&result.PreviewVideoURL, info.PreviewVideoURL)
 		firstNonEmpty(&result.PreviewVideoHLSURL, info.PreviewVideoHLSURL)
 		firstNonEmpty(&result.Maker, info.Maker)
@@ -407,9 +421,6 @@ func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieI
 		if len(info.Genres) > 0 {
 			result.Genres = pq.StringArray(appendUniqueStrings([]string(result.Genres), []string(info.Genres)...))
 		}
-		if len(info.PreviewImages) > 0 {
-			result.PreviewImages = pq.StringArray(appendUniqueStrings([]string(result.PreviewImages), []string(info.PreviewImages)...))
-		}
 		if result.Runtime == 0 && info.Runtime > 0 {
 			result.Runtime = info.Runtime
 		}
@@ -418,6 +429,19 @@ func mergeMovieInfoInRouteOrder(identity *model.MovieInfo, infos []*model.MovieI
 		}
 		if result.Score == 0 && info.Score != 0 {
 			result.Score = info.Score
+		}
+	}
+
+	for _, info := range imageOrder {
+		if info == nil {
+			continue
+		}
+		firstNonEmpty(&result.ThumbURL, info.ThumbURL)
+		firstNonEmpty(&result.BigThumbURL, info.BigThumbURL)
+		firstNonEmpty(&result.CoverURL, info.CoverURL)
+		firstNonEmpty(&result.BigCoverURL, info.BigCoverURL)
+		if len(info.PreviewImages) > 0 {
+			result.PreviewImages = pq.StringArray(appendUniqueStrings([]string(result.PreviewImages), []string(info.PreviewImages)...))
 		}
 	}
 	// Preserve the selected provider + ID identity and canonical catalog number.
@@ -442,6 +466,13 @@ func firstNonEmpty(dst *string, value string) {
 	if *dst == "" && strings.TrimSpace(value) != "" {
 		*dst = value
 	}
+}
+
+func movieInfoProviderName(info *model.MovieInfo) string {
+	if info == nil {
+		return ""
+	}
+	return info.Provider
 }
 
 func appendUniqueStrings(dst []string, values ...string) []string {
