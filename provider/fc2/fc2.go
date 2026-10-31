@@ -83,6 +83,39 @@ func isFC2ArticleHost(host string) bool {
 	}
 }
 
+// fc2ThumbHost is the resizing front for FC2's artwork. A path segment in
+// front of the original file selects the rendition, so /w262h262/<file URL
+// without scheme> is the 262x262 list thumbnail of that exact file.
+const fc2ThumbHost = "contents-thumbnail2.fc2.com"
+
+// upgradeFC2Artwork swaps the 262x262 list thumbnail the detail page embeds for
+// the artwork it was derived from. Jellyfin upscales a cover to the poster
+// size, so serving the thumbnail turns every FC2 entry into a blurry one — and
+// at 69k pixels it also loses the sharpness comparison the aggregated image
+// walk runs against JavDB's 128k cover, which then decides the picture comes
+// from another site. The suffix after the rendition segment is the original
+// file's own URL, so dropping the segment is enough to get it back; anything
+// that does not look like an FC2 storage host is returned untouched.
+func upgradeFC2Artwork(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "https" || !strings.EqualFold(u.Hostname(), fc2ThumbHost) {
+		return rawURL
+	}
+	_, original, ok := strings.Cut(strings.TrimPrefix(u.Path, "/"), "/")
+	if !ok {
+		return rawURL
+	}
+	upgraded, err := url.Parse("https://" + original)
+	if err != nil || upgraded.User != nil ||
+		!strings.HasSuffix(strings.ToLower(upgraded.Hostname()), ".contents.fc2.com") {
+		return rawURL
+	}
+	if u.RawQuery != "" {
+		upgraded.RawQuery = u.RawQuery
+	}
+	return upgraded.String()
+}
+
 func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
 	id, err := fc2.ParseMovieIDFromURL(rawURL)
 	if err != nil {
@@ -180,7 +213,7 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 
 	// Thumb
 	c.OnXML(`//div[@class="items_article_MainitemThumb"]/span/img`, func(e *colly.XMLElement) {
-		info.ThumbURL = e.Request.AbsoluteURL(e.Attr("src"))
+		info.ThumbURL = upgradeFC2Artwork(e.Request.AbsoluteURL(e.Attr("src")))
 	})
 
 	// Runtime
@@ -196,10 +229,9 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 	// Cover (fallbacks)
 	c.OnScraped(func(_ *colly.Response) {
 		if info.ThumbURL != "" {
+			// ThumbURL is the full-resolution file, see upgradeFC2Artwork.
 			info.CoverURL = info.ThumbURL
 		} else if len(info.PreviewImages) > 0 {
-			// Use the first preview image as cover due to
-			// thumb image's poor resolution.
 			info.CoverURL = info.PreviewImages[0]
 		}
 	})
