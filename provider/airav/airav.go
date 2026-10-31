@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound = errors.New("airav: movie not found")
+	ErrMovieNotFound = fmt.Errorf("airav: %w", mt.ErrMovieNotFound)
 )
 
 var (
@@ -487,7 +487,19 @@ func (p *Airav) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 	}
 	u := *p.baseURL
 	u.Path = path.Join(u.Path, "video", id)
-	return p.GetMovieInfoByURL(u.String())
+	info, err := p.GetMovieInfoByURL(u.String())
+	if err == nil {
+		return info, nil
+	}
+	// The catalog search above already reported no exact match, so an
+	// unresolvable detail route is a miss rather than a server failure:
+	// Airav answers 403 for unknown /video paths, which would otherwise
+	// surface as an opaque HTTP 500. The cause stays in the message so a
+	// genuine site block remains visible in the response and the logs.
+	if errors.Is(err, ErrMovieNotFound) {
+		return nil, err
+	}
+	return nil, fmt.Errorf("%w: %s: %v", ErrMovieNotFound, id, err)
 }
 
 func (p *Airav) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {

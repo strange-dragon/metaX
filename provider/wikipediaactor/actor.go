@@ -6,7 +6,6 @@ package wikipediaactor
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,7 +46,7 @@ const (
 	wikiLanguageEN  = "en"
 )
 
-var ErrActorNotFound = errors.New("wikipedia actor: actor not found")
+var ErrActorNotFound = fmt.Errorf("wikipedia actor: %w", mt.ErrActorNotFound)
 
 var (
 	_ mt.ActorProvider        = (*Actor)(nil)

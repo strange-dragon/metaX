@@ -53,7 +53,16 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 		err     error
 		elapsed time.Duration
 	}
-	responses := make([]response, len(providers))
+	// The split between providers must not let one straggler hold the answer.
+	// A plain wg.Wait() meant a provider whose own timeout is 20s set the
+	// latency of every category search, and a Jellyfin library refresh queues
+	// one search per file, so the whole scan looked hung. The budget keeps the
+	// answers that arrived and reports the rest as timed out.
+	var (
+		mu        sync.Mutex
+		responses = make([]response, len(providers))
+		settled   = make([]bool, len(providers))
+	)
 	var wg sync.WaitGroup
 	wg.Add(len(providers))
 	for i, provider := range providers {
@@ -64,21 +73,48 @@ func (e *Engine) SearchMovieProviders(keyword string, names []string, fallback b
 			defer release()
 			started := time.Now()
 			results, err := e.searchMovie(keyword, provider, fallback)
+			mu.Lock()
 			responses[i] = response{
 				results: results,
 				err:     err,
 				elapsed: time.Since(started),
 			}
+			settled[i] = true
+			mu.Unlock()
 		}()
 	}
-	wg.Wait()
+	budget := searchBudget()
+	allDone := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(allDone)
+	}()
+	if budget > 0 {
+		select {
+		case <-allDone:
+		case <-time.After(budget):
+		}
+	} else {
+		<-allDone
+	}
+
+	mu.Lock()
+	snapshot := make([]response, len(responses))
+	copy(snapshot, responses)
+	answered := make([]bool, len(settled))
+	copy(answered, settled)
+	mu.Unlock()
 
 	results := make([]*model.MovieSearchResult, 0)
 	for i, provider := range providers {
-		response := responses[i]
-		if response.err != nil {
+		response := snapshot[i]
+		switch {
+		case !answered[i]:
+			e.logger.Printf("Search keyword %s: %s: <still running after %s, skipped>",
+				keyword, provider.Name(), budget)
+		case response.err != nil:
 			e.logger.Printf("Search keyword %s: %s(%s): <%v>", keyword, provider.Name(), response.elapsed, response.err)
-		} else {
+		default:
 			e.logger.Printf("Search keyword %s: %s(%s): %d result(s)", keyword, provider.Name(), response.elapsed, len(response.results))
 			results = append(results, response.results...)
 		}

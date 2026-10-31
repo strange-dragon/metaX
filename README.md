@@ -155,6 +155,7 @@ The most commonly used settings:
 | `METAX_AGGREGATE_CACHE_TTL` | `10m` | Aggregated detail/image cache TTL. |
 | `METAX_AGGREGATE_CACHE_MAX` | `256` | Maximum cache entries per cache. |
 | `METAX_AGGREGATE_FANOUT` | `16` | Concurrent provider requests during aggregation. |
+| `METAX_SEARCH_BUDGET` | `10s` | How long a category search waits for its slowest provider before answering with what arrived. `0`/`off`/`disabled`/`none` waits for every provider. |
 | `--bind` | empty | Bind address. Docker uses `0.0.0.0`. |
 | `--port` | `8080` | Listen port. Docker/Koyeb images use `18080`. |
 | `--dsn` | empty | SQLite path or PostgreSQL DSN. |
@@ -225,7 +226,7 @@ that order.
 | Category | Default providers, in order |
 | --- | --- |
 | `censored` | FANZA, JavDB, JavBus, MGS, SOD, Prestige, FALENO, DAHLIA, JavLibrary, Jav321, GIGA, XCity, AVBASE |
-| `uncensored` | JavDB, JavBus, AVSOX, Freejavbt, FC2PPVDB, FC2, FC2Club, fc2hub, Airav, HEYZO, TOKYO-HOT, 1Pondo, Caribbeancom, CaribbeancomPR, 10musume, HeyDouga, KIN8, DUGA, AVE, JAVFREE, PACOPACOMAMA, MURAMURA, H0930, H4610, C0930, Gcolle, Pcolle |
+| `uncensored` | JavDB, JavBus, Jav321, AVSOX, Freejavbt, FC2PPVDB, FC2, FC2Club, fc2hub, Airav, HEYZO, TOKYO-HOT, 1Pondo, Caribbeancom, CaribbeancomPR, 10musume, HeyDouga, KIN8, DUGA, AVE, JAVFREE, PACOPACOMAMA, MURAMURA, H0930, H4610, C0930, Gcolle, Pcolle |
 | `chinese` | IQQTV, JavDB, Airav, Freejavbt, MadouQu |
 | `amateur` | MGS, FANZA, JavDB, JavBus, 10musume, 1Pondo, Caribbeancom, CaribbeancomPR, PACOPACOMAMA, MURAMURA, HeyDouga, H0930, H4610, C0930, Gcolle, Pcolle, MYWIFE, KIN8, TOKYO-HOT |
 | `western` | ThePornDBMovie, ThePornDBScene, JavDB, Freejavbt |

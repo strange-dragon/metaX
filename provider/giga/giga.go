@@ -41,7 +41,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound   = errors.New("giga: movie not found")
+	ErrMovieNotFound   = fmt.Errorf("giga: %w", mt.ErrMovieNotFound)
 	ErrAgeVerification = errors.New("giga: age-verification session was not accepted")
 	productIDRE        = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 	numberTokenRE      = regexp.MustCompile(`(?i)^[A-Za-z0-9]+[-_ ]?\d+[A-Za-z0-9_-]*$`)

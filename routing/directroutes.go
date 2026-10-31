@@ -66,6 +66,7 @@ var directRoutes = Config{Routes: map[Category][]string{
 	CategoryUncensored: {
 		"JavDB",
 		"JavBus",
+		"Jav321", // DMM covers, used as the image source
 		"Airav",
 		"TOKYO-HOT",
 		"1Pondo",

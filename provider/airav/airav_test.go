@@ -215,6 +215,27 @@ func TestDetailRedirectRejectsNoncanonicalRouteWithSameID(t *testing.T) {
 	require.Nil(t, info)
 }
 
+func TestGetMovieInfoByIDReportsUnindexedNumberAsNotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search_result", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `<html><body>No results</body></html>`)
+	})
+	mux.HandleFunc("/video/QC-DB-111492", func(w http.ResponseWriter, _ *http.Request) {
+		// Airav answers 403 for detail paths it does not serve, so the
+		// speculative probe must not turn a miss into a server error.
+		http.Error(w, "forbidden", http.StatusForbidden)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByID("QC-DB-111492")
+	require.Nil(t, info)
+	require.ErrorIs(t, err, ErrMovieNotFound)
+	require.ErrorIs(t, err, mt.ErrMovieNotFound)
+	require.Contains(t, err.Error(), "403")
+}
+
 func TestSearchMovieFC2CanonicalVariantFallback(t *testing.T) {
 	var queries []string
 	mux := http.NewServeMux()

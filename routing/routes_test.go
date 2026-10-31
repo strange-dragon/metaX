@@ -15,7 +15,7 @@ func TestDefaultRoutesRouteEveryIntegratedProvider(t *testing.T) {
 			"JavLibrary", "Jav321", "GIGA", "XCity", "AVBASE",
 		},
 		CategoryUncensored: {
-			"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
+			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
 			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
 			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
 			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",
@@ -95,7 +95,7 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 			"JavLibrary", "Jav321", "GIGA", "XCity",
 		}},
 		{CategoryUncensored, []string{
-			"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
+			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
 			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
 			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
 			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",

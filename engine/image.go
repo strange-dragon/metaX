@@ -120,15 +120,36 @@ func (e *Engine) getMovieArtwork(pid providerid.ProviderID, preferBigThumb bool)
 	if !e.IsMovieProvider(pid.Provider) {
 		return nil, nil, mt.ErrProviderNotFound
 	}
-	rawURL, info, err := e.getPreferredMovieImageURLAndInfo(pid, preferBigThumb)
+	return e.downloadMovieArtwork(pid, preferBigThumb)
+}
+
+// downloadMovieArtwork resolves the provider's artwork URL, downloads it, and
+// retries once with freshly fetched metadata when that download fails.
+//
+// Cached metadata carries whatever artwork URL the provider served when the
+// title was first scraped, and image CDNs do move: JavDB's host answers 403 to
+// datacenter IPs, Jav321's moves pictures to pics.dmm.co.jp. Reusing the stored
+// URL made every image request fail for that title until the row was evicted,
+// which is exactly what the Jellyfin plugin reported as "no poster".
+func (e *Engine) downloadMovieArtwork(pid providerid.ProviderID, thumb bool) (img image.Image, info *model.MovieInfo, err error) {
+	provider := e.MustGetMovieProviderByName(pid.Provider)
+	rawURL, info, err := e.getPreferredMovieImageURLAndInfo(pid, thumb, true)
 	if err != nil {
 		return nil, nil, err
 	}
-	img, err := e.getImageByURL(e.MustGetMovieProviderByName(pid.Provider), rawURL)
-	if err != nil {
-		return nil, nil, err
+	if img, err = e.getImageByURL(provider, rawURL); err == nil {
+		return img, info, nil
 	}
-	return img, info, nil
+	// Keep the cached attempt's error: it names the URL the caller asked for.
+	cachedErr := err
+	freshURL, freshInfo, freshErr := e.getPreferredMovieImageURLAndInfo(pid, thumb, false)
+	if freshErr != nil || freshURL == "" || freshURL == rawURL {
+		return nil, nil, cachedErr
+	}
+	if img, err = e.getImageByURL(provider, freshURL); err != nil {
+		return nil, nil, cachedErr
+	}
+	return img, freshInfo, nil
 }
 
 // cropMovieImage applies the same ratio and position rules the per-kind image
@@ -156,44 +177,27 @@ func (e *Engine) cropMovieImage(img image.Image, info *model.MovieInfo, kind Mov
 }
 
 func (e *Engine) GetMoviePrimaryImage(pid providerid.ProviderID, ratio, pos float64) (image.Image, error) {
-	url, info, err := e.getPreferredMovieImageURLAndInfo(pid, true)
+	img, info, err := e.downloadMovieArtwork(pid, true)
 	if err != nil {
 		return nil, err
 	}
-	if ratio < 0 /* default primary ratio */ {
-		ratio = R.PrimaryImageRatio
-	}
-	var auto bool
-	if pos < 0 /* manual position disabled */ {
-		pos = defaultMoviePrimaryImagePosition
-		auto = number.RequiresFaceDetection(info.Number)
-	}
-	return e.GetImageByURL(
-		e.MustGetMovieProviderByName(pid.Provider),
-		url, ratio, pos, auto,
-	)
+	return e.cropMovieImage(img, info, MovieImagePrimary, ratio, pos), nil
 }
 
 func (e *Engine) GetMovieThumbImage(pid providerid.ProviderID) (image.Image, error) {
-	url, _, err := e.getPreferredMovieImageURLAndInfo(pid, false)
+	img, _, err := e.downloadMovieArtwork(pid, false)
 	if err != nil {
 		return nil, err
 	}
-	return e.GetImageByURL(
-		e.MustGetMovieProviderByName(pid.Provider), url,
-		R.ThumbImageRatio, defaultMovieThumbImagePosition, false,
-	)
+	return e.cropMovieImage(img, nil, MovieImageThumb, R.ThumbImageRatio, defaultMovieThumbImagePosition), nil
 }
 
 func (e *Engine) GetMovieBackdropImage(pid providerid.ProviderID) (image.Image, error) {
-	url, _, err := e.getPreferredMovieImageURLAndInfo(pid, false)
+	img, _, err := e.downloadMovieArtwork(pid, false)
 	if err != nil {
 		return nil, err
 	}
-	return e.GetImageByURL(
-		e.MustGetMovieProviderByName(pid.Provider), url,
-		R.BackdropImageRatio, defaultMovieBackdropImagePosition, false,
-	)
+	return e.cropMovieImage(img, nil, MovieImageBackdrop, R.BackdropImageRatio, defaultMovieBackdropImagePosition), nil
 }
 
 func (e *Engine) GetImageByURL(provider mt.Provider, url string, ratio, pos float64, auto bool) (img image.Image, err error) {
@@ -221,8 +225,11 @@ func (e *Engine) getImageByURL(provider mt.Provider, url string) (img image.Imag
 	return
 }
 
-func (e *Engine) getPreferredMovieImageURLAndInfo(pid providerid.ProviderID, thumb bool) (url string, info *model.MovieInfo, err error) {
-	info, err = e.GetMovieInfoByProviderID(pid, true)
+// getPreferredMovieImageURLAndInfo resolves the artwork URL for a provider.
+// lazy=true trusts the metadata cache; lazy=false asks the provider again,
+// which is how a stale artwork URL gets refreshed after a failed download.
+func (e *Engine) getPreferredMovieImageURLAndInfo(pid providerid.ProviderID, thumb, lazy bool) (url string, info *model.MovieInfo, err error) {
+	info, err = e.GetMovieInfoByProviderID(pid, lazy)
 	if err != nil {
 		return
 	}

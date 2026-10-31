@@ -46,7 +46,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound = errors.New("jav321: movie not found")
+	ErrMovieNotFound = fmt.Errorf("jav321: %w", mt.ErrMovieNotFound)
 	// A detail slug is either <label><digits> (ssis00033) or, when the bare
 	// label would collide with an existing route, a short digit prefix glued in
 	// front of it (SDMM-031 -> 1sdmm00031). The prefix is part of the site's

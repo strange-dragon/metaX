@@ -38,7 +38,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound                         = errors.New("prestige: movie not found")
+	ErrMovieNotFound                         = fmt.Errorf("prestige: %w", mt.ErrMovieNotFound)
 	skuRE                                    = regexp.MustCompile(`^[A-Z0-9]+(?:-[A-Z0-9]+)*$`)
 	uuidRE                                   = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	_                mt.MovieProvider        = (*Prestige)(nil)

@@ -26,6 +26,7 @@ services:
       METAX_AGGREGATE_CACHE_TTL: ${METAX_AGGREGATE_CACHE_TTL:-10m}
       METAX_AGGREGATE_CACHE_MAX: ${METAX_AGGREGATE_CACHE_MAX:-256}
       METAX_AGGREGATE_FANOUT: ${METAX_AGGREGATE_FANOUT:-16}
+      METAX_SEARCH_BUDGET: ${METAX_SEARCH_BUDGET:-10s}
       # Optional environment-cookie fallback. The Jellyfin plugin normally
       # sends cookies per request; leave these blank unless needed.
       MT_MOVIE_PROVIDER_JAVDB__COOKIES: ${MT_MOVIE_PROVIDER_JAVDB__COOKIES:-}

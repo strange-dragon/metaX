@@ -148,7 +148,11 @@ func getProviders(app *engine.Engine) gin.HandlerFunc {
 func abortWithError(c *gin.Context, err error) {
 	var e *errors.HTTPError
 	if goerr.As(err, &e) {
-		c.AbortWithStatusJSON(e.Code, &responseMessage{Error: e})
+		// A provider wraps the shared HTTP-aware sentinel (for example
+		// provider.ErrMovieNotFound) to pick its status. Answer with that
+		// status but keep the provider-specific message, which carries the
+		// site and the failing URL.
+		abortWithStatusMessage(c, e.Code, err)
 		return
 	}
 	code := http.StatusInternalServerError

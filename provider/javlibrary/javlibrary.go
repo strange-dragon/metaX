@@ -72,7 +72,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound                          = errors.New("javlibrary: movie not found")
+	ErrMovieNotFound                          = fmt.Errorf("javlibrary: %w", mt.ErrMovieNotFound)
 	numberTokenRE                             = regexp.MustCompile(`(?i)^[a-z0-9]+(?:[-_.][a-z0-9]+)*$`)
 	runtimeRE                                 = regexp.MustCompile(`\d+`)
 	scoreRE                                   = regexp.MustCompile(`\(([\d.]+)\)`)

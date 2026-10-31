@@ -37,7 +37,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound = errors.New("fc2club: movie not found")
+	ErrMovieNotFound = fmt.Errorf("fc2club: %w", mt.ErrMovieNotFound)
 	fc2PrefixRE      = regexp.MustCompile(`(?i)^FC2(?:[-_]?PPV)?[-_]?`)
 	digitsOnlyRE     = regexp.MustCompile(`^\d+$`)
 	numberInTextRE   = regexp.MustCompile(`(?i)FC2[-_ ]?(?:PPV[-_ ]?)?(\d+)`)
