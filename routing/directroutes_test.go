@@ -7,15 +7,19 @@ import (
 )
 
 // blockedProviders fail before any parser runs: GeoIP 403, a Cloudflare
-// challenge, FC2's eKYC redirect, or a site that is simply gone. Keeping them
-// in the direct table only spends a fan-out slot.
+// challenge, or a site that is simply gone. Keeping them in the direct table
+// only spends a fan-out slot.
 //
 // CaribbeancomPR is blocked on the datacenter side only: a Shenzhen residential
 // line reaches caribbeancompr.com fine, Koyeb's `was` answers 403 every time.
 // The engine runs on the datacenter side, so it belongs here.
+//
+// FC2 is deliberately absent from this list: the publisher catalogue answers a
+// plain IP, and it is the only source that resolves FC2 numbers without JavDB
+// (JavDB's FC2 detail pages redirect anonymous clients to /login).
 var blockedProviders = []string{
 	"MGS", "SOD", "Prestige", "FALENO", "HEYZO", "Caribbeancom", "CaribbeancomPR",
-	"FC2PPVDB", "JAVFREE", "JavLibrary", "FC2",
+	"FC2PPVDB", "JAVFREE", "JavLibrary",
 	"H0930", "H4610", "C0930", "KIN8", "HeyDouga",
 	"AVSOX", "Freejavbt", "FC2Club", "fc2hub", "IQQTV", "AVE",
 }
@@ -140,6 +144,32 @@ func TestDirectConfigKeepsJavDBEverywhere(t *testing.T) {
 			t.Errorf("category %q has no JavDB fallback: %v", category, providers)
 		}
 	}
+}
+
+// TestDirectConfigRoutesFC2Titles guards the FC2 path: the publisher catalogue
+// is the only source that returns an FC2 entry without JavDB, and JavDB now
+// sends anonymous FC2 detail requests to /login. An FC2 number infers
+// CategoryFC2, which canonicalises to uncensored, so "FC2" has to be in that
+// chain or every FC2 scrape degenerates into a JavDB login wall.
+func TestDirectConfigRoutesFC2Titles(t *testing.T) {
+	category, ok := routing.InferCategory("FC2-4861886")
+	if !ok {
+		t.Fatal("FC2-4861886 did not infer a category")
+	}
+	canonical := category.Canonical()
+	// Resolve intersects the table with the registered providers, so the test
+	// supplies the names this build actually registers.
+	registered := []string{"JavDB", "JavBus", "Jav321", "FC2", "Airav"}
+	providers, err := routing.DirectConfig().Resolve(canonical, "", registered)
+	if err != nil {
+		t.Fatalf("resolve %s: %v", canonical, err)
+	}
+	for _, provider := range providers {
+		if provider == "FC2" {
+			return
+		}
+	}
+	t.Fatalf("category %q resolves to %v, which cannot serve an FC2 number", canonical, providers)
 }
 
 func TestConfigForProfileReturnsMatchingTable(t *testing.T) {

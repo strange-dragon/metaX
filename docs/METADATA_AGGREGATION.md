@@ -91,6 +91,14 @@ Merged fields are filled in two independent passes, because artwork and metadata
 - `Jav321` fetches artwork from `pics.dmm.co.jp` and `p.dmm.co.jp` in addition to its own host. Detail URLs remain restricted to jav321 itself.
 - The preference can only reorder providers the category route already contains, so the default image provider must also be routed. `Jav321` is listed in the `censored` and `uncensored` routes; an `uncensored` route without it silently served JavDB covers for every title. The `amateur` route still omits it, so amateur titles keep route-order artwork.
 
+## FC2 entries
+
+An FC2 number (`FC2-4861886`, `FC2PPV4861886`, `FC2_PPV_4861886`) classifies as `fc2`, which canonicalises to `uncensored`, so it resolves through the `uncensored` chain.
+
+- `FC2` (the publisher catalogue at `adult.contents.fc2.com`) is the source that answers them: it returns the work number, title, maker, release date, cover and sample images from a plain address.
+- JavDB indexes FC2 titles, but its FC2 detail pages redirect anonymous clients to `/login`. The search card still exists, so the failure looked like "JavDB does not have this title" while the catalogue did. `provider/javdb` now detects the login page and reports `ErrLoginRequired`, which still unwraps to `provider.ErrMovieNotFound` (the record cannot be described without credentials, so the status stays 404) but says in the message that a signed-in cookie is required. Supply one through `MT_MOVIE_PROVIDER_JAVDB__COOKIES`, or per request via `X-MetaX-Provider-Cookies`.
+- The other FC2 sources stay out of the derived route tables: `FC2PPVDB` answers 403 outside Japan, `FC2Club` is gone, `fc2hub` redirects to a host that answers 403.
+
 ## Caching and request coalescing
 
 Aggregated detail responses and `MetaX/<number>` image identity resolution are cached in-process and coalesced with `singleflight`:

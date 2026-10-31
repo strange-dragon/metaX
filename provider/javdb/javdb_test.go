@@ -246,3 +246,55 @@ func TestParseMovieIDFromURLRejectsInvalidOriginComponents(t *testing.T) {
 		})
 	}
 }
+
+// TestDetailLoginWallIsNotReportedAsMissingTitle pins the FC2 behaviour: JavDB
+// answers an anonymous FC2 detail request with a redirect to /login. The login
+// page has none of the detail markers, so the parser used to answer "movie not
+// found" for a title JavDB does have, and the aggregate surfaced a bare 404.
+func TestDetailLoginWallIsNotReportedAsMissingTitle(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v/FC2slug", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/login", http.StatusFound)
+	})
+	mux.HandleFunc("/login", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `<html><head><title> 登入 | JavDB 成人影片數據庫 </title></head>
+<body><form action="/login" method="post"><input name="password" type="password"></form></body></html>`)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByURL(server.URL + "/v/FC2slug")
+	require.Nil(t, info)
+	require.Error(t, err)
+	// The status stays 404: without credentials the record cannot be described.
+	require.ErrorIs(t, err, mt.ErrMovieNotFound)
+	require.ErrorIs(t, err, ErrLoginRequired)
+	require.Contains(t, err.Error(), "signed-in cookie",
+		"the message must name the login wall instead of claiming the title does not exist")
+}
+
+// TestGetMovieInfoByIDStopsAtLoginWall keeps the opaque-slug path from guessing:
+// a wall is not evidence that the slug is a keyword, so no search is issued.
+func TestGetMovieInfoByIDStopsAtLoginWall(t *testing.T) {
+	searchHits := 0
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v/FC2slug", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/login", http.StatusFound)
+	})
+	mux.HandleFunc("/login", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `<html><head><title>登入</title></head><body></body></html>`)
+	})
+	mux.HandleFunc("/search", func(w http.ResponseWriter, _ *http.Request) {
+		searchHits++
+		_, _ = fmt.Fprint(w, `<html><body></body></html>`)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByID("FC2slug")
+	require.Nil(t, info)
+	require.ErrorIs(t, err, ErrLoginRequired)
+	require.Zero(t, searchHits, "a login wall must not be retried as a keyword search")
+}

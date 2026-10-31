@@ -48,9 +48,19 @@ const (
 //     `was` answers 403 on every attempt (5/5, ~0.5s each). The sibling
 //     caribbeancom.com is 403 from both. So neither Caribbean brand can serve
 //     the direct profile, and keeping PR routed only spends a fan-out slot.
+//
 //   - Cloudflare JavaScript challenge: JavLibrary.
-//   - Site policy: FC2 now forces redirect.fc2.com/ekyc_auth.
+//
 //   - Dead or unreachable: AVSOX, Freejavbt, FC2Club, fc2hub, IQQTV, AVE.
+//
+// FC2 (the publisher's own catalogue at adult.contents.fc2.com) is routed: it
+// answers a plain IP with the age cookie its provider already sends, and it is
+// the only source left that returns FC2 entries without JavDB. JavDB used to
+// cover them, but its FC2 detail pages now redirect anonymous clients to
+// /login, so an FC2 number reached JavDB search, failed the detail fetch, and
+// the whole aggregate returned 404. The sibling FC2 sites stay out:
+// FC2PPVDB answers 403 outside Japan, FC2Club is gone, fc2hub redirects to a
+// 403 host.
 //
 // A deployment that sets METAX_PROVIDER_PROXY (a Japanese residential proxy)
 // gets DefaultConfig instead, because that proxy unblocks the first group.
@@ -67,6 +77,7 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"JavDB",
 		"JavBus",
 		"Jav321", // DMM covers, used as the image source
+		"FC2",    // publisher catalogue: the only FC2 source without JavDB
 		"Airav",
 		"TOKYO-HOT",
 		"1Pondo",

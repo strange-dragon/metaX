@@ -40,7 +40,14 @@ const (
 )
 
 var (
-	ErrMovieNotFound          = fmt.Errorf("javdb: %w", mt.ErrMovieNotFound)
+	ErrMovieNotFound = fmt.Errorf("javdb: %w", mt.ErrMovieNotFound)
+	// ErrLoginRequired marks JavDB's login wall. Its FC2 detail pages redirect
+	// anonymous clients to /login, and the login page carries none of the
+	// detail markers the parser looks for, so without this the wall looked
+	// exactly like a title JavDB does not have. It still unwraps to
+	// ErrMovieNotFound — the record cannot be described without credentials, so
+	// the HTTP status stays 404 — but the message names the real cause.
+	ErrLoginRequired          = fmt.Errorf("javdb: detail page requires a signed-in cookie (anonymous FC2 entries redirect to /login); set MT_MOVIE_PROVIDER_JAVDB__COOKIES or send X-MetaX-Provider-Cookies: %w", mt.ErrMovieNotFound)
 	movieNumberRE             = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
 	compactNumberRE           = regexp.MustCompile(`(?i)^[a-z]{1,16}[-_ ]?[0-9]{2,}[a-z0-9._-]*$`)
 	numericUnderscoreNumberRE = regexp.MustCompile(`^[0-9]{3,}(?:_[0-9]+)+$`)
@@ -369,7 +376,31 @@ func (p *JavDB) getHTML(rawURL string) (*goquery.Document, error) {
 	if err != nil {
 		return nil, fmt.Errorf("javdb: parse HTML from %s: %w", rawURL, err)
 	}
+	if isLoginPage(resp.Request.URL, doc) {
+		return nil, ErrLoginRequired
+	}
 	return doc, nil
+}
+
+// isLoginPage reports whether the response is JavDB's sign-in page rather than
+// the page that was requested. A detail request for an FC2 entry is answered
+// with a redirect to /login, and the resulting page has neither the number copy
+// control nor a video cover, so the parser used to report it as a missing
+// title. Both signals are checked: the redirect target survives on
+// resp.Request.URL, and the form itself survives a rewrite that keeps the URL.
+func isLoginPage(u *url.URL, doc *goquery.Document) bool {
+	if u != nil && strings.HasPrefix(strings.ToLower(strings.TrimSuffix(u.Path, "/")), "/login") {
+		return true
+	}
+	if doc == nil {
+		return false
+	}
+	if doc.Find("form[action*='/login'], form[action*=\"/login\"], input[name='password'][type='password']").Length() > 0 {
+		return true
+	}
+	title := strings.ToLower(strings.TrimSpace(doc.Find("title").First().Text()))
+	return strings.Contains(title, "登入") || strings.Contains(title, "登録") ||
+		strings.Contains(title, "log in") || strings.Contains(title, "login")
 }
 
 func (p *JavDB) detailURL(id string) string {
@@ -405,6 +436,11 @@ func (p *JavDB) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 		info, err := p.GetMovieInfoByURL(p.detailURL(id))
 		if err == nil && info != nil {
 			return info, nil
+		}
+		if errors.Is(err, ErrLoginRequired) {
+			// A login wall is not evidence about the slug: searching for it
+			// would return the same wall for a title JavDB does have.
+			return nil, err
 		}
 		if err != nil && !errors.Is(err, ErrMovieNotFound) {
 			// Preserve transport, timeout, status and parse failures; a network
