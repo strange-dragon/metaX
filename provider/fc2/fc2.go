@@ -1,15 +1,18 @@
 package fc2
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
 	"golang.org/x/text/language"
+	"gorm.io/datatypes"
 
 	"github.com/strange-dragon/metaX/common/parser"
 	"github.com/strange-dragon/metaX/model"
@@ -30,6 +33,54 @@ const (
 	movieURL  = "https://adult.contents.fc2.com/article/%s/"
 	sampleURL = "https://adult.contents.fc2.com/api/v2/videos/%s/sample"
 )
+
+// FC2 answers requests for the article page from some regions with a 302 to
+// redirect.fc2.com/ekyc_auth — its identity-document age check — while the same
+// page renders normally from others and the artwork CDN hosts are never gated.
+// A container in Frankfurt or Washington therefore cannot read a single FC2
+// article, and no header, cookie or path variation changes that: the gate is
+// decided per egress region, not per request.
+//
+// readerPrefix fronts the page through a fetch service that uses its own
+// egress. The document comes back unchanged, so the selectors, the artwork
+// URLs and the absolute-URL resolution below all keep working as they are.
+const (
+	readerPrefix = "https://r.jina.ai/"
+	readerEnv    = "MT_MOVIE_PROVIDER_FC2__READER"
+)
+
+var errEKYCBlocked = errors.New("fc2: article page is gated by eKYC age verification")
+
+// readerMode decides when the reader is used. The default asks for it only
+// after FC2 has actually blocked the request, so an egress that can read the
+// page never sends anything to a third party.
+type readerMode uint8
+
+const (
+	readerOnReaderBlock readerMode = iota // default: only when FC2 blocks us
+	readerOff
+	readerAlways
+)
+
+func activeReaderMode() readerMode {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(readerEnv))) {
+	case "0", "off", "false", "no", "disable", "disabled":
+		return readerOff
+	case "force", "always":
+		return readerAlways
+	default:
+		return readerOnReaderBlock
+	}
+}
+
+func isEKYCURL(u *url.URL) bool {
+	return strings.EqualFold(u.Hostname(), "redirect.fc2.com") ||
+		strings.Contains(u.Path, "/ekyc_auth")
+}
+
+func isReaderURL(u *url.URL) bool {
+	return strings.EqualFold(u.Hostname(), "r.jina.ai")
+}
 
 type FC2 struct {
 	*scraper.Scraper
@@ -133,9 +184,17 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 	}
 
 	c := fc2.ClonedCollector()
+	var blocked bool
 	c.SetRedirectHandler(func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return fmt.Errorf("fc2: stopped after 10 redirects")
+		}
+		if isReaderURL(req.URL) {
+			return nil // the reader is a plain hop, not a work URL
+		}
+		if isEKYCURL(req.URL) {
+			blocked = true
+			return errEKYCBlocked
 		}
 		redirectID, redirectErr := fc2.ParseMovieIDFromURL(req.URL.String())
 		if redirectErr != nil || redirectID != id {
@@ -251,10 +310,56 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 	//	d.Visit(fmt.Sprintf(sampleURL, info.ID))
 	//})
 
-	if vErr := c.Visit(info.Homepage); vErr != nil {
+	mode := activeReaderMode()
+	var vErr error
+	if mode != readerAlways {
+		vErr = c.Visit(info.Homepage)
+	}
+	if mode == readerAlways || (blocked && mode == readerOnReaderBlock) {
+		// The reader serves the same document, so the handlers above fill this
+		// struct a second time. Drop what the blocked attempt collected or the
+		// list fields end up with every entry twice.
+		resetMovieInfo(info)
+		vErr = fc2.visitThroughReader(c, info)
+	}
+	if vErr != nil {
 		err = vErr
 	}
 	return
+}
+
+// visitThroughReader fetches the article through the reader service.
+//
+// The reader hands back the page with absolute artwork URLs, so nothing needs
+// rewriting; only the document's own <base> is irrelevant because the handlers
+// never rely on a relative path.
+func (fc2 *FC2) visitThroughReader(c *colly.Collector, info *model.MovieInfo) error {
+	c.OnRequest(func(r *colly.Request) {
+		r.Headers.Set("x-respond-with", "html")
+		r.Headers.Set("x-timeout", "30")
+	})
+	// The reader returns the document labelled text/plain, and colly only runs
+	// the XML handlers for html/xml content types — without this the page parses
+	// to nothing and the provider reports incomplete metadata.
+	c.OnResponse(func(r *colly.Response) {
+		r.Headers.Set("Content-Type", "text/html; charset=utf-8")
+	})
+	return c.Visit(readerPrefix + info.Homepage)
+}
+
+// resetMovieInfo clears the scraped fields so a second pass starts clean.
+func resetMovieInfo(info *model.MovieInfo) {
+	info.Title = ""
+	info.Summary = ""
+	info.Maker = ""
+	info.Score = 0
+	info.Runtime = 0
+	info.ReleaseDate = datatypes.Date{}
+	info.ThumbURL = ""
+	info.CoverURL = ""
+	info.Genres = nil
+	info.Actors = nil
+	info.PreviewImages = nil
 }
 
 func init() {

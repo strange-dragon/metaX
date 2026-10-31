@@ -1,6 +1,7 @@
 package fc2
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/strange-dragon/metaX/provider/internal/testkit"
@@ -55,6 +56,58 @@ func TestFC2_GetMovieInfoByID(t *testing.T) {
 		"2812904",
 		"4996887",
 	})
+}
+
+func TestIsEKYCURL(t *testing.T) {
+	cases := []struct {
+		url  string
+		want bool
+	}{
+		{"https://redirect.fc2.com/ekyc_auth/?ref=contents&csms=20261101002200", true},
+		{"https://redirect.fc2.com/", true},
+		{"https://adult.contents.fc2.com/article/4861886/", false},
+		{"https://adult.contents.fc2.com/article/4861886/ekyc_auth", true},
+		{"https://contents-thumbnail2.fc2.com/w262h262/storage1.contents.fc2.com/x.jpg", false},
+	}
+	for _, tt := range cases {
+		u, err := url.Parse(tt.url)
+		if err != nil {
+			t.Fatalf("parse %q: %v", tt.url, err)
+		}
+		if got := isEKYCURL(u); got != tt.want {
+			t.Errorf("isEKYCURL(%q) = %v, want %v", tt.url, got, tt.want)
+		}
+	}
+}
+
+func TestActiveReaderMode(t *testing.T) {
+	cases := []struct {
+		value string
+		want  readerMode
+	}{
+		{"", readerOnReaderBlock},
+		{"on", readerOnReaderBlock},
+		{"1", readerOnReaderBlock},
+		{"off", readerOff},
+		{"0", readerOff},
+		{"disabled", readerOff},
+		{"force", readerAlways},
+		{"always", readerAlways},
+		{" FORCE ", readerAlways},
+	}
+	for _, tt := range cases {
+		t.Setenv(readerEnv, tt.value)
+		if got := activeReaderMode(); got != tt.want {
+			t.Errorf("activeReaderMode(%q) = %v, want %v", tt.value, got, tt.want)
+		}
+	}
+}
+
+func TestReaderURLKeepsTheArticleAddress(t *testing.T) {
+	article := "https://adult.contents.fc2.com/article/4861886/"
+	if got := readerPrefix + article; got != "https://r.jina.ai/https://adult.contents.fc2.com/article/4861886/" {
+		t.Errorf("reader URL = %q", got)
+	}
 }
 
 func TestUpgradeFC2Artwork(t *testing.T) {
