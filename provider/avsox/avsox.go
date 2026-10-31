@@ -39,7 +39,7 @@ const (
 	maxPageBytes   = 8 << 20
 )
 
-var ErrMovieNotFound = errors.New("avsox: movie not found")
+var ErrMovieNotFound = fmt.Errorf("avsox: %w", mt.ErrMovieNotFound)
 
 var (
 	_ mt.MovieProvider        = (*AVSOX)(nil)

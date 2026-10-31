@@ -7,7 +7,6 @@ package freejavbt
 
 import (
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,7 +37,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound = errors.New("freejavbt: movie not found")
+	ErrMovieNotFound = fmt.Errorf("freejavbt: %w", mt.ErrMovieNotFound)
 	numberTokenRE    = regexp.MustCompile(`(?i)^[a-z]+[- ]?\d+[a-z0-9_-]*$`)
 	leadingNumberRE  = regexp.MustCompile(`(?i)^([a-z]+[- ]?\d+[a-z0-9_-]*)`)
 	validSlugRE      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)

@@ -40,7 +40,7 @@ const (
 )
 
 var (
-	ErrMovieNotFound          = errors.New("javdb: movie not found")
+	ErrMovieNotFound          = fmt.Errorf("javdb: %w", mt.ErrMovieNotFound)
 	movieNumberRE             = regexp.MustCompile(`(?i)^[0-9]{0,4}[a-z]{1,16}(?:[._-]?[a-z0-9]+)*[._-][0-9]{2,}(?:[._-][a-z0-9]+)*$`)
 	compactNumberRE           = regexp.MustCompile(`(?i)^[a-z]{1,16}[-_ ]?[0-9]{2,}[a-z0-9._-]*$`)
 	numericUnderscoreNumberRE = regexp.MustCompile(`^[0-9]{3,}(?:_[0-9]+)+$`)

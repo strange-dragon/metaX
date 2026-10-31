@@ -8,10 +8,15 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/text/language"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
+
+	"github.com/glebarez/sqlite"
 
 	"github.com/strange-dragon/metaX/engine"
 	"github.com/strange-dragon/metaX/model"
@@ -74,6 +79,27 @@ func init() {
 	}
 }
 
+// openImageRouteDB gives every image test its own in-memory database. The
+// package helper shares one DSN, so a row cached by an earlier test — with the
+// artwork URL of a test server that has since been closed — would be served to
+// the next test and fail there for reasons that have nothing to do with it.
+func openImageRouteDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	dsn := "file:metax-image-route-" +
+		strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()) +
+		"?mode=memory&cache=shared"
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger: gormlogger.Default.LogMode(gormlogger.Silent),
+	})
+	if err != nil {
+		t.Fatalf("open in-memory database: %v", err)
+	}
+	if err := db.AutoMigrate(&model.MovieInfo{}); err != nil {
+		t.Fatalf("migrate movie metadata table: %v", err)
+	}
+	return db
+}
+
 func imageRouteServer(t *testing.T, width, height int) *httptest.Server {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
@@ -121,7 +147,7 @@ func TestImageEndpointServesTheSharpestAggregatedArtwork(t *testing.T) {
 	})
 
 	router := gin.New()
-	router.GET("/v1/images/primary/:provider/:id", getImage(engine.New(openEndpointAggregateDB(t)), primaryImageType))
+	router.GET("/v1/images/primary/:provider/:id", getImage(engine.New(openImageRouteDB(t)), primaryImageType))
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/v1/images/primary/MetaX/SSIS-001?category=censored", nil)
@@ -136,5 +162,106 @@ func TestImageEndpointServesTheSharpestAggregatedArtwork(t *testing.T) {
 	}
 	if width < 300 {
 		t.Fatalf("width = %d, want the 800px source to win over the 120px one", width)
+	}
+}
+
+// The plugin sends the merged cover_url as ?url=. When that host is unreachable
+// from this deployment — JavDB's image CDN answers 403 to datacenter IPs, which
+// is why Jav321 is the default artwork source — the endpoint must still serve
+// the chain's own artwork instead of failing the image outright.
+func TestImageEndpointFallsBackWhenTheSuppliedURLCannotBeFetched(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	large := imageRouteServer(t, 800, 538)
+	imageRouteSmallCover = large.URL + "/cover.png"
+	imageRouteLargeCover = large.URL + "/cover.png"
+	t.Cleanup(func() {
+		imageRouteSmallCover = ""
+		imageRouteLargeCover = ""
+	})
+	t.Setenv(engine.EnvMergeImageProvider, imageRouteLargeProvider)
+
+	blocked := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	t.Cleanup(blocked.Close)
+
+	config := routing.Config{Routes: map[routing.Category][]string{
+		routing.CategoryCensored: {imageRouteLargeProvider, imageRouteSmallProvider},
+	}}
+	previous := routing.ActiveConfig()
+	if err := routing.SetActiveConfig(config); err != nil {
+		t.Fatalf("install route table: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := routing.SetActiveConfig(previous); err != nil {
+			t.Errorf("restore route table: %v", err)
+		}
+	})
+
+	router := gin.New()
+	router.GET("/v1/images/primary/:provider/:id", getImage(engine.New(openImageRouteDB(t)), primaryImageType))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/v1/images/primary/MetaX/SSIS-001?category=censored&url="+url.QueryEscape(blocked.URL+"/cover.png"), nil)
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	width, err := strconv.Atoi(recorder.Header().Get("X-MetaTube-Image-Width"))
+	if err != nil {
+		t.Fatalf("width header = %q: %v", recorder.Header().Get("X-MetaTube-Image-Width"), err)
+	}
+	if width == 0 {
+		t.Fatal("fallback artwork has no width")
+	}
+}
+
+// Cached metadata keeps the artwork URL the provider served at scrape time.
+// When that URL dies — a moved CDN, or a host that answers 403 to datacenter
+// IPs — the endpoint must ask the provider again instead of replaying the
+// stored failure until the row ages out.
+func TestImageEndpointRefreshesStaleCachedArtwork(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	live := imageRouteServer(t, 800, 538)
+	imageRouteSmallCover = live.URL + "/cover.png"
+	imageRouteLargeCover = live.URL + "/cover.png"
+	t.Cleanup(func() {
+		imageRouteSmallCover = ""
+		imageRouteLargeCover = ""
+	})
+
+	stale := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	t.Cleanup(stale.Close)
+
+	db := openImageRouteDB(t)
+	if err := db.Create(&model.MovieInfo{
+		ID:          "ssis00001",
+		Number:      "SSIS-001",
+		Title:       "Image route title",
+		Provider:    imageRouteSmallProvider,
+		Homepage:    "https://" + imageRouteSmallProvider + ".invalid/ssis00001",
+		CoverURL:    stale.URL + "/cover.png",
+		BigCoverURL: stale.URL + "/cover.png",
+	}).Error; err != nil {
+		t.Fatalf("seed cached metadata: %v", err)
+	}
+
+	router := gin.New()
+	router.GET("/v1/images/primary/:provider/:id", getImage(engine.New(db), primaryImageType))
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/v1/images/primary/"+imageRouteSmallProvider+"/ssis00001", nil)
+	router.ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if width := recorder.Header().Get("X-MetaTube-Image-Width"); width == "" {
+		t.Fatal("refreshed artwork has no width")
 	}
 }

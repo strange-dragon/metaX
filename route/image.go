@@ -6,6 +6,7 @@ import (
 	"image"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/render"
@@ -130,7 +131,13 @@ func getImage(app *engine.Engine, typ imageType) gin.HandlerFunc {
 			if typ != primaryImageType || query.Ratio < 0 {
 				query.Ratio = ratio
 			}
-			for _, pid := range fetchers {
+			deadline := time.Now().Add(engine.AggregateImageBudget)
+			for i, pid := range fetchers {
+				if i > 0 && time.Now().After(deadline) {
+					// Each fetcher spends its own download timeout, and four of
+					// those in a row is what a scan looks like as a hang.
+					break
+				}
 				var provider mt.Provider
 				if isActorProvider {
 					if !app.IsActorProvider(pid.Provider) {
@@ -146,6 +153,13 @@ func getImage(app *engine.Engine, typ imageType) gin.HandlerFunc {
 				if img, err = app.GetImageByURL(provider, query.URL, query.Ratio, query.Position, query.Auto); err == nil {
 					break
 				}
+			}
+			if img == nil && len(candidates) > 0 {
+				// The caller-supplied URL comes from the provider that won the
+				// artwork merge. When this deployment cannot fetch that host —
+				// JavDB's image CDN answers 403 to datacenter IPs — serve the
+				// candidate chain's own artwork instead of failing the image.
+				img, err = app.GetAggregatedMovieImage(candidates, movieImageKind(typ), query.Ratio, query.Position)
 			}
 		case isActorProvider /* actor */ :
 			switch typ {

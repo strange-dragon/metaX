@@ -89,6 +89,7 @@ Merged fields are filled in two independent passes, because artwork and metadata
 - Image bytes are chosen by resolution, not only by preference: the image route walks up to 4 candidates, keeps the largest source image, and stops as soon as one is at least 180 000 pixels (between JavDB's 292×438 covers and the 800×538 artwork DMM and JavBus serve). A preferred provider therefore wins whenever it has artwork worth showing, and a title it does not carry — or artwork it cannot serve — falls through to the sharpest remaining source instead of returning nothing.
 - The default pair exists because the two sources fail in opposite ways in practice: Jav321's artwork comes from the DMM picture CDN, while JavDB's image host answers 403 to datacenter clients that are not in its allowlist; JavDB in turn has the more complete catalogue metadata. Provider names are matched case-insensitively; unregistered names are ignored.
 - `Jav321` fetches artwork from `pics.dmm.co.jp` and `p.dmm.co.jp` in addition to its own host. Detail URLs remain restricted to jav321 itself.
+- The preference can only reorder providers the category route already contains, so the default image provider must also be routed. `Jav321` is listed in the `censored` and `uncensored` routes; an `uncensored` route without it silently served JavDB covers for every title. The `amateur` route still omits it, so amateur titles keep route-order artwork.
 
 ## Caching and request coalescing
 
@@ -97,6 +98,7 @@ Aggregated detail responses and `MetaX/<number>` image identity resolution are c
 - `METAX_AGGREGATE_CACHE_TTL` controls the TTL (default `10m`; `0`, `off`, or `disabled` turns caching off).
 - `METAX_AGGREGATE_CACHE_MAX` controls the maximum number of entries per cache (default `256`).
 - `METAX_AGGREGATE_FANOUT` bounds concurrent provider calls from category search and detail source fan-out (default `16`; `0`, `off`, `disabled`, or `none` disables the bound). The server's `--request-timeout` (default `1m`) remains the per-provider HTTP deadline; the limiter only bounds concurrency and never abandons a running provider call.
+- `METAX_SEARCH_BUDGET` bounds how long a category search waits for its slowest provider (default `10s`). Answers that arrived are returned; providers still running are logged and skipped for that request. `0`, `off`, `disabled`, or `none` restores waiting for every provider. This is what keeps a library refresh from queueing behind one provider whose own timeout is measured in seconds.
 
 Only successful results are cached; failures are returned to the caller and retried on the next request. Cache keys include the route-table fingerprint, category, lazy flag, and provider/number identity. FC2 and uncensored share a cache key because they resolve to the same route. Returned values are cloned so the `MetaX` identity rewrite cannot corrupt the cached entry. The cache is per-process and is cleared on restart; it is not shared across server instances.
 

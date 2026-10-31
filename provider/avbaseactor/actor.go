@@ -36,7 +36,7 @@ const (
 	maxPageBytes   = 8 << 20
 )
 
-var ErrActorNotFound = errors.New("avbase actor: profile not found")
+var ErrActorNotFound = fmt.Errorf("avbase actor: %w", mt.ErrActorNotFound)
 
 var (
 	_ mt.ActorProvider        = (*Actor)(nil)

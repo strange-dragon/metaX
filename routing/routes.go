@@ -250,6 +250,12 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 	CategoryUncensored: {
 		"JavDB",
 		"JavBus",
+		// Jav321 is the default artwork source (METAX_MERGE_IMAGE_PROVIDER)
+		// because it serves the DMM picture CDN, which stays reachable where
+		// JavDB's image host does not. The preference can only reorder
+		// providers the route already lists, so an uncensored route without
+		// Jav321 silently served JavDB covers for every title.
+		"Jav321",
 		"AVSOX",
 		"Freejavbt",
 		"FC2PPVDB",
