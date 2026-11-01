@@ -5,6 +5,7 @@ package engine
 import (
 	_ "github.com/strange-dragon/metaX/provider/10musume"
 	_ "github.com/strange-dragon/metaX/provider/1pondo"
+	_ "github.com/strange-dragon/metaX/provider/7mmtv"
 	_ "github.com/strange-dragon/metaX/provider/airav"
 	_ "github.com/strange-dragon/metaX/provider/anilist"
 	_ "github.com/strange-dragon/metaX/provider/avbaseactor"

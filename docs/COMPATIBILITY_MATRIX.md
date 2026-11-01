@@ -117,6 +117,20 @@ Compared Amane `src/amane/crawlers/sites/mgstage.py` with the pinned SDK's `prov
 - [ ] Status updated with test evidence and known limitations.
 
 
+## Focused comparison: 7MMTV (2026-11-01)
+
+Amane has no crawler for this catalogue (`SiteName` has no entry and `sites/` has no module), so this is a new provider rather than a port. The implementation was written against the live markup.
+
+- **Site status.** `7mmtv.tv` no longer completes a TLS handshake (`curl` exit 35). `7mmtv.sx` answers 200 from a plain IP behind a Cloudflare edge that does not challenge it, so that is the configured host.
+- **ID and URL shape.** Every detail URL is `/zh/{category}_content/{row id}/{number}.html`, and the catalog number sits in the path. The provider issues `category:rowid:number` as its movie ID: the row id is only unique within a category, so all three parts travel together. A pasted detail URL, a pasted search URL, a bare catalog number, and the composite ID all resolve.
+- **Search.** `GET /zh/searchall_search/all/{keyword}/1.html`. Results carry the category tag in the title (`[中字]`, `[無碼破解]`) and repeat the number in both the heading and the artwork `alt`. The tag and the leading number are stripped, because both have their own fields.
+- **Departure from Amane's browse model.** One catalog number yields one entry per category it was filed under, each with a different row id. Search returns only the first, since a search looks for the work rather than for an edition; the other editions stay reachable through their own composite IDs.
+- **Detail extraction.** `h1.fullvideo-title` holds number, title and performers on one line; the performers are matched against the `_avperformer` links and cut off the end, and the number is cut off the front. Maker (`發行商`), label (`製作商`), director (`導演`), genres (`影片類別`), the cover, and the release date are read from their own rows.
+- **Artwork lives on another domain.** Covers and previews come from `n{label}.102{4,6}cdn.sx`, which is a different registrable domain from the site and rotates its numeric label. The origin guard admits that host family explicitly, refuses everything else, and reports a 404 on artwork as `ErrImageNotFound` so the aggregate layer keeps asking the rest of the chain.
+- **Deterministic coverage.** Local HTTP tests cover ID parsing from detail and search URLs, category-tag and number stripping, performer removal from the heading, attribute rows, the asset-host and origin guards, and the not-found path.
+- **Live verification (2026-11-01).** Searching `SSIS-001` against the live site returned the three editions (de-mosaicked, Chinese-titled, censored); the detail read returned `S1 NO.1 STYLE` as maker, `エスワン ナンバーワンスタイル` as label, `苺原` as director, both performers, eight genres, the full-size cover, and the release date. Note that the catalogue's performer field uses the simplified name (`葵司`) while the heading keeps the Japanese one (`葵つかさ`), so the trailing-name trim does not fire for that title.
+- **Limitations.** The provider ships no preview images or summary, because the catalogue does not publish them. `7mmtv.tv` is not configured; only `.sx` is.
+
 ## Focused comparison: AVBase (2026-10-16)
 
 Compared Amane `src/amane/crawlers/sites/avbase.py` and the pinned SDK `provider/avbase/avbase.go` at `c62584675c593816cc07e7b5b977d14c7eb505a3`.

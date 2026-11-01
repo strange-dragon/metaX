@@ -100,6 +100,7 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"FC2PPVDB", // archive at ppvdatabank.com: covers titles FC2 delisted
 		"Freejavbt",
 		"Airav",
+		"7MMTV", // Chinese titles for the same catalogue; answers a plain IP
 		"TOKYO-HOT",
 		"1Pondo",
 		"10musume",
@@ -112,6 +113,7 @@ var directRoutes = Config{Routes: map[Category][]string{
 	CategoryChinese: {
 		"IQQTV",
 		"JavDB",
+		"7MMTV",
 		"Airav",
 		"Freejavbt",
 		"MadouQu",

@@ -16,11 +16,11 @@ func TestDefaultRoutesRouteEveryIntegratedProvider(t *testing.T) {
 		},
 		CategoryUncensored: {
 			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2",
-			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
+			"Airav", "7MMTV", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
 			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
 			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",
 		},
-		CategoryChinese: {"IQQTV", "JavDB", "Airav", "Freejavbt", "MadouQu"},
+		CategoryChinese: {"IQQTV", "JavDB", "7MMTV", "Airav", "Freejavbt", "MadouQu"},
 		CategoryAmateur: {
 			"MGS", "FANZA", "JavDB", "JavBus", "10musume", "1Pondo", "Caribbeancom",
 			"CaribbeancomPR", "PACOPACOMAMA", "MURAMURA", "HeyDouga", "H0930", "H4610",
@@ -79,7 +79,7 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 	// a default build. Amane's Official studio router is not part of the
 	// category fan-out model.
 	registered := []string{
-		"10musume", "1Pondo", "AVE", "AVSOX", "Airav", "AniList", "C0930",
+		"10musume", "1Pondo", "7MMTV", "AVE", "AVSOX", "Airav", "AniList", "C0930",
 		"Caribbeancom", "CaribbeancomPR", "DAHLIA", "DUGA", "FALENO", "FANZA", "FC2",
 		"FC2Club", "FC2PPVDB", "Freejavbt", "GIGA", "Gcolle", "Getchu", "H0930",
 		"H4610", "HEYZO", "HeyDouga", "IQQTV", "JAVFREE", "Jav321", "JavBus", "JavDB",
@@ -96,11 +96,11 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 		}},
 		{CategoryUncensored, []string{
 			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2",
-			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
+			"Airav", "7MMTV", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
 			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
 			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",
 		}},
-		{CategoryChinese, []string{"IQQTV", "JavDB", "Airav", "Freejavbt"}},
+		{CategoryChinese, []string{"IQQTV", "JavDB", "7MMTV", "Airav", "Freejavbt"}},
 		{CategoryAmateur, []string{
 			"MGS", "FANZA", "JavDB", "JavBus", "10musume", "1Pondo", "Caribbeancom",
 			"CaribbeancomPR", "PACOPACOMAMA", "MURAMURA", "HeyDouga", "H0930", "H4610",
@@ -293,7 +293,7 @@ func TestDefaultRoutesLeaveNoDeferredGaps(t *testing.T) {
 	// Every default-build provider must be routed, so the only gaps a default
 	// deployment can report are the three experimental entries.
 	registered := []string{
-		"10musume", "1Pondo", "AVE", "AVSOX", "Airav", "AniList", "C0930",
+		"10musume", "1Pondo", "7MMTV", "AVE", "AVSOX", "Airav", "AniList", "C0930",
 		"Caribbeancom", "CaribbeancomPR", "DAHLIA", "DUGA", "FALENO", "FANZA", "FC2",
 		"FC2Club", "FC2PPVDB", "Freejavbt", "GIGA", "Gcolle", "Getchu", "H0930",
 		"H4610", "HEYZO", "HeyDouga", "IQQTV", "JAVFREE", "Jav321", "JavBus", "JavDB",

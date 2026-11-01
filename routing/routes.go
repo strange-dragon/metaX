@@ -267,6 +267,12 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 		"FC2PPVDB",
 		"FC2",
 		"Airav",
+		// 7MMTV indexes the same uncensored catalogue as the manufacturer
+		// sites below (FC2, 10musume, HEYZO, Tokyo Hot and the rest) but with
+		// Chinese titles and the catalog number in every detail URL, which is
+		// what it is here for. Its own artwork sits on a separate CDN, so it
+		// contributes artwork only when the DMM-backed sources come up empty.
+		"7MMTV",
 		"HEYZO",
 		"TOKYO-HOT",
 		"1Pondo",
@@ -289,6 +295,10 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 	CategoryChinese: {
 		"IQQTV", // iqq5.xyz redirects to iqqab.com; the redirect is followed
 		"JavDB",
+		// 7MMTV files its Chinese-subtitled catalogue separately and covers
+		// titles the Chinese-native sites never index. Its titles are
+		// traditional, so JavDB stays ahead of it.
+		"7MMTV",
 		"Airav",
 		"Freejavbt",
 		"MadouQu",

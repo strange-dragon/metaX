@@ -164,7 +164,10 @@ in the table but only resolves in a `-tags experimental` build, so a default
 build reports it under `route_provider_gaps`. `MadouQu` used to be experimental
 and disabled; it now ships in the default build and is routed under `chinese`,
 because that route was the thinnest one and the provider is covered by live
-search and detail tests. Override the table with the variables below to narrow
+search and detail tests. `7MMTV` is routed under `uncensored` and `chinese`; it
+sits behind the DMM-backed sources because its artwork lives on its own CDN, so
+it is there for its Chinese titles and for the titles the manufacturer sites do
+not index. Override the table with the variables below to narrow
 the fan-out or to change the priority order.
 
 Two providers stay registered but are deliberately unrouted, because the sites
