@@ -2,6 +2,20 @@ package routing
 
 import "strings"
 
+// sitePrefixes are the catalogue names that get prepended to a site-local ID to
+// keep it unique across providers: Gcolle stores "847256" as "GCOLLE-847256",
+// HeyDouga stores "4037-479" as "HEYDOUGA-4037-479".
+//
+// A file on disk is named after the bare ID, so a request for "4037-479" folded
+// to "4037479" while the provider answered "heydouga4037479". The merge compares
+// the two, finds no match, and reports the source as not_found — which is why
+// these titles scraped from one provider but never merged with the others.
+// Stripping the prefix on both sides is what makes the same work comparable.
+var sitePrefixes = []string{
+	"heydouga", "mywife", "gcolle", "pcolle",
+	"h0930", "h4610", "c0930",
+}
+
 // NormalizeNumber folds a catalog number to the key used when deciding whether
 // two providers describe the same title.
 //
@@ -9,15 +23,42 @@ import "strings"
 // case-insensitive, hyphens and spaces are insignificant, and underscores are
 // significant (Amane treats 010115_001 and 010115-001 as different titles).
 //
-// On top of that, the FC2 family is canonicalized because providers spell the
-// same product differently: FC2-123456, FC2PPV123456, FC2-PPV-123456 and
-// FC2_PPV_123456 all fold to fc2ppv123456. This matters for metaX because the
-// FC2 and uncensored routes are merged into one provider chain.
+// On top of that, two families are canonicalized because providers spell the
+// same work differently:
+//
+//   - FC2-123456, FC2PPV123456, FC2-PPV-123456 and FC2_PPV_123456 all fold to
+//     fc2ppv123456. This matters because the FC2 and uncensored routes share one
+//     provider chain.
+//   - the site-prefixed IDs in sitePrefixes drop their prefix, so a filename's
+//     bare catalog number matches the provider's stored spelling.
 func NormalizeNumber(value string) string {
-	folded := strings.ToLower(strings.TrimSpace(value))
+	folded := stripSitePrefix(value)
 	folded = strings.NewReplacer("-", "", " ", "").Replace(folded)
 	if digits, ok := fc2ProductDigits(folded); ok {
 		return "fc2ppv" + digits
+	}
+	return folded
+}
+
+// stripSitePrefix lowercases and trims value, then removes a leading site name
+// and its separator. Underscore and space separators are accepted alongside the
+// hyphen so "GCOLLE_847256" folds the same way as "GCOLLE-847256".
+func stripSitePrefix(value string) string {
+	folded := strings.ToLower(strings.TrimSpace(value))
+	for _, name := range sitePrefixes {
+		if !strings.HasPrefix(folded, name) {
+			continue
+		}
+		rest := folded[len(name):]
+		if rest == "" {
+			continue
+		}
+		switch rest[0] {
+		case '-', '_', ' ':
+			if trimmed := strings.TrimLeft(rest, "-_ "); trimmed != "" {
+				return trimmed
+			}
+		}
 	}
 	return folded
 }

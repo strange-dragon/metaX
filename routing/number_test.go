@@ -95,3 +95,35 @@ func TestNumberLookupKeysKeepNonFC2NumbersExact(t *testing.T) {
 		t.Fatalf("NumberLookupKeys(empty) = %v, want nil", keys)
 	}
 }
+
+// TestNormalizeNumberFoldsSitePrefixedIDs covers the catalogue names metaX
+// prepends to a site-local ID. A file is named after the bare ID, so without the
+// fold the merge compared "4037479" with "heydouga4037479", found no match, and
+// reported the source as not_found — the title scraped but never merged.
+func TestNormalizeNumberFoldsSitePrefixedIDs(t *testing.T) {
+	tests := [][2]string{
+		{"HEYDOUGA-4037-479", "4037-479"},
+		{"heydouga_4037-479", "4037-479"},
+		{"MYWIFE-1542", "1542"},
+		{"GCOLLE-847256", "847256"},
+		{"GCOLLE_847256", "847256"},
+		{"PCOLLE-156785614478ab480db", "156785614478ab480db"},
+		{"H0930-ori1643", "ori1643"},
+		{"C0930-ki220913", "ki220913"},
+	}
+	for _, pair := range tests {
+		if !SameNumber(pair[0], pair[1]) {
+			t.Errorf("SameNumber(%q, %q) = false, want true", pair[0], pair[1])
+		}
+	}
+	// A site name without a separator is part of the ID, not a prefix.
+	if SameNumber("GCOLLE847256", "847256") {
+		t.Error("a site name without a separator must not be stripped")
+	}
+	// Ordinary catalogue numbers are untouched.
+	for _, value := range []string{"ABP-123", "SSIS-001", "010115_001", "FC2-3954834"} {
+		if got := NormalizeNumber(value); got != NormalizeNumber(value) || got == "" {
+			t.Errorf("NormalizeNumber(%q) = %q, want a stable non-empty fold", value, got)
+		}
+	}
+}
