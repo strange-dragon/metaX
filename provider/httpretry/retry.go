@@ -30,6 +30,14 @@ type Policy struct {
 	MaxDelay    time.Duration
 	Jitter      func(time.Duration) time.Duration
 	Sleep       func(context.Context, time.Duration) error
+	// SkipTimeouts keeps a whole-request deadline from being retried.
+	//
+	// A client timeout means the budget is already spent: retrying spends it
+	// again and fails the same way. Callers whose timeout covers the whole
+	// request (colly's SetRequestTimeout sets http.Client.Timeout) should set
+	// this. Callers whose timeout is a dial or read timeout, where a second
+	// attempt can still succeed, should leave it off.
+	SkipTimeouts bool
 }
 
 // DefaultPolicy is deliberately conservative: at most three attempts, a
@@ -106,7 +114,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return resp, err
 		}
 		if err != nil {
-			if !isTransientError(err) {
+			if !t.policy.isTransientError(err) {
 				return nil, err
 			}
 			lastErr = err
@@ -219,15 +227,18 @@ func isRetryableStatus(status int) bool {
 	}
 }
 
-func isTransientError(err error) bool {
+func (p Policy) isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return netErr.Timeout() || netErr.Temporary()
+	if !errors.As(err, &netErr) {
+		return false
 	}
-	return false
+	if p.SkipTimeouts && netErr.Timeout() {
+		return false
+	}
+	return netErr.Timeout() || netErr.Temporary()
 }
 
 func drainAndClose(body io.ReadCloser) {
