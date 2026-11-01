@@ -57,6 +57,11 @@ func TestCleanFC2TitleDropsTheWatermarkSpan(t *testing.T) {
 			body: `<div class="items_article_headerInfo"><h3>Ａ　Ｂ` + watermark + `Ｃ</h3></div>`,
 			want: "Ａ　ＢＣ",
 		},
+		{
+			name: "a markdown-escaped bang is restored",
+			body: `<div class="items_article_headerInfo"><h3>超剛毛スレンダー\!お顔も</h3></div>`,
+			want: "超剛毛スレンダー!お顔も",
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {

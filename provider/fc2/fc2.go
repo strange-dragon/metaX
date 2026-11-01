@@ -207,7 +207,11 @@ func cleanFC2Title(node *html.Node) string {
 			span.Parent.RemoveChild(span)
 		}
 	}
-	return strings.TrimSpace(htmlquery.InnerText(heading))
+	title := strings.TrimSpace(htmlquery.InnerText(heading))
+	// The reader hands the document back through a markdown pipeline, which
+	// leaves escaped punctuation behind ("レンダー\!お顔"). The document is
+	// rendered as HTML here, so those backslashes are never meaningful.
+	return strings.ReplaceAll(title, `\!`, "!")
 }
 
 // isGonePage reports whether the response body is the page FC2 answers with for
