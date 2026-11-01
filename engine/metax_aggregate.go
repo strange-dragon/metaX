@@ -346,6 +346,13 @@ func (e *Engine) resolveAggregatedProviderIDs(number string, category routing.Ca
 	providers = OrderByProviderPreference(providers, ActiveMergePreference().Image, func(name string) string {
 		return name
 	})
+	// The image endpoint walks this chain from the front, so a demoted provider
+	// has to sit outside the budgeted window rather than merely lose the merge
+	// tie-break: otherwise a title only it can picture would answer 404.
+	lastResort := ActiveArtworkLastResort()
+	ordered := DemoteProviders(providers, lastResort, func(name string) string { return name })
+	reserve := demotedTail(ordered, lastResort, func(name string) string { return name })
+	primary := ordered[:len(ordered)-len(reserve)]
 
 	// Image requests only need a real provider identity. Reuse the local
 	// catalog when possible so primary/thumb/backdrop fetches do not each
@@ -362,18 +369,18 @@ func (e *Engine) resolveAggregatedProviderIDs(number string, category routing.Ca
 		candidates = append(candidates, pid)
 		return len(candidates) >= limit
 	}
-	for _, name := range providers {
+	for _, name := range primary {
 		if len(candidates) >= limit {
-			return candidates, nil
+			break
 		}
 		if pid, ok := e.lookupProviderIDByNumber(number, []string{name}); ok {
 			if add(pid) {
-				return candidates, nil
+				break
 			}
 		}
 	}
 
-	for _, name := range providers {
+	for _, name := range primary {
 		if len(candidates) >= limit {
 			break
 		}
@@ -395,7 +402,43 @@ func (e *Engine) resolveAggregatedProviderIDs(number string, category routing.Ca
 	if len(candidates) == 0 {
 		return nil, mt.ErrInfoNotFound
 	}
+
+	// One last-resort identity rides behind the window. It is only ever reached
+	// after every budgeted candidate answered without artwork, which is what
+	// "use it only when nothing else has a picture" means for an endpoint that
+	// walks a bounded chain. It is looked up in the catalog only: a search
+	// fan-out here would undo the point of the budget.
+	for _, name := range reserve {
+		if _, done := seen[strings.ToLower(strings.TrimSpace(name))]; done {
+			continue
+		}
+		if pid, ok := e.lookupProviderIDByNumber(number, []string{name}); ok {
+			candidates = append(candidates, pid)
+			break
+		}
+	}
 	return candidates, nil
+}
+
+// demotedTail returns the entries that the demotion moved to the back of
+// ordered, in their original relative order. It is empty when nothing moved.
+func demotedTail[T any](ordered []T, providers []string, providerOf func(T) string) []T {
+	if len(providers) == 0 {
+		return nil
+	}
+	names := make(map[string]struct{}, len(providers))
+	for _, name := range providers {
+		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
+			names[name] = struct{}{}
+		}
+	}
+	tail := make([]T, 0, len(providers))
+	for _, item := range ordered {
+		if _, ok := names[strings.ToLower(strings.TrimSpace(providerOf(item)))]; ok {
+			tail = append(tail, item)
+		}
+	}
+	return tail
 }
 
 // aggregateRouteProviders resolves the provider chain for a category, with a
@@ -470,7 +513,14 @@ func mergeMovieInfoWithPreference(identity *model.MovieInfo, infos []*model.Movi
 	result.Score = identity.Score
 
 	detailOrder := OrderByProviderPreference(infos, pref.Detail, movieInfoProviderName)
-	imageOrder := preferLargeArtwork(OrderByProviderPreference(infos, pref.Image, movieInfoProviderName))
+	// The demotion runs after preferLargeArtwork on purpose: a large-variant
+	// reorder would otherwise pull a demoted source straight back to the front,
+	// which is exactly how JavDB kept winning covers.
+	imageOrder := DemoteProviders(
+		preferLargeArtwork(OrderByProviderPreference(infos, pref.Image, movieInfoProviderName)),
+		ActiveArtworkLastResort(),
+		movieInfoProviderName,
+	)
 
 	for _, info := range detailOrder {
 		if info == nil {
