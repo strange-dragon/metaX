@@ -529,7 +529,8 @@ func (p *AVSOX) searchResult(movie map[string]any, lang string) *model.MovieSear
 	return &model.MovieSearchResult{
 		ID: id, Number: number, Title: title, Provider: p.Name(),
 		Homepage: p.detailURL(id, lang), CoverURL: p.absoluteAssetURL(anyString(movie["posterLarge"])),
-		ThumbURL: p.absoluteAssetURL(anyString(movie["posterSmall"])),
+		ThumbURL:    p.absoluteAssetURL(anyString(movie["posterSmall"])),
+		ReleaseDate: parser.ParseDate(anyString(movie["releaseDate"])),
 	}
 }
 func (p *AVSOX) GetMovieInfoByID(id string) (*model.MovieInfo, error) {

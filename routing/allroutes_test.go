@@ -11,13 +11,21 @@ import (
 // experimentalProviders are compiled only with `-tags experimental`, so a
 // default build legitimately reports them as route gaps.
 var experimentalProviders = map[string]struct{}{
-	"AVBASE":  {},
-	"MadouQu": {},
+	"AVBASE": {},
+}
+
+// unroutedProviders are compiled in but deliberately absent from the default
+// table: the sites themselves are gone, verified on 2026-11-01. The packages
+// stay registered so an operator can still route one with METAX_ROUTES if it
+// comes back, and so removing the route does not have to delete the provider.
+var unroutedProviders = map[string]struct{}{
+	"FC2Club": {}, // fc2club.com does not resolve; fc2club.top 302s to a parked host
+	"fc2hub":  {}, // 301 to javten.com, which answers 403
 }
 
 // TestDefaultRoutesCoverTheRealProviderInventory keeps DefaultConfig honest:
 // every movie provider linked into the binary must be reachable from at least
-// one category, and the only allowed gaps are the experimental providers.
+// one category, except the experimental ones and the ones whose site is gone.
 func TestDefaultRoutesCoverTheRealProviderInventory(t *testing.T) {
 	registered := make([]string, 0, 64)
 	mt.RangeMovieFactory(func(name string, _ mt.MovieFactory) bool {
@@ -52,9 +60,13 @@ func TestDefaultRoutesCoverTheRealProviderInventory(t *testing.T) {
 	}
 
 	for _, name := range registered {
-		if _, ok := used[name]; !ok {
-			t.Errorf("provider %q is compiled in but not routed by routing.DefaultConfig()", name)
+		if _, ok := used[name]; ok {
+			continue
 		}
+		if _, gone := unroutedProviders[name]; gone {
+			continue
+		}
+		t.Errorf("provider %q is compiled in but not routed by routing.DefaultConfig()", name)
 	}
 
 	coverage := config.ProviderCoverage(registered)

@@ -51,7 +51,19 @@ const (
 //
 //   - Cloudflare JavaScript challenge: JavLibrary.
 //
-//   - Dead or unreachable: AVSOX, Freejavbt, FC2Club, fc2hub, IQQTV, AVE.
+//   - Dead or unreachable: FC2Club, fc2hub (301 to javten.com, which answers
+//     403), AVE.
+//
+// IQQTV and Freejavbt were on that list and are not any more: iqq5.xyz
+// redirects to iqqab.com and freejavbt.com serves 200 with parseable cards, both
+// from a plain IP. They are routed here again.
+//
+// AVSOX was on that list too, for a reason that turned out to be a measurement
+// error: avsox.click serves a Vue SPA whose shell is a 1.5 kB page with no
+// result cards, which an HTML probe reads as "empty site". The metadata has
+// moved to a Yii JSON API (/javu/data/api/{search,getMovie}) that answers 200
+// with real records from the same IP, which is what the provider already calls.
+// A site is not dead just because its HTML is. AVSOX is routed here again.
 //
 // FC2 (the publisher's own catalogue at adult.contents.fc2.com) is routed: it
 // answers a plain IP with the age cookie its provider already sends, and it is
@@ -83,8 +95,10 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"JavDB",
 		"JavBus",
 		"Jav321",   // DMM covers, used as the image source
+		"AVSOX",    // JSON API behind the SPA shell; no JavaScript needed
 		"FC2",      // publisher catalogue: the only FC2 source without JavDB
 		"FC2PPVDB", // archive at ppvdatabank.com: covers titles FC2 delisted
+		"Freejavbt",
 		"Airav",
 		"TOKYO-HOT",
 		"1Pondo",
@@ -96,8 +110,11 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"Pcolle",
 	},
 	CategoryChinese: {
+		"IQQTV",
 		"JavDB",
 		"Airav",
+		"Freejavbt",
+		"MadouQu",
 	},
 	CategoryAmateur: {
 		"JavDB",

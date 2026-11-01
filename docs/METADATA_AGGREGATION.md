@@ -105,9 +105,11 @@ Merged fields are filled in two independent passes, because artwork and metadata
 | Image | `cover_url`, `big_cover_url`, `thumb_url`, `big_thumb_url`, `preview_images` | `METAX_MERGE_IMAGE_PROVIDER` | `Jav321` |
 
 - Both passes fall back to route order for any field the preferred provider leaves empty or cannot answer at all. A provider that returns `not_found` or `error` simply does not appear, so the preference is never a hard requirement.
+- Artwork order is nudged by a size signal before it is applied: a source that reports `big_cover_url` different from `cover_url` (or the same for the thumb) demonstrably has a larger copy, and it moves ahead of sources that only ever report one URL. This is what stops a 356 px thumbnail from becoming the cover of a record another source holds at full size. When no source in the group has a distinct large variant there is no signal, so the preference order is used unchanged. The judgment is made per image group; metadata still follows the detail pass untouched.
+- `JavDB` is excluded from artwork unless nothing else has it (`METAX_ARTWORK_LAST_RESORT`, default `JavDB`; comma-separated, `off`/`none` disables). It is the best source for text and the worst for images on the same record: its covers go through a hotlink-protected host that answers a placeholder to many clients, and it publishes a single size, so a merged record could end up carrying a JavDB cover while a sibling source held the full-size original. The demotion runs *after* the size nudge — otherwise a large-variant reorder would pull it straight back to the front, which is exactly how it kept winning. "Demoted is not dropped": if every other source in the chain answers without artwork, JavDB still supplies one. The rule applies to artwork only; `JavDB` keeps its `METAX_MERGE_DETAIL_PROVIDER` default for text.
 - Set either variable to `off`, `none`, `route`, `default`, or an empty value to restore pure route-order merging for that group.
 - The preference also drives `MetaX` image resolution, so the same provider supplies both the merged `cover_url` and the bytes behind `/v1/images/primary/MetaX/:number`.
-- Image bytes are chosen by resolution, not only by preference: the image route walks up to 4 candidates, keeps the largest source image, and stops as soon as one is at least 180 000 pixels (between JavDB's 292×438 covers and the 800×538 artwork DMM and JavBus serve). A preferred provider therefore wins whenever it has artwork worth showing, and a title it does not carry — or artwork it cannot serve — falls through to the sharpest remaining source instead of returning nothing.
+- Image bytes are chosen by resolution, not only by preference: the image route walks up to 4 candidates, keeps the largest source image, and stops as soon as one is at least 180 000 pixels (between JavDB's 292×438 covers and the 800×538 artwork DMM and JavBus serve). A preferred provider therefore wins whenever it has artwork worth showing, and a title it does not carry — or artwork it cannot serve — falls through to the sharpest remaining source instead of returning nothing. A last-resort provider rides behind that window as a single extra candidate, resolved from the local catalog only (no search fan-out), so it is reached only after every budgeted candidate answered without artwork.
 - The default pair exists because the two sources fail in opposite ways in practice: Jav321's artwork comes from the DMM picture CDN, while JavDB's image host answers 403 to datacenter clients that are not in its allowlist; JavDB in turn has the more complete catalogue metadata. Provider names are matched case-insensitively; unregistered names are ignored.
 - `Jav321` fetches artwork from `pics.dmm.co.jp` and `p.dmm.co.jp` in addition to its own host. Detail URLs remain restricted to jav321 itself.
 - The preference can only reorder providers the category route already contains, so the default image provider must also be routed. `Jav321` is listed in the `censored` and `uncensored` routes; an `uncensored` route without it silently served JavDB covers for every title. The `amateur` route still omits it, so amateur titles keep route-order artwork.
@@ -157,12 +159,46 @@ The SDK's numeric `Provider.Priority()` value does not control this ordering.
 The merged `MetaX` candidate is always prepended as the first result.
 
 The built-in `routing.DefaultConfig()` routes every movie provider compiled into
-the binary (43 on a default build, in quality-first order). The experimental
-providers `AVBASE` and `MadouQu` are listed in the table but only resolve in a
-`-tags experimental` build, so a default build reports them under
-`route_provider_gaps`. `MadouQu` additionally ships with `Priority = 0` and
-needs `MT_MOVIE_PROVIDER_MADOUQU__PRIORITY` to be set. Override the table with the variables
-below to narrow the fan-out or to change the priority order.
+the binary, in quality-first order. The experimental provider `AVBASE` is listed
+in the table but only resolves in a `-tags experimental` build, so a default
+build reports it under `route_provider_gaps`. `MadouQu` used to be experimental
+and disabled; it now ships in the default build and is routed under `chinese`,
+because that route was the thinnest one and the provider is covered by live
+search and detail tests. Override the table with the variables below to narrow
+the fan-out or to change the priority order.
+
+Two providers stay registered but are deliberately unrouted, because the sites
+themselves are gone: `FC2Club` (`fc2club.com` does not resolve, `fc2club.top`
+redirects to a parked host) and `fc2hub` (301 to `javten.com`, which answers 403).
+They remain in the binary so an operator can route one again through
+`METAX_ROUTES` if it comes back. `IQQTV` and `Freejavbt` were on the unreachable
+list and are not any more: `iqq5.xyz` redirects to `iqqab.com`, and
+`freejavbt.com` serves parseable cards, both from a plain IP.
+
+### How a site is judged dead
+
+A curl probe from one machine is not evidence, and reading it as evidence has
+produced two wrong verdicts in this table (both `IQQTV` and `Freejavbt` were
+declared dead while serving traffic, and `AVSOX` was dropped for "answering 200
+with an empty shell" when that shell is its Vue SPA by design — the metadata
+moved to a JSON API the provider already calls, and which answers with real
+records from the same IP).
+
+Judge liveness by two independent signals instead:
+
+1. **A peer project still routes it.** Amane's `_DEFAULT_CONTENT_ROUTES` is the
+   reference: it lists `AVSOX`, `Freejavbt` and `FC2PPVDB` as live, and carries
+   `FC2Club` only as a registered crawler that no default route uses — the same
+   split this table now has. Presence in a maintained project's default route is
+   strong evidence of life; absence is weak evidence of death, because a project
+   may simply not cover a site, so never drop on absence alone.
+2. **The provider's own data path answers.** Not the HTML: the endpoint the
+   provider actually calls. `avsox.click/cn/search/...` returns an empty 1.5 kB
+   shell while `POST /javu/data/api/search` returns `{"code":200,"data":[...]}`.
+
+A site is only unroutable when its *data* is unreachable **and** no peer routes
+it. `FC2Club` fails both; `fc2hub` fails both; `AVSOX` fails neither and is
+routed again.
 
 The table is configurable at startup:
 

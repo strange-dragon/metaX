@@ -15,7 +15,7 @@ func TestDefaultRoutesRouteEveryIntegratedProvider(t *testing.T) {
 			"JavLibrary", "Jav321", "GIGA", "XCity", "AVBASE",
 		},
 		CategoryUncensored: {
-			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
+			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2",
 			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
 			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
 			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",
@@ -95,7 +95,7 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 			"JavLibrary", "Jav321", "GIGA", "XCity",
 		}},
 		{CategoryUncensored, []string{
-			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "FC2Club", "fc2hub",
+			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2",
 			"Airav", "HEYZO", "TOKYO-HOT", "1Pondo", "Caribbeancom", "CaribbeancomPR",
 			"10musume", "HeyDouga", "KIN8", "DUGA", "AVE", "JAVFREE", "PACOPACOMAMA",
 			"MURAMURA", "H0930", "H4610", "C0930", "Gcolle", "Pcolle",
@@ -134,24 +134,24 @@ func TestExplicitDMMSelectionResolvesToFANZA(t *testing.T) {
 }
 
 func TestUncensoredRouteKeepsFC2FamilyAdjacent(t *testing.T) {
-	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	registered := []string{"JavDB", "JavBus", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	got, err := DefaultConfig().Resolve(CategoryUncensored, "", registered)
 	if err != nil {
 		t.Fatalf("Resolve(uncensored) error = %v", err)
 	}
-	want := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	want := []string{"JavDB", "JavBus", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Resolve(uncensored) = %#v, want merged FC2 providers %#v", got, want)
 	}
 }
 
 func TestLegacyFC2CategoryResolvesToMergedUncensoredRoute(t *testing.T) {
-	registered := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	registered := []string{"JavDB", "JavBus", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	got, err := DefaultConfig().Resolve(CategoryFC2, "", registered)
 	if err != nil {
 		t.Fatalf("Resolve(FC2 legacy alias) error = %v", err)
 	}
-	want := []string{"JavDB", "JavBus", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
+	want := []string{"JavDB", "JavBus", "Freejavbt", "FC2PPVDB", "FC2", "Airav"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Resolve(FC2 legacy alias) = %#v, want merged uncensored providers %#v", got, want)
 	}

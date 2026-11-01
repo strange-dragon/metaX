@@ -158,7 +158,7 @@ Compared Amane's AVSOX crawler behavior with the pinned SDK provider inventory. 
 - **Metadata mapping.** The provider maps movie ID/number, localized title and description, cover/poster, sample images, actors, studio, label, series, director, genres, release date, and runtime into the SDK model. Localized entity-name suffixes are handled without assuming every API object has the same shape.
 - **Request hardening.** Requests and redirects are constrained to the configured origin; detail URLs require the supported movie path and an alphanumeric ID; response bodies are capped.
 - **Deterministic coverage.** Local API tests cover CSRF propagation, search selection, underscore distinction, metadata mapping, mismatched API IDs, invalid URL origins/paths, cross-origin redirects, provider registration, and proxy/timeout configuration. Full metaX Go tests passed in [run 38892023957](https://github.com/strange-dragon/metaX/actions/runs/38892023957), and formatting passed in [run 38892023918](https://github.com/strange-dragon/metaX/actions/runs/38892023918).
-- **Limitations.** No live AVSOX requests were made. The configured domain, CSRF policy, API payload/response schema, and current field names remain source-derived assumptions pending live verification. The provider is not yet imported by the pinned upstream SDK's provider registration package.
+- **Limitations.** No live AVSOX requests were made when this comparison was written; the transport model above was source-derived. Live verification on 2026-11-01 confirmed it end to end: `POST https://avsox.click/javu/data/api/search` with body `[{"search":"123120-001","lang":"cn"},60,1]` answered `{"code":200,"data":[{"movieId":"kpavagl","movieFanHao":"123120_001",...}]}`, and `HEYZO-1234` / `010120-001` resolved the same way. The GET of `/cn/` still returns the SPA shell, which is why the provider must not be judged by its HTML. The provider is not yet imported by the pinned upstream SDK's provider registration package.
 
 ## Focused comparison: Getchu (2026-10-16)
 
@@ -520,7 +520,7 @@ Provider-specific limits observed on the same date:
 - **Official:** withdrawn with the Amane manufacturer router. The default censored route no longer lists it.
 - **Prestige:** native provider implemented as live-unverified; promote only after permitted-region responses or reliable fixtures exist. **R18Dev:** out of scope (2026-10-21); no PostgreSQL/import contract will be added.
 
-The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged for optional providers such as token-gated `ThePornDB` or the experimental `AVBASE` and `MadouQu`.
+The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged for optional providers such as token-gated `ThePornDB` or the experimental `AVBASE`.
 
 ## Provider access follow-up (2026-10-20)
 

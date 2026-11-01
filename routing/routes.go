@@ -218,14 +218,17 @@ func providerRegistered(provider string, registered map[string]struct{}) bool {
 	return false
 }
 
-// DefaultConfig routes every movie provider that ships in the default build
-// (43 of 45; AVBASE and MadouQu need `-tags experimental`, and MadouQu also
-// ships disabled) into the category it belongs to. Ordering inside a category is quality-first: the
+// DefaultConfig routes every movie provider that ships in the default build. It
+// used to exclude AVBASE and MadouQu behind `-tags experimental`; MadouQu is now
+// compiled in and routed because the domestic chain is the thinnest one, and it
+// is covered by live search and detail tests. AVBASE stays experimental: its
+// request path depends on a build id, and this network cannot reach the site to
+// confirm a change in it. Ordering inside a category is quality-first: the
 // providers that normally return the most complete metadata are queried first,
 // and merged fields are taken in that order.
 //
 // There is intentionally no manufacturer ("Official") router: category fan-out
-// replaces it. FC2 is merged into the uncensored chain and keeps its four
+// replaces it. FC2 is merged into the uncensored chain and keeps its two live
 // FC2-family providers adjacent so a single search reuses the same number
 // normalization.
 //
@@ -256,12 +259,13 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 		// providers the route already lists, so an uncensored route without
 		// Jav321 silently served JavDB covers for every title.
 		"Jav321",
+		// AVSOX serves a Vue SPA shell, so an HTML probe sees an empty page and
+		// the site looks dead. The metadata comes from its Yii JSON API, which
+		// answers 200 with real records, so it stays in the route.
 		"AVSOX",
-		"Freejavbt",
+		"Freejavbt", // live again on freejavbt.com; 200 with parseable cards
 		"FC2PPVDB",
 		"FC2",
-		"FC2Club",
-		"fc2hub",
 		"Airav",
 		"HEYZO",
 		"TOKYO-HOT",
@@ -283,11 +287,11 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 		"Pcolle",
 	},
 	CategoryChinese: {
-		"IQQTV",
+		"IQQTV", // iqq5.xyz redirects to iqqab.com; the redirect is followed
 		"JavDB",
 		"Airav",
 		"Freejavbt",
-		"MadouQu", // experimental build, Priority 0 by default
+		"MadouQu",
 	},
 	CategoryAmateur: {
 		"MGS",

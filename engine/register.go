@@ -37,6 +37,7 @@ import (
 	_ "github.com/strange-dragon/metaX/provider/javfree"
 	_ "github.com/strange-dragon/metaX/provider/javlibrary"
 	_ "github.com/strange-dragon/metaX/provider/kin8tengoku"
+	_ "github.com/strange-dragon/metaX/provider/madouqu"
 	_ "github.com/strange-dragon/metaX/provider/mgstage"
 	_ "github.com/strange-dragon/metaX/provider/minnano"
 	_ "github.com/strange-dragon/metaX/provider/muramura"
