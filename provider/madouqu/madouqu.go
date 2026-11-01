@@ -3,7 +3,6 @@ package madouqu
 import (
 	"fmt"
 	"net/url"
-	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -55,7 +54,7 @@ func (mdq *MadouQu) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return path.Base(homepage.Path), nil
+	return scraper.LastPathSegment(homepage.Path, ""), nil
 }
 
 func (mdq *MadouQu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
@@ -74,24 +73,31 @@ func (mdq *MadouQu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err
 	}
 
 	c := mdq.ClonedCollector()
+	gone := scraper.TrackNotFound(c)
 
 	c.OnXML(`//article[starts-with(@id,'post')]//div[@class="container"]//p`, func(e *colly.XMLElement) {
+		// The image used to return early, so a paragraph that carried both the
+		// artwork and a labelled value lost the value.
 		if src := e.ChildAttr(`./img`, "src"); src != "" {
-			info.CoverURL = ExtractImgSrc(src)
-			return
+			if info.CoverURL == "" {
+				info.CoverURL = e.Request.AbsoluteURL(ExtractImgSrc(src))
+			}
 		}
 
 		switch {
 		case strings.Contains(e.Text, "番號"):
-			_, nb, _ := strings.Cut(e.Text, "：")
-			info.Number = nb
+			if info.Number == "" {
+				info.Number = detailValue(e.Text)
+			}
 		case strings.Contains(e.Text, "片名"):
-			_, title, _ := strings.Cut(e.Text, "：")
-			info.Title = title
+			if info.Title == "" {
+				info.Title = detailValue(e.Text)
+			}
 		case strings.Contains(e.Text, "女郎"):
-			_, actors, _ := strings.Cut(e.Text, "：")
-			for _, actor := range strings.Split(actors, "、") {
-				info.Actors = append(info.Actors, strings.TrimSpace(actor))
+			for _, actor := range strings.Split(detailValue(e.Text), "、") {
+				if actor = strings.TrimSpace(actor); actor != "" {
+					info.Actors = append(info.Actors, actor)
+				}
 			}
 		}
 	})
@@ -128,7 +134,7 @@ func (mdq *MadouQu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err
 		}
 	})
 
-	err = c.Visit(info.Homepage)
+	err = gone.Resolve(mdq.Name(), c.Visit(info.Homepage))
 	return
 }
 
@@ -177,15 +183,37 @@ func (mdq *MadouQu) SearchMovie(keyword string) (results []*model.MovieSearchRes
 	return
 }
 
+// wrappedImageRE finds an absolute URL that the site wrapped in its own image
+// proxy, e.g. https://madouqu.com/https://cdn.example/cover.jpg.
+var wrappedImageRE = regexp.MustCompile(`(https?://.+$)`)
+
+// ExtractImgSrc unwraps the site's image proxy. Lazy-loaded images often keep
+// the real target in the query string rather than the path, so both are tried.
 func ExtractImgSrc(src string) string {
 	u, err := url.Parse(src)
 	if err != nil {
 		return src
 	}
-	if ss := regexp.MustCompile(`(https?://.+$)`).FindStringSubmatch(u.Path); len(ss) > 0 {
+	if ss := wrappedImageRE.FindStringSubmatch(u.Path); len(ss) > 0 {
+		return ss[1]
+	}
+	if ss := wrappedImageRE.FindStringSubmatch(u.RawQuery); len(ss) > 0 {
 		return ss[1]
 	}
 	return src
+}
+
+// detailValue returns the text after a label separator. The site mixes the full
+// width colon with the half width one, and every value used to be stored with
+// its leading whitespace intact, so a number spelled " MD-0123" never matched a
+// search for "MD-0123".
+func detailValue(text string) string {
+	for _, separator := range []string{"：", ":"} {
+		if _, value, ok := strings.Cut(text, separator); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func init() {

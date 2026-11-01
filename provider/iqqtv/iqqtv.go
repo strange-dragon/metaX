@@ -446,12 +446,49 @@ func (p *IQQTV) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) 
 	return results, nil
 }
 
-func lastToken(value string) string {
-	parts := strings.Fields(strings.TrimSpace(value))
-	if len(parts) == 0 {
-		return ""
+// catalogNumberFromTitle picks the token that looks like a catalogue number.
+//
+// The heading usually ends with the number, but not always: a Chinese release is
+// often titled "ABC-123 【中文字幕】" or "ABC-123 (2024)", and reading only the
+// last token turned a title that exists into a 404. A token that carries letters
+// wins over an all-digit one so a bare year in the heading is never mistaken for
+// the catalogue number.
+func catalogNumberFromTitle(title string) string {
+	fallback := ""
+	for _, token := range titleNumberTokens(title) {
+		candidate := cleanNumber(token)
+		if !catalogNumberRE.MatchString(candidate) {
+			continue
+		}
+		if strings.Trim(candidate, "0123456789-") != "" {
+			return candidate
+		}
+		if fallback == "" {
+			fallback = candidate
+		}
 	}
-	return parts[len(parts)-1]
+	return fallback
+}
+
+// iqqtvLangPrefixes are the localized path roots the site redirects between. A
+// detail URL that moves from /jp/<id> to /cn/<id> describes the same title, so
+// the path comparison ignores the language segment; comparing the raw strings
+// reported a working title as not found.
+var iqqtvLangPrefixes = []string{"cn/", "jp/", "tw/", "en/", "zh/"}
+
+func sameDetailPath(left, right string) bool {
+	return detailPathKey(left) == detailPathKey(right)
+}
+
+func detailPathKey(id string) string {
+	trimmed := strings.Trim(id, "/")
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range iqqtvLangPrefixes {
+		if len(lower) > len(prefix) && strings.HasPrefix(lower, prefix) {
+			return trimmed[len(prefix):]
+		}
+	}
+	return trimmed
 }
 
 func (p *IQQTV) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
@@ -486,15 +523,15 @@ func (p *IQQTV) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		return nil, err
 	}
 	finalID, err := p.ParseMovieIDFromURL(finalURL)
-	if err != nil || finalID != id {
+	if err != nil || !sameDetailPath(finalID, id) {
 		return nil, fmt.Errorf("%w: detail URL redirected from %q to %q", ErrMovieNotFound, rawURL, finalURL)
 	}
 	title := strings.TrimSpace(doc.Find("h1.h4.b").First().Text())
 	if title == "" || isExcluded(title) {
 		return nil, ErrMovieNotFound
 	}
-	number := cleanNumber(lastToken(title))
-	if !catalogNumberRE.MatchString(number) {
+	number := catalogNumberFromTitle(title)
+	if number == "" {
 		return nil, fmt.Errorf("%w: detail title has no catalog number", ErrMovieNotFound)
 	}
 	actors := uniqueTexts(doc.Find("a[href*='actor'] span"))
@@ -515,7 +552,7 @@ func (p *IQQTV) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	})
 	info := &model.MovieInfo{
 		ID: id, Number: number, Title: cleanTitle(title), Provider: p.Name(), Homepage: rawURL,
-		Actors: pq.StringArray(actors), Maker: studio, Label: studio, Series: series,
+		Actors: pq.StringArray(actors), Maker: studio, Series: series,
 		Genres:  pq.StringArray(uniqueTexts(doc.Find("div.tag-info a[href*='tag']"))),
 		Summary: plot, CoverURL: thumb, ThumbURL: thumb, PreviewImages: pq.StringArray(samples),
 	}

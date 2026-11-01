@@ -65,7 +65,9 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	require.Equal(t, "ABC-123", info.Number)
 	require.Equal(t, "Exact title", info.Title)
 	require.Equal(t, "Studio One", info.Maker)
-	require.Equal(t, "Studio One", info.Label)
+	// The detail page has one studio field and no separate label. Label used to
+	// be filled with the same value, which published a maker as a label.
+	require.Equal(t, "", info.Label)
 	require.Equal(t, "Series One", info.Series)
 	require.Equal(t, []string{"Actor One", "Actor Two"}, []string(info.Actors))
 	require.Equal(t, []string{"Drama", "Romance"}, []string(info.Genres))
