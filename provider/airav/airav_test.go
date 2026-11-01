@@ -327,3 +327,52 @@ func TestFC2ArticleIDNormalizationRejectsMalformedAndNearNumbers(t *testing.T) {
 	require.True(t, sameNumber("FC2-PPV-12345", "FC2-12345"))
 	require.False(t, sameNumber("FC2-PPV-123456", "FC2-12345"))
 }
+
+func TestSameSiteTreatsWWWAsDecoration(t *testing.T) {
+	require.True(t, sameSite("airav.io", "www.airav.io"))
+	require.True(t, sameSite("WWW.Airav.IO", "airav.io"))
+	require.True(t, sameSite("airav.io.", "airav.io"))
+	require.False(t, sameSite("airav.io", "airav.io.evil.invalid"))
+	require.False(t, sameSite("www.airav.io", "www2.airav.io"))
+}
+
+// A cover that 404s must not be reported as a missing work: the aggregate layer
+// reads that error as "this title does not exist" and stops asking the rest of
+// the chain for artwork.
+func TestFetchReportsMissingArtworkAsImageNotFound(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/storage/cover/big/gone.jpg", func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	})
+	mux.HandleFunc("/video", func(w http.ResponseWriter, _ *http.Request) {
+		http.NotFound(w, nil)
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+
+	_, err := p.Fetch(server.URL + "/storage/cover/big/gone.jpg")
+	require.ErrorIs(t, err, mt.ErrImageNotFound)
+	require.NotErrorIs(t, err, mt.ErrMovieNotFound)
+
+	_, err = p.Fetch(server.URL + "/video?hid=gone")
+	require.ErrorIs(t, err, ErrMovieNotFound)
+}
+
+func TestIsArtworkURL(t *testing.T) {
+	for raw, want := range map[string]bool{
+		"https://airav.io/storage/cover/big/127999.jpg":         true,
+		"https://airav.io/storage/cover/big/127999.jpg?1793476": true,
+		"https://airav.io/pc/images/logo.png":                   true,
+		"https://airav.io/storage/ef/whatever":                  true,
+		"https://airav.io/video?hid=127999":                     false,
+		"https://airav.io/search_result?kw=SSIS-001":            false,
+		"https://airav.io/cn/video?hid=99-21":                   false,
+	} {
+		u, err := url.Parse(raw)
+		require.NoError(t, err)
+		require.Equal(t, want, isArtworkURL(u), raw)
+	}
+	require.False(t, isArtworkURL(nil))
+}

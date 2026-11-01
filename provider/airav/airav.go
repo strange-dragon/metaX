@@ -144,10 +144,25 @@ func (p *Airav) validOrigin(u *url.URL) bool {
 	if u == nil || u.User != nil || u.Host == "" || !strings.EqualFold(u.Scheme, p.baseURL.Scheme) {
 		return false
 	}
-	if !strings.EqualFold(strings.TrimSuffix(u.Hostname(), "."), strings.TrimSuffix(p.baseURL.Hostname(), ".")) {
+	if !sameSite(u.Hostname(), p.baseURL.Hostname()) {
 		return false
 	}
 	return effectivePort(u) == effectivePort(p.baseURL)
+}
+
+// sameSite reports whether two hostnames name the same site. A leading "www."
+// is decoration rather than a different origin: the catalogue serves both
+// spellings, and an operator who configures the base URL with "www." would
+// otherwise have every page and every cover refused, because the site links to
+// the bare host. Treating them as one site keeps the origin guard aimed at
+// genuinely foreign hosts, which is what it is for.
+func sameSite(a, b string) bool {
+	return strings.EqualFold(canonicalHost(a), canonicalHost(b))
+}
+
+func canonicalHost(host string) string {
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	return strings.TrimPrefix(host, "www.")
 }
 
 func effectivePort(u *url.URL) string {
@@ -162,6 +177,30 @@ func effectivePort(u *url.URL) string {
 	default:
 		return ""
 	}
+}
+
+// artworkSuffixes are the extensions the catalogue serves covers under, and
+// artworkStoragePrefix is the static path they live on. Everything else on this
+// origin is a page, so the same Fetch can tell a missing cover from a missing
+// work.
+var artworkSuffixes = []string{".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+
+const artworkStoragePrefix = "/storage/"
+
+func isArtworkURL(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+	lower := strings.ToLower(u.Path)
+	if strings.HasPrefix(lower, artworkStoragePrefix) {
+		return true
+	}
+	for _, suffix := range artworkSuffixes {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Airav) checkRedirect(req *http.Request, via []*http.Request) error {
@@ -243,7 +282,15 @@ func (p *Airav) Fetch(rawURL string) (*http.Response, error) {
 		return nil, fmt.Errorf("airav: create request: %w", err)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	if isArtworkURL(u) {
+		// The same Fetch serves the document and the artwork. Asking for a
+		// static cover with a document Accept header is what makes an edge
+		// challenge treat it as a page request; a plain image Accept keeps it
+		// on the static path.
+		req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+	} else {
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	}
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.7")
 	req.Header.Set("Referer", p.baseURL.String()+"/")
 
@@ -253,6 +300,12 @@ func (p *Airav) Fetch(rawURL string) (*http.Response, error) {
 	}
 	if resp.StatusCode == http.StatusNotFound {
 		_ = resp.Body.Close()
+		// A cover that 404s says nothing about the work itself. Reporting it as
+		// ErrMovieNotFound made the aggregate layer answer "this title does not
+		// exist" and stop asking the remaining providers for artwork.
+		if isArtworkURL(u) {
+			return nil, fmt.Errorf("%w: %s", mt.ErrImageNotFound, rawURL)
+		}
 		return nil, fmt.Errorf("%w: %s", ErrMovieNotFound, rawURL)
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
