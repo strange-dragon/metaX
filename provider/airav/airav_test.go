@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,8 +221,8 @@ func TestGetMovieInfoByIDReportsUnindexedNumberAsNotFound(t *testing.T) {
 	mux.HandleFunc("/search_result", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = fmt.Fprint(w, `<html><body>No results</body></html>`)
 	})
-	mux.HandleFunc("/video/QC-DB-111492", func(w http.ResponseWriter, _ *http.Request) {
-		// Airav answers 403 for detail paths it does not serve, so the
+	mux.HandleFunc("/video", func(w http.ResponseWriter, _ *http.Request) {
+		// Airav answers 403 for detail routes it does not serve, so the
 		// speculative probe must not turn a miss into a server error.
 		http.Error(w, "forbidden", http.StatusForbidden)
 	})
@@ -375,4 +376,31 @@ func TestIsArtworkURL(t *testing.T) {
 		require.Equal(t, want, isArtworkURL(u), raw)
 	}
 	require.False(t, isArtworkURL(nil))
+}
+
+// A record created from a search result is stored under the row id the
+// catalogue uses ("QC-DB-111492"), which is not a catalog number. Resolving it
+// has to go through the ?hid= route: the search box matches titles and numbers
+// and never a row id, so the old path-form fallback answered 404 for a record
+// the site does serve.
+func TestGetMovieInfoByIDResolvesItsOwnRowID(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search_result", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, `<!doctype html><html><body></body></html>`)
+	})
+	mux.HandleFunc("/video", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("hid") != "QC-DB-111492" {
+			http.NotFound(w, nil)
+			return
+		}
+		_, _ = fmt.Fprint(w, strings.ReplaceAll(detailFixture, "ABC-123", "FC2-PPV-4916927"))
+	})
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	p := newForTest(server.URL, server.Client())
+	info, err := p.GetMovieInfoByID("QC-DB-111492")
+	require.NoError(t, err)
+	require.Equal(t, "QC-DB-111492", info.ID)
+	require.Equal(t, "FC2-PPV-4916927", info.Number)
 }

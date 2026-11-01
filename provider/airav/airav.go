@@ -532,27 +532,56 @@ func (p *Airav) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
 		}
 	}
 
-	// The Provider API also calls this method with IDs parsed from Homepage.
-	// If no exact catalog-number search result exists, try the site's detail
-	// route using that opaque path ID.
-	if strings.ContainsAny(id, "/\\\\?#") {
+	// The Provider API also calls this method with the opaque row id this
+	// provider issues ("QC-DB-111492"). The catalogue addresses a detail
+	// through ?hid=, so the row id maps straight onto that query. This used to
+	// fall back to the /video/<id> path form, which the site does not serve: a
+	// record created from a search result could then never be resolved again,
+	// because the search box above matches titles and catalog numbers and
+	// never a row id.
+	if strings.ContainsAny(id, "/\\?#") {
 		return nil, fmt.Errorf("airav: invalid movie ID %q", id)
 	}
-	u := *p.baseURL
-	u.Path = path.Join(u.Path, "video", id)
-	info, err := p.GetMovieInfoByURL(u.String())
+	info, err := p.GetMovieInfoByURL(p.detailURL(id))
 	if err == nil {
+		return info, nil
+	}
+	detailErr := err
+	// Some catalogue layouts answer the path form instead of the query form.
+	// It is kept as a second probe so an ID minted against that layout still
+	// resolves; the query form is tried first because it is the one this site
+	// serves today.
+	if info, err = p.GetMovieInfoByURL(p.detailPathURL(id)); err == nil {
 		return info, nil
 	}
 	// The catalog search above already reported no exact match, so an
 	// unresolvable detail route is a miss rather than a server failure:
-	// Airav answers 403 for unknown /video paths, which would otherwise
-	// surface as an opaque HTTP 500. The cause stays in the message so a
-	// genuine site block remains visible in the response and the logs.
-	if errors.Is(err, ErrMovieNotFound) {
-		return nil, err
+	// Airav answers 403 for unknown routes, which would otherwise surface as
+	// an opaque HTTP 500. The cause stays in the message so a genuine site
+	// block remains visible in the response and the logs.
+	if errors.Is(detailErr, ErrMovieNotFound) {
+		return nil, detailErr
 	}
-	return nil, fmt.Errorf("%w: %s: %v", ErrMovieNotFound, id, err)
+	return nil, fmt.Errorf("%w: %s: %v", ErrMovieNotFound, id, detailErr)
+}
+
+// detailURL builds the catalogue's detail address for a row id. The site routes
+// details through a query parameter, and that is the form it answers.
+func (p *Airav) detailURL(id string) string {
+	u := *p.baseURL
+	u.Path = strings.TrimRight(u.Path, "/") + "/video"
+	u.RawQuery = url.Values{"hid": {id}}.Encode()
+	u.Fragment = ""
+	return u.String()
+}
+
+// detailPathURL builds the older path-form detail address.
+func (p *Airav) detailPathURL(id string) string {
+	u := *p.baseURL
+	u.Path = strings.TrimRight(u.Path, "/") + "/video/" + id
+	u.RawQuery = ""
+	u.Fragment = ""
+	return u.String()
 }
 
 func (p *Airav) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
