@@ -521,6 +521,7 @@ func mergeMovieInfoWithPreference(identity *model.MovieInfo, infos []*model.Movi
 	if result.Title == "" {
 		result.Title = identity.Title
 	}
+	result.Title = preferUnmarkedTitle(result.Title, detailOrder)
 	result.Homepage = identity.Homepage
 	if result.CoverURL == "" {
 		result.CoverURL = identity.CoverURL
@@ -535,6 +536,39 @@ func firstNonEmpty(dst *string, value string) {
 	if *dst == "" && strings.TrimSpace(value) != "" {
 		*dst = value
 	}
+}
+
+// preferUnmarkedTitle replaces a title carrying an anti-scraping mark with a
+// sibling source's spelling of the same work when one is available.
+//
+// FC2 replaces characters in the heading with asterisks for requesters it reads
+// as scrapers; the characters are overwritten, not appended, so the mark cannot
+// be stripped afterwards without corrupting the words around it. A marked title
+// still identifies the file, but when another provider describes the same work
+// without the mark, that spelling is the better one to display.
+func preferUnmarkedTitle(current string, infos []*model.MovieInfo) string {
+	if !hasScrapeMark(current) {
+		return current
+	}
+	for _, info := range infos {
+		if info == nil {
+			continue
+		}
+		title := strings.TrimSpace(info.Title)
+		if title == "" || hasScrapeMark(title) {
+			continue
+		}
+		return title
+	}
+	return current
+}
+
+// hasScrapeMark reports whether a title looks like it was rewritten by the
+// source's anti-scraping filter. A doubled asterisk or several scattered ones
+// is the shape FC2 leaves behind; a lone asterisk in a title is common enough
+// to be genuine and is not treated as a mark.
+func hasScrapeMark(title string) bool {
+	return strings.Contains(title, "**") || strings.Count(title, "*") >= 2
 }
 
 func movieInfoProviderName(info *model.MovieInfo) string {
