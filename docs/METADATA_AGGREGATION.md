@@ -66,6 +66,27 @@ When aggregation runs, the response keeps the existing `data` envelope and the e
 | An inferred category cannot be resolved on detail | 200 with a `baseline_only` source record |
 | `MetaX` image with an invalid category | 400 |
 
+#### How a provider reports a failure
+
+The distinction that drives those statuses is who says "no" and how:
+
+| Provider outcome | Engine result |
+| --- | --- |
+| Returns `provider.ErrMovieNotFound` (wrapped or not) | 404 as the baseline, `not_found` as a source |
+| Answers a bare 404 status | 404 as the baseline, `not_found` as a source |
+| Returns a record that fails `MovieInfo.IsValid()` | 500 `ERR_INCOMPLETE_METADATA` as the baseline, `error` as a source |
+| Returns `nil, nil` | 404 as the baseline, `not_found` as a source |
+| Times out, answers 403/429/5xx, or cannot parse the page | 500 as the baseline, `error` as a source, message preserved |
+
+A missing record and a broken page are deliberately different answers. The first is a fact about the catalogue and is stable; the second means the scraper no longer understands the markup and someone needs to look. Reporting the second as 404 hides a regression behind a plausible "not in this source", which is how several providers used to answer with an empty 200 or a raw `Not Found` string.
+
+`provider/internal/scraper` supplies the shared machinery so a provider does not have to re-derive it:
+
+- `TrackNotFound` observes status codes and a fingerprint list of "this item is gone" copy (`お探しの商品が見つかりません`, `page not found`, `頁面不存在`, …). `Resolve` then maps the visit error to `ErrMovieNotFound` only when one of those was actually seen — a timeout or an unparsed page keeps its own error.
+- `ClonedCollector` relabels a response that looks like markup but arrives as `text/plain`. Proxies and CDNs do this, and colly silently skips every `OnHTML`/`OnXML` callback when the header does not mention html or xml, so such a source used to parse to nothing without an error.
+- `LastPathSegment` is the single way to take an identifier out of a detail URL. `path.Base(path.Dir(p))` returns the parent segment (`moviepages`) whenever the URL has neither a trailing slash nor an index file.
+- The default collector also negotiates charset and wraps the transport in `httpretry`, so a transient reset does not surface as a metadata failure.
+
 ## Image contract
 
 ```http
@@ -122,6 +143,7 @@ For multi-instance deployments, the in-process cache is intentionally not a dist
 
 - The lookup is restricted to providers in the resolved category route, keeps configured route order when several providers have the same number, and applies `routing.SameNumber` in Go after a bounded SQL pre-filter.
 - The SQL pre-filter mirrors number folding (case-insensitive, hyphens and spaces removed, underscores preserved) and includes the common FC2 spellings (`FC2-...`, `FC2PPV...`, `FC2_PPV_...`).
+- Catalog numbers that carry a site name (`GCOLLE-847256`, `HEYDOUGA-4037-479`, `H0930-ori1643`, …) fold the same way a file name does, so a bare ID matches a provider that stores the prefixed one. The lookup keys list both spellings, because rows written before the prefix was folded out keep it and SQL folding cannot remove it.
 - A miss, query error, or incomplete row falls back to the live route search. A stale record at worst yields a stale lazy detail or a broken image until the next non-lazy refresh; it never blocks live fallback for a different request.
 - `lazy=false` deliberately skips the DB-first path so a refresh still observes provider changes immediately.
 

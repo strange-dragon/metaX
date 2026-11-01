@@ -1,6 +1,9 @@
 package routing
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeNumberMirrorsAmaneFoldNumber(t *testing.T) {
 	tests := []struct {
@@ -88,11 +91,41 @@ func TestNumberLookupKeysCoverStoredFC2Spellings(t *testing.T) {
 
 func TestNumberLookupKeysKeepNonFC2NumbersExact(t *testing.T) {
 	keys := NumberLookupKeys(" ABP-123 ")
-	if len(keys) != 1 || keys[0] != "abp123" {
-		t.Fatalf("NumberLookupKeys(ABP-123) = %v, want [abp123]", keys)
+	if len(keys) == 0 || keys[0] != "abp123" {
+		t.Fatalf("NumberLookupKeys(ABP-123) = %v, want abp123 first", keys)
+	}
+	// No FC2 spelling may be invented for a number that is not FC2.
+	for _, key := range keys {
+		if strings.HasPrefix(key, "fc2") {
+			t.Errorf("NumberLookupKeys(ABP-123) = %v, unexpected FC2 key %q", keys, key)
+		}
 	}
 	if keys := NumberLookupKeys("   "); keys != nil {
 		t.Fatalf("NumberLookupKeys(empty) = %v, want nil", keys)
+	}
+}
+
+// TestNumberLookupKeysCoverSitePrefixedRows covers the rows written before the
+// site prefixes were folded out of the number: the stored value is
+// "GCOLLE-847256", SQL folding leaves the prefix, so a lookup for the bare ID
+// only matches when the prefixed spellings are listed as keys.
+func TestNumberLookupKeysCoverSitePrefixedRows(t *testing.T) {
+	for _, value := range []string{"847256", "GCOLLE-847256", "GCOLLE_847256"} {
+		keys := NumberLookupKeys(value)
+		// The SQL pre-filter lowercases and strips hyphens and spaces only.
+		want := []string{"847256", "gcolle847256", "gcolle_847256"}
+		for _, expected := range want {
+			found := false
+			for _, key := range keys {
+				if key == expected {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("NumberLookupKeys(%q) = %v, missing %q", value, keys, expected)
+			}
+		}
 	}
 }
 

@@ -76,31 +76,48 @@ func SameNumber(left, right string) bool {
 // use for the same title. It is used as a bounded SQL pre-filter before
 // SameNumber is applied in Go: SQL lowercases the value and removes hyphens and
 // spaces, while the FC2 family also needs its common separator variants.
+//
+// Rows written before the site prefixes were stripped out store the prefixed
+// spelling ("GCOLLE-847256"), and SQL folding leaves that prefix in place, so
+// the prefixed variants have to be listed too. Otherwise the DB-first lookup
+// misses every such row and falls back to a live search for a number the cache
+// has held all along.
 func NumberLookupKeys(value string) []string {
 	normalized := NormalizeNumber(value)
 	if normalized == "" {
 		return nil
 	}
-	keys := []string{normalized}
-	digits, ok := fc2ProductDigits(normalized)
-	if !ok {
-		return keys
-	}
 
 	seen := map[string]struct{}{normalized: {}}
-	for _, key := range []string{
-		"fc2" + digits,
-		"fc2_" + digits,
-		"fc2ppv" + digits,
-		"fc2ppv_" + digits,
-		"fc2_ppv" + digits,
-		"fc2_ppv_" + digits,
-	} {
+	keys := []string{normalized}
+	add := func(key string) {
+		if key == "" {
+			return
+		}
 		if _, exists := seen[key]; exists {
-			continue
+			return
 		}
 		seen[key] = struct{}{}
 		keys = append(keys, key)
+	}
+
+	// Underscore survives SQL folding, so both separators need a key.
+	for _, name := range sitePrefixes {
+		add(name + normalized)
+		add(name + "_" + normalized)
+	}
+
+	if digits, ok := fc2ProductDigits(normalized); ok {
+		for _, key := range []string{
+			"fc2" + digits,
+			"fc2_" + digits,
+			"fc2ppv" + digits,
+			"fc2ppv_" + digits,
+			"fc2_ppv" + digits,
+			"fc2_ppv_" + digits,
+		} {
+			add(key)
+		}
 	}
 	return keys
 }
