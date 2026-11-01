@@ -1,14 +1,34 @@
+// Package fc2ppvdb scrapes the FC2 PPV catalogue at ppvdatabank.com.
+//
+// The provider keeps its historical name and provider key ("FC2PPVDB") because
+// route lists and stored records refer to it, but the catalogue it reads moved:
+// fc2ppvdb.com now answers 526 on every request, while ppvdatabank.com serves
+// the same articles at /article/<id>/ under a different markup. That catalogue
+// is the only one left that still has entries FC2 has delisted from
+// adult.contents.fc2.com, which is what makes it worth keeping as the FC2
+// fallback — the publisher's own page is authoritative for everything still on
+// sale, but a removed title has nothing to scrape there.
+//
+// What it can supply is narrower than the publisher's page: title, artwork,
+// sample images, release date, runtime and the seller. There are no genres and
+// no performers, so the aggregation layer keeps looking for those elsewhere.
+//
+// Its artwork is the weak part. The detail page offers a single thumbnail with
+// 356px on the long edge — square for some articles, 356x236 for others — which
+// is below the 180k-pixel bar the aggregated image walk uses before it stops
+// asking the other providers. A title covered by both sources therefore still
+// takes its poster from FC2. That is the intended order: this catalogue is a
+// fallback for what the publisher no longer lists, not a replacement.
 package fc2ppvdb
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 
-	"github.com/antchfx/htmlquery"
 	"github.com/gocolly/colly/v2"
-	"golang.org/x/net/html"
 	"golang.org/x/text/language"
 
 	"github.com/strange-dragon/metaX/common/parser"
@@ -25,10 +45,25 @@ const (
 	Priority = 1000 - 2
 )
 
+const catalogueHost = "ppvdatabank.com"
+
 const (
-	baseURL  = "https://fc2ppvdb.com/"
-	movieURL = "https://fc2ppvdb.com/articles/%s"
+	baseURL  = "https://" + catalogueHost + "/"
+	movieURL = "https://" + catalogueHost + "/article/%s/"
 )
+
+// ErrMovieNotFound answers 404 for an ID this catalogue does not carry. It
+// covers most of the catalogue's own gaps — new releases take a while to be
+// archived — and must not be reported as a scrape failure.
+var ErrMovieNotFound = fmt.Errorf("fc2ppvdb: %w", provider.ErrMovieNotFound)
+
+// notFoundMarkers are the phrases the catalogue answers with for an article it
+// does not have. The server uses a real 404 status, but the body is checked as
+// well so a rewrite that starts answering 200 still resolves to "not found".
+var notFoundMarkers = []string{
+	"404 File Not Found",
+	"お探しのページは見つかりませんでした",
+}
 
 type FC2PPVDB struct {
 	*scraper.Scraper
@@ -45,12 +80,12 @@ func (fc2ppvdb *FC2PPVDB) NormalizeMovieID(id string) string {
 func (fc2ppvdb *FC2PPVDB) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
 	id = fc2ppvdb.NormalizeMovieID(id)
 	if id == "" {
-		return nil, fmt.Errorf("fc2ppvdb: invalid movie ID")
+		return nil, provider.ErrInvalidID
 	}
 	return fc2ppvdb.GetMovieInfoByURL(fmt.Sprintf(movieURL, id))
 }
 
-var detailPathRE = regexp.MustCompile(`^/articles/([0-9]+)/?$`)
+var detailPathRE = regexp.MustCompile(`^/article/([0-9]+)/?$`)
 
 func (fc2ppvdb *FC2PPVDB) ParseMovieIDFromURL(rawURL string) (string, error) {
 	homepage, err := url.Parse(rawURL)
@@ -58,20 +93,20 @@ func (fc2ppvdb *FC2PPVDB) ParseMovieIDFromURL(rawURL string) (string, error) {
 		return "", err
 	}
 	if !homepage.IsAbs() || homepage.Host == "" || !strings.EqualFold(homepage.Scheme, "https") {
-		return "", fmt.Errorf("fc2ppvdb: expected an absolute HTTPS article URL")
+		return "", provider.ErrInvalidURL
 	}
 	if homepage.User != nil {
-		return "", fmt.Errorf("fc2ppvdb: userinfo is not allowed in article URLs")
+		return "", provider.ErrInvalidURL
 	}
-	if host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), "."); host != "fc2ppvdb.com" {
-		return "", fmt.Errorf("fc2ppvdb: unexpected article host %q", homepage.Hostname())
+	if host := strings.TrimSuffix(strings.ToLower(homepage.Hostname()), "."); host != catalogueHost {
+		return "", provider.ErrInvalidURL
 	}
 	if port := homepage.Port(); port != "" && port != "443" {
-		return "", fmt.Errorf("fc2ppvdb: unexpected article port %q", port)
+		return "", provider.ErrInvalidURL
 	}
 	matches := detailPathRE.FindStringSubmatch(homepage.Path)
 	if len(matches) != 2 {
-		return "", fmt.Errorf("fc2ppvdb: URL is not a supported article path")
+		return "", provider.ErrInvalidURL
 	}
 	return matches[1], nil
 }
@@ -93,45 +128,87 @@ func (fc2ppvdb *FC2PPVDB) GetMovieInfoByURL(rawURL string) (info *model.MovieInf
 	}
 
 	c := fc2ppvdb.ClonedCollector()
-
-	// Cover/Thumb Image
-	c.OnXML(`//main//div[contains(@class,'container')]/div[1]/div[1]/a/img`, func(e *colly.XMLElement) {
-		info.CoverURL = e.Request.AbsoluteURL(e.Attr("src"))
+	var gone bool
+	// A missing article answers 404. colly reports a non-2xx status as a bare
+	// "Not Found" error with no status attached, so the code has to be read
+	// here rather than from the returned error.
+	c.OnError(func(r *colly.Response, _ error) {
+		if r != nil && r.StatusCode == http.StatusNotFound {
+			gone = true
+		}
 	})
-
-	// Title
-	c.OnXML(`//main//div[contains(@class,'container')]/div[1]/div[2]/h2/a`, func(e *colly.XMLElement) {
-		info.Title = e.Text
-	})
-
-	// Fields
-	c.OnXML(`//main//div[contains(@class,'container')]/div[1]/div[2]/div`, func(e *colly.XMLElement) {
-		if child := e.DOM.(*html.Node).FirstChild; child != nil {
-			switch child.Data {
-			case "ID：":
-				info.ID = strings.TrimSpace(e.ChildText(`.//span`))
-			case "販売者：":
-				info.Maker = strings.TrimSpace(e.ChildText(`.//span`))
-			case "女優：":
-				parser.ParseTexts(
-					htmlquery.FindOne(e.DOM.(*html.Node), `.//span`),
-					(*[]string)(&info.Actors),
-				)
-			case "モザイク：": // mosaic
-			case "販売日：":
-				info.ReleaseDate = parser.ParseDate(e.ChildText(`.//span`))
-			case "収録時間：":
-				info.Runtime = parser.ParseRuntime(e.ChildText(`.//span`))
-			case "タグ：": // tags & genres
-				parser.ParseTexts(
-					htmlquery.FindOne(e.DOM.(*html.Node), `.//span`),
-					(*[]string)(&info.Genres),
-				)
+	c.OnResponse(func(r *colly.Response) {
+		if r.StatusCode == http.StatusNotFound {
+			gone = true
+			return
+		}
+		body := string(r.Body)
+		for _, marker := range notFoundMarkers {
+			if strings.Contains(body, marker) {
+				gone = true
+				return
 			}
 		}
 	})
 
-	err = c.Visit(info.Homepage)
+	// Cover image. The catalogue renders the same file at three sizes; the
+	// detail page embeds the 356x356 one, which is the largest square it has.
+	c.OnXML(`//div[@class="thumb"]/img`, func(e *colly.XMLElement) {
+		info.CoverURL = e.Request.AbsoluteURL(e.Attr("src"))
+		if info.ThumbURL == "" {
+			info.ThumbURL = info.CoverURL
+		}
+	})
+
+	// Title. The catalogue repeats it in a meta tag and in the page title, so
+	// both are kept as fallbacks for a markup change in the heading block.
+	c.OnXML(`//div[@class="article_title"]//a`, func(e *colly.XMLElement) {
+		if info.Title == "" {
+			info.Title = strings.TrimSpace(e.Text)
+		}
+	})
+	c.OnXML(`//meta[@name="title"]`, func(e *colly.XMLElement) {
+		if info.Title == "" {
+			info.Title = strings.TrimSpace(e.Attr("content"))
+		}
+	})
+
+	// Metadata rows: "発売日 : 2026/3/11", "再生時間 : 01:32:30", "販売者 : <a>".
+	// The label follows the page language, so both spellings are accepted and
+	// the value is parsed by shape rather than by position.
+	c.OnXML(`//ul[@class="meta"]/li`, func(e *colly.XMLElement) {
+		key, value, found := strings.Cut(e.Text, ":")
+		if !found {
+			return
+		}
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		switch key {
+		case "発売日", "販売日", "Sale Day", "Release Date":
+			info.ReleaseDate = parser.ParseDate(value)
+		case "再生時間", "収録時間", "Runtime":
+			info.Runtime = parser.ParseRuntime(value)
+		case "販売者", "Seller":
+			info.Maker = value
+		}
+	})
+
+	// Sample images: the anchor points at the full-size file, the thumbnail
+	// sits inside it.
+	c.OnXML(`//ul[@class="sample_image_area"]//a`, func(e *colly.XMLElement) {
+		if href := e.Attr("href"); href != "" {
+			info.PreviewImages = append(info.PreviewImages, e.Request.AbsoluteURL(href))
+		}
+	})
+
+	if vErr := c.Visit(info.Homepage); vErr != nil {
+		if gone {
+			return nil, ErrMovieNotFound
+		}
+		return nil, vErr
+	}
+	if gone || strings.TrimSpace(info.Title) == "" {
+		return nil, ErrMovieNotFound
+	}
 	return
 }
 

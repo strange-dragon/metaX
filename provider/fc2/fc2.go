@@ -1,6 +1,7 @@
 package fc2
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,8 +10,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/PuerkitoBio/goquery"
+	"github.com/antchfx/htmlquery"
 	"github.com/gocolly/colly/v2"
+	"golang.org/x/net/html"
 	"golang.org/x/text/language"
 	"gorm.io/datatypes"
 
@@ -20,6 +22,20 @@ import (
 	"github.com/strange-dragon/metaX/provider/fc2/fc2util"
 	"github.com/strange-dragon/metaX/provider/internal/scraper"
 )
+
+// ErrMovieNotFound answers 404 for a product FC2 no longer lists. Without it
+// the empty article parses into zero fields, fails the metadata check and
+// surfaces as ERR_INCOMPLETE_METADATA (500), which tells Jellyfin to retry
+// forever instead of recording the title as unidentifiable.
+var ErrMovieNotFound = fmt.Errorf("fc2: %w", provider.ErrMovieNotFound)
+
+// fc2GoneMarkers are the phrases on the page FC2 serves for a product that does
+// not exist. The article endpoint answers 200 with that page rather than 404,
+// so the only way to tell a removed title from a parse failure is its text.
+var fc2GoneMarkers = [][]byte{
+	[]byte("お探しの商品が見つかりません"),
+	[]byte("We couldn't find any products that match your search"),
+}
 
 var _ provider.MovieProvider = (*FC2)(nil)
 
@@ -167,6 +183,44 @@ func upgradeFC2Artwork(rawURL string) string {
 	return upgraded.String()
 }
 
+// cleanFC2Title returns the article heading with the spans FC2 injects into it
+// removed.
+//
+// A publisher hides a scraper fingerprint in the heading as a span styled down
+// to one pixel — zoom:0.01;width:1px;height:1px;overflow:hidden — and white on
+// white. It never reaches a visitor's eyes, but reading the text does pick it
+// up, so every title arrived with a "**jjyoqz*ys" prefix. Dropping it has to
+// happen on the parsed tree: reading the heading's text first flattens the
+// node and the span is already indistinguishable from the title.
+func cleanFC2Title(node *html.Node) string {
+	if node == nil {
+		return ""
+	}
+	heading := htmlquery.FindOne(node, "./h3")
+	if heading == nil {
+		return strings.TrimSpace(htmlquery.InnerText(node))
+	}
+	// An FC2 heading is plain text plus that hidden span, so removing every
+	// span under it loses nothing a visitor can see.
+	for _, span := range htmlquery.Find(heading, ".//span") {
+		if span.Parent != nil {
+			span.Parent.RemoveChild(span)
+		}
+	}
+	return strings.TrimSpace(htmlquery.InnerText(heading))
+}
+
+// isGonePage reports whether the response body is the page FC2 answers with for
+// a product that is no longer listed.
+func isGonePage(body []byte) bool {
+	for _, marker := range fc2GoneMarkers {
+		if bytes.Contains(body, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
 	id, err := fc2.ParseMovieIDFromURL(rawURL)
 	if err != nil {
@@ -184,7 +238,7 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 	}
 
 	c := fc2.ClonedCollector()
-	var blocked bool
+	var blocked, gone bool
 	c.SetRedirectHandler(func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return fmt.Errorf("fc2: stopped after 10 redirects")
@@ -203,31 +257,26 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 		return nil
 	})
 
+	// A removed product is answered with 200 and a "not found" page, so the
+	// document has to be inspected before it is judged to be a parse failure.
+	c.OnResponse(func(r *colly.Response) {
+		if isGonePage(r.Body) {
+			gone = true
+		}
+	})
+
 	// Headers
-	c.OnXML(`//div[@class="items_article_headerInfo"]`, func(e *colly.XMLElement) {
-		// Modified title extraction
-		rawTitle := e.ChildText(`./h3`) // Get all text content from h3 element
-
-		// Process as HTML
-		doc, err := goquery.NewDocumentFromReader(strings.NewReader("<h3>" + rawTitle + "</h3>"))
-		if err == nil {
-			// Remove spam-like spans
-			doc.Find("span").Each(func(i int, s *goquery.Selection) {
-				style, exists := s.Attr("style")
-				if exists && (strings.Contains(style, "zoom:0.01") ||
-					strings.Contains(style, "display:none") ||
-					strings.Contains(style, "overflow:hidden")) {
-					s.Remove()
-				}
-			})
-
-			// Get clean text
-			info.Title = strings.TrimSpace(doc.Text())
+	//
+	// FC2 marks the header block twice: the legacy items_article_headerInfo
+	// class and a data-section="userInfo" attribute, both on the same div. The
+	// attribute is the newer of the two and survives a class rename, so it is
+	// matched alongside rather than instead of — XPath unions de-duplicate the
+	// node, so a page carrying both still runs this callback once.
+	c.OnXML(`//div[@class="items_article_headerInfo"] | //div[@data-section="userInfo"]`, func(e *colly.XMLElement) {
+		if dom, ok := e.DOM.(*html.Node); ok {
+			info.Title = cleanFC2Title(dom)
 		} else {
-			// Fallback: Remove spam patterns using regex
-			pattern := regexp.MustCompile(`\*+[a-z0-9*]+\s*`)
-			cleanTitle := pattern.ReplaceAllString(rawTitle, "")
-			info.Title = strings.TrimSpace(cleanTitle)
+			info.Title = strings.TrimSpace(e.ChildText(`./h3`))
 		}
 		info.Genres = e.ChildTexts(`.//section[@class="items_article_TagArea"]/div/a`)
 		info.Maker = e.ChildText(`.//ul/li[last()]/a`)
@@ -242,7 +291,10 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 	})
 
 	// Extra Info
-	c.OnXML(`//div[@class="items_article_headerInfo"]/div[@class="items_article_softDevice"]/p`, func(e *colly.XMLElement) {
+	//
+	// Anchored on the block itself rather than on its parent, so it keeps
+	// working whichever of the two header markers the page carries.
+	c.OnXML(`//div[@class="items_article_softDevice"]/p`, func(e *colly.XMLElement) {
 		key, value, found := strings.Cut(e.Text, ":")
 		if !found {
 			return
@@ -320,10 +372,19 @@ func (fc2 *FC2) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 		// struct a second time. Drop what the blocked attempt collected or the
 		// list fields end up with every entry twice.
 		resetMovieInfo(info)
+		gone = false // the reader's document decides this, not the blocked one
 		vErr = fc2.visitThroughReader(c, info)
 	}
 	if vErr != nil {
 		err = vErr
+		return
+	}
+	// A title-less article is either a removed product or a heading that no
+	// longer matches the selector; both mean this ID has nothing to serve, and
+	// answering 404 keeps Jellyfin from retrying a title that cannot resolve.
+	// The page-text check above is what tells the two apart in the log.
+	if gone || strings.TrimSpace(info.Title) == "" {
+		return nil, ErrMovieNotFound
 	}
 	return
 }

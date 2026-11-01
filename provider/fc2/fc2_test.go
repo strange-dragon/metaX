@@ -2,10 +2,102 @@ package fc2
 
 import (
 	"net/url"
+	"strings"
 	"testing"
+
+	"github.com/antchfx/htmlquery"
+	"golang.org/x/net/html"
 
 	"github.com/strange-dragon/metaX/provider/internal/testkit"
 )
+
+// parseHeading is a helper that turns an article heading into the node the
+// collector hands the OnXML callback.
+func parseHeading(t *testing.T, body string) *html.Node {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("parse body: %v", err)
+	}
+	return htmlquery.FindOne(doc, "//div")
+}
+
+func TestCleanFC2TitleDropsTheWatermarkSpan(t *testing.T) {
+	const (
+		watermark = `<span style="zoom:0.01;color:#fff;width:1px;height:1px;display:inline-block;overflow:hidden;">**jjyoqz*ys </span>`
+		visible   = "【個人撮影】おじさんの精子の勢いに驚く可愛い制服素人女子"
+	)
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "the injected watermark is removed",
+			body: `<div class="items_article_headerInfo"><h3>【個人撮影】` + watermark + visible + `</h3><ul><li>meta</li></ul></div>`,
+			want: "【個人撮影】" + visible,
+		},
+		{
+			name: "a watermark in the middle is removed too",
+			body: `<div class="items_article_headerInfo"><h3>前半` + watermark + `後半</h3></div>`,
+			want: "前半後半",
+		},
+		{
+			name: "several hidden spans are all removed",
+			body: `<div class="items_article_headerInfo"><h3>` + watermark + `タイトル` + watermark + `</h3></div>`,
+			want: "タイトル",
+		},
+		{
+			name: "a clean title is untouched",
+			body: `<div class="items_article_headerInfo"><h3>` + visible + `</h3></div>`,
+			want: visible,
+		},
+		{
+			name: "the text around the span keeps its spacing",
+			body: `<div class="items_article_headerInfo"><h3>Ａ　Ｂ` + watermark + `Ｃ</h3></div>`,
+			want: "Ａ　ＢＣ",
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cleanFC2Title(parseHeading(t, tt.body)); got != tt.want {
+				t.Errorf("cleanFC2Title() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCleanFC2TitleHandlesAMissingHeading(t *testing.T) {
+	if got := cleanFC2Title(nil); got != "" {
+		t.Errorf("cleanFC2Title(nil) = %q, want empty", got)
+	}
+	// The fallback path reads the whole element, so a page that changed its
+	// heading tag still yields something instead of an empty title.
+	body := `<div class="items_article_headerInfo"><h2>替代標題</h2></div>`
+	if got := cleanFC2Title(parseHeading(t, body)); got != "替代標題" {
+		t.Errorf("cleanFC2Title(no h3) = %q, want %q", got, "替代標題")
+	}
+}
+
+func TestIsGonePage(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"the Japanese marker", `<title>お探しの商品が見つかりませんでした | FC2コンテンツマーケット</title>`, true},
+		{"the English marker", `<p>We couldn't find any products that match your search</p>`, true},
+		{"a normal article", `<h3>【個人撮影】タイトル</h3>`, false},
+		{"an empty body", ``, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isGonePage([]byte(tt.body)); got != tt.want {
+				t.Errorf("isGonePage(%q) = %v, want %v", tt.body, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestFC2_ParseMovieIDFromURLValidation(t *testing.T) {
 	fc2 := New()

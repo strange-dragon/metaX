@@ -96,8 +96,11 @@ Merged fields are filled in two independent passes, because artwork and metadata
 An FC2 number (`FC2-4861886`, `FC2PPV4861886`, `FC2_PPV_4861886`) classifies as `fc2`, which canonicalises to `uncensored`, so it resolves through the `uncensored` chain.
 
 - `FC2` (the publisher catalogue at `adult.contents.fc2.com`) is the source that answers them: it returns the work number, title, maker, release date, cover and sample images from a plain address.
+- A bare publisher ID (`5001937`) also resolves. Files taken straight from the storefront are named after the numeric product ID, so the aggregate would compare `5001937` against the `FC2-5001937` every provider returns and match nothing. Seven-digit runs are FC2's shape alone, so the number gains the prefix before routing (`routing.InferCategory` already classifies it as `fc2`). Eight-digit runs are left unclassified because they are usually dates.
+- A product the publisher has removed answers **HTTP 200** with `お探しの商品が見つかりませんでした` and no article markup. `provider/fc2` checks for that page and returns `ErrMovieNotFound`, so the caller sees 404 instead of the `ERR_INCOMPLETE_METADATA` (500) it used to get.
+- `FC2PPVDB` is routed. The host it is named after, `fc2ppvdb.com`, answers 526 to everything, but the catalogue lives on at `ppvdatabank.com`, which a plain datacenter IP can read. It archives titles the publisher has since delisted, so it sits directly after `FC2` in the `uncensored` chain — and never before it, because it carries neither genres nor performers and its cover is a single 356px thumbnail.
 - JavDB indexes FC2 titles, but its FC2 detail pages redirect anonymous clients to `/login`. The search card still exists, so the failure looked like "JavDB does not have this title" while the catalogue did. `provider/javdb` now detects the login page and reports `ErrLoginRequired`, which still unwraps to `provider.ErrMovieNotFound` (the record cannot be described without credentials, so the status stays 404) but says in the message that a signed-in cookie is required. Supply one through `MT_MOVIE_PROVIDER_JAVDB__COOKIES`, or per request via `X-MetaX-Provider-Cookies`.
-- The other FC2 sources stay out of the derived route tables: `FC2PPVDB` answers 403 outside Japan, `FC2Club` is gone, `fc2hub` redirects to a host that answers 403.
+- `FC2Club` is gone and `fc2hub` redirects to a host that answers 403, so neither is routed.
 
 ## Caching and request coalescing
 

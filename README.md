@@ -315,8 +315,15 @@ git push origin v0.2.0
 - **FANZA returns an error**: region/age-gate restrictions are common. Use a
   permitted region or proxy.
 - **JavDB FC2 detail fails**: the source may require a login cookie.
-- **Freejavbt, FC2PPVDB, MGS, or FALENO return login/anti-bot pages**: configure
+- **Freejavbt, MGS, or FALENO return login/anti-bot pages**: configure
   cookies or a proxy for that provider.
+- **An FC2 title returns 404**: either the publisher has delisted it (the error
+  is a real 404, not a scrape failure) or the deployment's egress is gated by
+  FC2's eKYC check. A delisted title can still resolve through `FC2PPVDB`, which
+  reads the archive at `ppvdatabank.com`.
+- **A bare FC2 ID such as `5001937` returns 404 while `FC2-5001937` works**:
+  seven-digit IDs are recognised, eight-digit runs are treated as dates and are
+  deliberately left unclassified.
 - **Images work but metadata does not**: check the plugin Server URL and the
   backend logs.
 

@@ -237,11 +237,32 @@ func (e *Engine) GetAggregatedMovieInfoByNumber(number string, category routing.
 	return cloneAggregatedMovieInfo(result), err
 }
 
+// withFC2Prefix spells a bare publisher ID the way the FC2 providers do.
+//
+// A file taken straight from the FC2 storefront is named after the numeric
+// product ID, so the aggregate receives "5001937" with no prefix while every
+// provider answers with "FC2-5001937". A number comparison between the two
+// finds no match, and the request fails even when the record is already in the
+// cache. A seven-digit run is FC2's shape alone — routing.InferCategory already
+// classifies it that way — so adding the prefix for exactly that case is safe
+// and leaves every other spelling untouched.
+func withFC2Prefix(number string) string {
+	if strings.HasPrefix(strings.ToUpper(number), "FC2") {
+		return number
+	}
+	category, ok := routing.InferCategory(number)
+	if !ok || category != routing.CategoryFC2 {
+		return number
+	}
+	return "FC2-" + number
+}
+
 func (e *Engine) getAggregatedMovieInfoByNumber(number string, category routing.Category, lazy bool, config routing.Config) (*AggregatedMovieInfo, error) {
 	number = strings.TrimSpace(number)
 	if number == "" {
 		return nil, mt.ErrInvalidKeyword
 	}
+	number = withFC2Prefix(number)
 	candidateCategory, providers, err := e.aggregateRouteProviders(number, category, config)
 	if err != nil {
 		return nil, err
