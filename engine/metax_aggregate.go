@@ -470,7 +470,7 @@ func mergeMovieInfoWithPreference(identity *model.MovieInfo, infos []*model.Movi
 	result.Score = identity.Score
 
 	detailOrder := OrderByProviderPreference(infos, pref.Detail, movieInfoProviderName)
-	imageOrder := OrderByProviderPreference(infos, pref.Image, movieInfoProviderName)
+	imageOrder := preferLargeArtwork(OrderByProviderPreference(infos, pref.Image, movieInfoProviderName))
 
 	for _, info := range detailOrder {
 		if info == nil {
@@ -536,6 +536,51 @@ func firstNonEmpty(dst *string, value string) {
 	if *dst == "" && strings.TrimSpace(value) != "" {
 		*dst = value
 	}
+}
+
+// preferLargeArtwork moves sources that publish a separate large variant ahead
+// of the ones that only have a single image, keeping the configured order inside
+// each group.
+//
+// Merging had no size signal at all: it took the first non-empty cover in route
+// order, so a source whose only artwork is a 356 px thumbnail could supply the
+// cover of a record another source holds at full size. A provider reporting
+// big_cover_url different from cover_url is saying it has a better copy; one
+// reporting the same URL twice has nothing more to offer. That is the only size
+// signal available without downloading the bytes, and it matches what
+// /v1/images/* concludes after measuring the actual candidates.
+//
+// The reorder is skipped when every source falls into the same group, so a route
+// where nobody publishes a large variant keeps its exact previous order.
+func preferLargeArtwork(infos []*model.MovieInfo) []*model.MovieInfo {
+	if len(infos) < 2 {
+		return infos
+	}
+	withLarge := make([]*model.MovieInfo, 0, len(infos))
+	single := make([]*model.MovieInfo, 0, len(infos))
+	for _, info := range infos {
+		if hasDistinctLargeArtwork(info) {
+			withLarge = append(withLarge, info)
+			continue
+		}
+		single = append(single, info)
+	}
+	if len(withLarge) == 0 || len(single) == 0 {
+		return infos
+	}
+	return append(withLarge, single...)
+}
+
+// hasDistinctLargeArtwork reports whether a source publishes a large variant
+// that is not simply a repeat of the standard one.
+func hasDistinctLargeArtwork(info *model.MovieInfo) bool {
+	if info == nil {
+		return false
+	}
+	if info.BigCoverURL != "" && info.BigCoverURL != info.CoverURL {
+		return true
+	}
+	return info.BigThumbURL != "" && info.BigThumbURL != info.ThumbURL
 }
 
 // preferUnmarkedTitle replaces a title carrying an anti-scraping mark with a

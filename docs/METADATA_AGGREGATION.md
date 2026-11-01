@@ -105,6 +105,7 @@ Merged fields are filled in two independent passes, because artwork and metadata
 | Image | `cover_url`, `big_cover_url`, `thumb_url`, `big_thumb_url`, `preview_images` | `METAX_MERGE_IMAGE_PROVIDER` | `Jav321` |
 
 - Both passes fall back to route order for any field the preferred provider leaves empty or cannot answer at all. A provider that returns `not_found` or `error` simply does not appear, so the preference is never a hard requirement.
+- Artwork order is nudged by a size signal before it is applied: a source that reports `big_cover_url` different from `cover_url` (or the same for the thumb) demonstrably has a larger copy, and it moves ahead of sources that only ever report one URL. This is what stops a 356 px thumbnail from becoming the cover of a record another source holds at full size. When no source in the group has a distinct large variant there is no signal, so the preference order is used unchanged. The judgment is made per image group; metadata still follows the detail pass untouched.
 - Set either variable to `off`, `none`, `route`, `default`, or an empty value to restore pure route-order merging for that group.
 - The preference also drives `MetaX` image resolution, so the same provider supplies both the merged `cover_url` and the bytes behind `/v1/images/primary/MetaX/:number`.
 - Image bytes are chosen by resolution, not only by preference: the image route walks up to 4 candidates, keeps the largest source image, and stops as soon as one is at least 180 000 pixels (between JavDB's 292×438 covers and the 800×538 artwork DMM and JavBus serve). A preferred provider therefore wins whenever it has artwork worth showing, and a title it does not carry — or artwork it cannot serve — falls through to the sharpest remaining source instead of returning nothing.
@@ -157,12 +158,23 @@ The SDK's numeric `Provider.Priority()` value does not control this ordering.
 The merged `MetaX` candidate is always prepended as the first result.
 
 The built-in `routing.DefaultConfig()` routes every movie provider compiled into
-the binary (43 on a default build, in quality-first order). The experimental
-providers `AVBASE` and `MadouQu` are listed in the table but only resolve in a
-`-tags experimental` build, so a default build reports them under
-`route_provider_gaps`. `MadouQu` additionally ships with `Priority = 0` and
-needs `MT_MOVIE_PROVIDER_MADOUQU__PRIORITY` to be set. Override the table with the variables
-below to narrow the fan-out or to change the priority order.
+the binary, in quality-first order. The experimental provider `AVBASE` is listed
+in the table but only resolves in a `-tags experimental` build, so a default
+build reports it under `route_provider_gaps`. `MadouQu` used to be experimental
+and disabled; it now ships in the default build and is routed under `chinese`,
+because that route was the thinnest one and the provider is covered by live
+search and detail tests. Override the table with the variables below to narrow
+the fan-out or to change the priority order.
+
+Three providers stay registered but are deliberately unrouted, because the sites
+themselves are gone (measured 2026-11-01): `FC2Club` (`fc2club.com` does not
+resolve, `fc2club.top` redirects to a parked host), `fc2hub` (301 to `javten.com`,
+which answers 403), and `AVSOX` (`avsox.click` answers 200 with a 1.5 kB shell
+that carries no result cards). They remain in the binary so an operator can route
+one again through `METAX_ROUTES` if it comes back. `IQQTV` and `Freejavbt` were on
+the unreachable list and are not any more: `iqq5.xyz` redirects to `iqqab.com`,
+and `freejavbt.com` serves parseable cards, both from a plain IP, so both are
+routed again in the full and the direct profiles.
 
 The table is configurable at startup:
 
