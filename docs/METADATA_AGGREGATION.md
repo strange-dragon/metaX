@@ -102,17 +102,42 @@ Merged fields are filled in two independent passes, because artwork and metadata
 | Group | Fields | Env override | Default |
 | --- | --- | --- | --- |
 | Detail | `title`, `summary`, `director`, `actors`, `genres`, `maker`, `label`, `series`, `runtime`, `release_date`, `score`, preview-video URLs | `METAX_MERGE_DETAIL_PROVIDER` | `JavDB` |
-| Image | `cover_url`, `big_cover_url`, `thumb_url`, `big_thumb_url`, `preview_images` | `METAX_MERGE_IMAGE_PROVIDER` | `Jav321` |
+| Image | `cover_url`, `big_cover_url`, `thumb_url`, `big_thumb_url`, `preview_images` | `METAX_MERGE_IMAGE_PROVIDER` | `Jav321,JavBus,Airav,7MMTV` |
 
 - Both passes fall back to route order for any field the preferred provider leaves empty or cannot answer at all. A provider that returns `not_found` or `error` simply does not appear, so the preference is never a hard requirement.
+- The image preference is a *chain*, not a single name: the first source that published a picture supplies it, and the rest are the fallbacks tried before route order takes over. Artwork is the field where one provider routinely has nothing — a site may carry the title and still serve no cover, or serve it from a CDN that refuses this client — so naming several picture-publishing sources is what makes the chain reach a picture at all. The four defaults each publish from a host of their own: `pics.dmm.co.jp` (Jav321), JavBus' own host, `airav.io`, and `1024cdn` (7MMTV).
 - Artwork order is nudged by a size signal before it is applied: a source that reports `big_cover_url` different from `cover_url` (or the same for the thumb) demonstrably has a larger copy, and it moves ahead of sources that only ever report one URL. This is what stops a 356 px thumbnail from becoming the cover of a record another source holds at full size. When no source in the group has a distinct large variant there is no signal, so the preference order is used unchanged. The judgment is made per image group; metadata still follows the detail pass untouched.
 - `JavDB` is excluded from artwork unless nothing else has it (`METAX_ARTWORK_LAST_RESORT`, default `JavDB`; comma-separated, `off`/`none` disables). It is the best source for text and the worst for images on the same record: its covers go through a hotlink-protected host that answers a placeholder to many clients, and it publishes a single size, so a merged record could end up carrying a JavDB cover while a sibling source held the full-size original. The demotion runs *after* the size nudge — otherwise a large-variant reorder would pull it straight back to the front, which is exactly how it kept winning. "Demoted is not dropped": if every other source in the chain answers without artwork, JavDB still supplies one. The rule applies to artwork only; `JavDB` keeps its `METAX_MERGE_DETAIL_PROVIDER` default for text.
 - Set either variable to `off`, `none`, `route`, `default`, or an empty value to restore pure route-order merging for that group.
 - The preference also drives `MetaX` image resolution, so the same provider supplies both the merged `cover_url` and the bytes behind `/v1/images/primary/MetaX/:number`.
-- Image bytes are chosen by resolution, not only by preference: the image route walks up to 4 candidates, keeps the largest source image, and stops as soon as one is at least 180 000 pixels (between JavDB's 292×438 covers and the 800×538 artwork DMM and JavBus serve). A preferred provider therefore wins whenever it has artwork worth showing, and a title it does not carry — or artwork it cannot serve — falls through to the sharpest remaining source instead of returning nothing. A last-resort provider rides behind that window as a single extra candidate, resolved from the local catalog only (no search fan-out), so it is reached only after every budgeted candidate answered without artwork.
-- The default pair exists because the two sources fail in opposite ways in practice: Jav321's artwork comes from the DMM picture CDN, while JavDB's image host answers 403 to datacenter clients that are not in its allowlist; JavDB in turn has the more complete catalogue metadata. Provider names are matched case-insensitively; unregistered names are ignored.
+- Image bytes are chosen by resolution, not only by preference: the image route walks up to 6 candidates, keeps the largest source image, and stops as soon as one is at least 180 000 pixels (between JavDB's 292×438 covers and the 800×538 artwork DMM and JavBus serve). A preferred provider therefore wins whenever it has artwork worth showing, and a title it does not carry — or artwork it cannot serve — falls through to the sharpest remaining source instead of returning nothing. A last-resort provider rides behind that window as a single extra candidate, resolved from the local catalog only (no search fan-out), so it is reached only after every budgeted candidate answered without artwork.
+- Filling that window is cheap for titles already in the catalog and capped for the ones that are not: every candidate is first looked up locally, and at most three network searches run behind those lookups. A title whose artwork request would otherwise fan out across eight sites still answers with what the catalog holds.
+- A picture host that fails *as a host* — a connection that never opens, a timeout, a 403, a rate limit — is not asked again for the rest of the walk. Providers sharing an image CDN are the norm (FANZA, Jav321 and others all hand out `pics.dmm.co.jp`), so without this the window gets spent on the same unreachable CDN and the independent source behind it is never reached. A 404 is not a host verdict: it is about one picture, and the next provider on that host still gets its turn.
+- The defaults exist because the sources fail in opposite ways in practice: Jav321's artwork comes from the DMM picture CDN, JavBus serves 800 px files from its own host, and Airav/7MMTV are the only sources with pictures for parts of the uncensored and Chinese catalogues. JavDB in turn has the more complete catalogue metadata. Provider names are matched case-insensitively; unregistered names are ignored.
 - `Jav321` fetches artwork from `pics.dmm.co.jp` and `p.dmm.co.jp` in addition to its own host. Detail URLs remain restricted to jav321 itself.
-- The preference can only reorder providers the category route already contains, so the default image provider must also be routed. `Jav321` is listed in the `censored` and `uncensored` routes; an `uncensored` route without it silently served JavDB covers for every title. The `amateur` route still omits it, so amateur titles keep route-order artwork.
+- The preference can only reorder providers the category route already contains, so a default image source must also be routed. `Jav321`, `JavBus`, `Airav` and `7MMTV` are listed in the `censored` and `uncensored` routes; an `uncensored` route without `Jav321` silently served JavDB covers for every title. The `amateur` route still omits `Jav321`, so amateur titles keep route-order artwork.
+
+### Counting the picture sources a build really has
+
+A provider that returns a cover URL is not a picture source until the bytes
+arrive, and providers sharing an image CDN fail together. Both facts are
+invisible from the metadata side, so the diagnostic reports them directly:
+
+```
+METAX_BROWSER_MODE=off metax-livecheck -artwork -id SSIS-033
+```
+
+It fetches each registered provider's best artwork through that provider's own
+fetcher and prints the host and pixel size next to the result, then groups the
+successes by host. For `SSIS-033` on a plain datacenter address this printed
+five hosts — `pics.dmm.co.jp` (Jav321), `www.javbus.com`, `c0.jdbstatic.com`
+(JavDB), `airav.io` and `1024cdn` (7MMTV) — while `HEYZO-0001` printed two
+(`file.netcdn.space` via AVSOX, and JavBus) and `FC2-PPV-4916927` printed one
+(Airav). Those numbers, not the provider count, are what the route and
+preference defaults are sized against. `FC2-PPV-4916927` is the clearest case:
+Airav was routed all along but sat eighth in the chain, behind a six-candidate
+window that had no picture for it, so the image endpoint answered 404 while the
+one provider holding the cover was never asked.
 
 ## FC2 entries
 

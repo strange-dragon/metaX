@@ -12,7 +12,7 @@ func TestDefaultRoutesRouteEveryIntegratedProvider(t *testing.T) {
 	want := map[Category][]string{
 		CategoryCensored: {
 			"FANZA", "JavDB", "JavBus", "MGS", "SOD", "Prestige", "FALENO", "DAHLIA",
-			"JavLibrary", "Jav321", "GIGA", "XCity", "AVBASE",
+			"JavLibrary", "Jav321", "GIGA", "XCity", "7MMTV", "Airav", "AVBASE",
 		},
 		CategoryUncensored: {
 			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2",
@@ -24,7 +24,7 @@ func TestDefaultRoutesRouteEveryIntegratedProvider(t *testing.T) {
 		CategoryAmateur: {
 			"MGS", "FANZA", "JavDB", "JavBus", "10musume", "1Pondo", "Caribbeancom",
 			"CaribbeancomPR", "PACOPACOMAMA", "MURAMURA", "HeyDouga", "H0930", "H4610",
-			"C0930", "Gcolle", "Pcolle", "MYWIFE", "KIN8", "TOKYO-HOT",
+			"C0930", "Gcolle", "Pcolle", "MYWIFE", "KIN8", "TOKYO-HOT", "7MMTV",
 		},
 		CategoryWestern: {"ThePornDBMovie", "ThePornDBScene", "JavDB", "Freejavbt"},
 		CategoryHentai:  {"Getchu", "AniList", "FANZA", "JavDB", "GIGA"},
@@ -92,7 +92,7 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 	}{
 		{CategoryCensored, []string{
 			"FANZA", "JavDB", "JavBus", "MGS", "SOD", "Prestige", "FALENO", "DAHLIA",
-			"JavLibrary", "Jav321", "GIGA", "XCity",
+			"JavLibrary", "Jav321", "GIGA", "XCity", "7MMTV", "Airav",
 		}},
 		{CategoryUncensored, []string{
 			"JavDB", "JavBus", "Jav321", "AVSOX", "Freejavbt", "FC2PPVDB", "FC2",
@@ -104,7 +104,7 @@ func TestDefaultRoutesResolveAgainstIntegratedProviderInventory(t *testing.T) {
 		{CategoryAmateur, []string{
 			"MGS", "FANZA", "JavDB", "JavBus", "10musume", "1Pondo", "Caribbeancom",
 			"CaribbeancomPR", "PACOPACOMAMA", "MURAMURA", "HeyDouga", "H0930", "H4610",
-			"C0930", "Gcolle", "Pcolle", "MYWIFE", "KIN8", "TOKYO-HOT",
+			"C0930", "Gcolle", "Pcolle", "MYWIFE", "KIN8", "TOKYO-HOT", "7MMTV",
 		}},
 		{CategoryWestern, []string{"ThePornDBMovie", "ThePornDBScene", "JavDB", "Freejavbt"}},
 		{CategoryHentai, []string{"Getchu", "AniList", "FANZA", "JavDB", "GIGA"}},

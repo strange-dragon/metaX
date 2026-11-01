@@ -225,12 +225,19 @@ that order.
 
 | Category | Default providers, in order |
 | --- | --- |
-| `censored` | FANZA, JavDB, JavBus, MGS, SOD, Prestige, FALENO, DAHLIA, JavLibrary, Jav321, GIGA, XCity, AVBASE |
-| `uncensored` | JavDB, JavBus, Jav321, AVSOX, Freejavbt, FC2PPVDB, FC2, FC2Club, fc2hub, Airav, HEYZO, TOKYO-HOT, 1Pondo, Caribbeancom, CaribbeancomPR, 10musume, HeyDouga, KIN8, DUGA, AVE, JAVFREE, PACOPACOMAMA, MURAMURA, H0930, H4610, C0930, Gcolle, Pcolle |
-| `chinese` | IQQTV, JavDB, Airav, Freejavbt, MadouQu |
-| `amateur` | MGS, FANZA, JavDB, JavBus, 10musume, 1Pondo, Caribbeancom, CaribbeancomPR, PACOPACOMAMA, MURAMURA, HeyDouga, H0930, H4610, C0930, Gcolle, Pcolle, MYWIFE, KIN8, TOKYO-HOT |
+| `censored` | FANZA, JavDB, JavBus, MGS, SOD, Prestige, FALENO, DAHLIA, JavLibrary, Jav321, GIGA, XCity, 7MMTV, Airav, AVBASE |
+| `uncensored` | JavDB, JavBus, Jav321, AVSOX, Freejavbt, FC2PPVDB, FC2, Airav, 7MMTV, HEYZO, TOKYO-HOT, 1Pondo, Caribbeancom, CaribbeancomPR, 10musume, HeyDouga, KIN8, DUGA, AVE, JAVFREE, PACOPACOMAMA, MURAMURA, H0930, H4610, C0930, Gcolle, Pcolle |
+| `chinese` | IQQTV, JavDB, 7MMTV, Airav, Freejavbt, MadouQu |
+| `amateur` | MGS, FANZA, JavDB, JavBus, 10musume, 1Pondo, Caribbeancom, CaribbeancomPR, PACOPACOMAMA, MURAMURA, HeyDouga, H0930, H4610, C0930, Gcolle, Pcolle, MYWIFE, KIN8, TOKYO-HOT, 7MMTV |
 | `western` | ThePornDBMovie, ThePornDBScene, JavDB, Freejavbt |
 | `hentai` | Getchu, AniList, FANZA, JavDB, GIGA |
+
+Without `METAX_PROVIDER_PROXY` the server installs the narrower `direct`
+profile instead: the same categories minus the sites that answer 403 to a
+plain datacenter address (MGS, SOD, Prestige, FALENO, HEYZO, the 0930 family,
+Caribbeancom/PR, KIN8, HeyDouga, JAVFREE, JavLibrary) and minus the providers
+whose site is gone. `METAX_ROUTE_PROFILE=full` forces the table above;
+`METAX_ROUTE_PROFILE=direct` forces the subset.
 
 `fc2` is an alias for `uncensored`; `animation` is an alias for `hentai`.
 Narrow or reorder the table with `METAX_ROUTES` or `METAX_ROUTES_FILE`.

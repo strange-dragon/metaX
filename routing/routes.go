@@ -248,6 +248,15 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 		"Jav321",
 		"GIGA",
 		"XCity",
+		// These two index the censored catalogue as well, and their artwork
+		// lives on a CDN of its own: a live probe of SSIS-033, STARS-001 and
+		// ABP-123 found 7MMTV serving an 800px cover on 1024cdn for all three
+		// and Airav on airav.io for two of them. A slot here is not about
+		// metadata (they sit after the catalogues that describe a censored
+		// title best) but about the picture chain having a source that does not
+		// share DMM's image host with everything above it.
+		"7MMTV",
+		"Airav",
 		"AVBASE", // experimental build
 	},
 	CategoryUncensored: {
@@ -323,6 +332,12 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 		"MYWIFE",
 		"KIN8",
 		"TOKYO-HOT",
+		// A private-lable number is the one case where the two catalogues
+		// above answer with nothing: 300MIUM-001 is in neither JavBus nor
+		// Jav321, but 7MMTV carries it with an 840x472 cover. It sits last
+		// because its title is traditional Chinese and the manufacturer
+		// sites describe the work better.
+		"7MMTV",
 	},
 	CategoryWestern: {
 		"ThePornDBMovie",

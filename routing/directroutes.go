@@ -90,6 +90,16 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"FANZA",  // largest catalogue; intermittently region-blocked
 		"DAHLIA",
 		"GIGA",
+		// The censored chain used to stop here, which left it with three
+		// usable picture sources out of six candidates: DMM (Jav321), JavBus'
+		// own host, and JavDB's static host, with FANZA/DAHLIA/GIGA filling
+		// the rest of the budget without a picture. A live probe of SSIS-033,
+		// STARS-001 and ABP-123 found 7MMTV serving an 800px cover on 1024cdn
+		// for all three and Airav serving one from airav.io for two of them,
+		// so both are routed here for the picture chain. They sit last on
+		// purpose: the catalogues above describe a censored title better.
+		"7MMTV",
+		"Airav",
 	},
 	CategoryUncensored: {
 		"JavDB",
@@ -130,6 +140,10 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"Pcolle",
 		"MYWIFE",
 		"TOKYO-HOT",
+		// The only source with a picture for a private-label number the two
+		// big catalogues do not index (300MIUM-001 has none in JavBus or
+		// Jav321, and 7MMTV has an 840x472 cover for it).
+		"7MMTV",
 	},
 	CategoryWestern: {
 		"ThePornDBMovie",
