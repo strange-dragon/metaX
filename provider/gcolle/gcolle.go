@@ -69,7 +69,7 @@ func (gcl *Gcolle) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err 
 
 	info = &model.MovieInfo{
 		ID:            id,
-		Number:        fmt.Sprintf("GCOLLE-%s", id),
+		Number:        id,
 		Provider:      gcl.Name(),
 		Homepage:      rawURL,
 		Actors:        []string{},

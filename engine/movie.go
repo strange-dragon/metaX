@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -209,8 +210,30 @@ func (e *Engine) getMovieInfoFromDB(provider mt.MovieProvider, id string) (*mode
 
 func (e *Engine) getMovieInfoWithCallback(provider mt.MovieProvider, id string, lazy bool, callback func() (*model.MovieInfo, error)) (info *model.MovieInfo, err error) {
 	defer func() {
-		// metadata validation check.
-		if err == nil && (info == nil || !info.IsValid()) {
+		// Every provider reports "the source has no such record" in one of two
+		// shapes that the HTTP layer could not classify, so both surfaced as a
+		// 500 — "the server is broken" — and a client library retried the same
+		// missing file on every scan:
+		//
+		//   - colly turns any non-2xx response into errors.New(StatusText(code))
+		//     with no type to assert on, and providers return it verbatim;
+		//   - a removed record answers 200 with a page that parses into a
+		//     structurally valid but title-less MovieInfo.
+		//
+		// A 404 for both is the truthful answer. A record that has a title but
+		// is missing other fields stays ErrIncompleteMetadata: that one really
+		// is a parser or upstream problem, and it should stay visible as a 500.
+		switch {
+		case err != nil:
+			err = classifyProviderError(err)
+		case info == nil:
+			// The provider ran to completion and returned nothing at all, which
+			// is how the catalogue-backed providers spell "no such record".
+			err = mt.ErrMovieNotFound
+		case !info.IsValid():
+			// A record that parsed but is missing its title or artwork is a
+			// parser or upstream problem. Reporting it as 404 would turn a site
+			// rewrite into a catalogue that silently lost every title.
 			err = mt.ErrIncompleteMetadata
 		}
 	}()
@@ -222,13 +245,32 @@ func (e *Engine) getMovieInfoWithCallback(provider mt.MovieProvider, id string, 
 	}
 	// delayed info auto-save.
 	defer func() {
-		if err == nil && info.IsValid() {
+		// info is nil whenever the provider answered "no such record" with a nil
+		// error, which is how the API-backed sources spell a miss. Dereferencing
+		// it here panicked inside the request goroutine.
+		if err == nil && info != nil && info.IsValid() {
 			e.db.Clauses(clause.OnConflict{
 				UpdateAll: true,
 			}).Create(info) // ignore error
 		}
 	}()
 	return callback()
+}
+
+// classifyProviderError maps the status-text error colly produces onto the
+// HTTP-aware sentinel the API layer understands.
+//
+// colly constructs errors.New(http.StatusText(code)) for every non-2xx response
+// when ParseHTTPErrorResponse is off, which is the default, and providers return
+// that value verbatim. It carries no type, so nothing downstream could tell a
+// missing record from a broken server. Only 404 is remapped: 403 and 429 mean
+// "blocked" and "slow down", and a client must not cache either of those as
+// "this title does not exist".
+func classifyProviderError(err error) error {
+	if err != nil && err.Error() == http.StatusText(http.StatusNotFound) {
+		return mt.ErrMovieNotFound
+	}
+	return err
 }
 
 func (e *Engine) getMovieInfoByProviderID(provider mt.MovieProvider, id string, lazy bool) (*model.MovieInfo, error) {

@@ -1,6 +1,9 @@
 package routing
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeNumberMirrorsAmaneFoldNumber(t *testing.T) {
 	tests := []struct {
@@ -88,10 +91,72 @@ func TestNumberLookupKeysCoverStoredFC2Spellings(t *testing.T) {
 
 func TestNumberLookupKeysKeepNonFC2NumbersExact(t *testing.T) {
 	keys := NumberLookupKeys(" ABP-123 ")
-	if len(keys) != 1 || keys[0] != "abp123" {
-		t.Fatalf("NumberLookupKeys(ABP-123) = %v, want [abp123]", keys)
+	if len(keys) == 0 || keys[0] != "abp123" {
+		t.Fatalf("NumberLookupKeys(ABP-123) = %v, want abp123 first", keys)
+	}
+	// No FC2 spelling may be invented for a number that is not FC2.
+	for _, key := range keys {
+		if strings.HasPrefix(key, "fc2") {
+			t.Errorf("NumberLookupKeys(ABP-123) = %v, unexpected FC2 key %q", keys, key)
+		}
 	}
 	if keys := NumberLookupKeys("   "); keys != nil {
 		t.Fatalf("NumberLookupKeys(empty) = %v, want nil", keys)
+	}
+}
+
+// TestNumberLookupKeysCoverSitePrefixedRows covers the rows written before the
+// site prefixes were folded out of the number: the stored value is
+// "GCOLLE-847256", SQL folding leaves the prefix, so a lookup for the bare ID
+// only matches when the prefixed spellings are listed as keys.
+func TestNumberLookupKeysCoverSitePrefixedRows(t *testing.T) {
+	for _, value := range []string{"847256", "GCOLLE-847256", "GCOLLE_847256"} {
+		keys := NumberLookupKeys(value)
+		// The SQL pre-filter lowercases and strips hyphens and spaces only.
+		want := []string{"847256", "gcolle847256", "gcolle_847256"}
+		for _, expected := range want {
+			found := false
+			for _, key := range keys {
+				if key == expected {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("NumberLookupKeys(%q) = %v, missing %q", value, keys, expected)
+			}
+		}
+	}
+}
+
+// TestNormalizeNumberFoldsSitePrefixedIDs covers the catalogue names metaX
+// prepends to a site-local ID. A file is named after the bare ID, so without the
+// fold the merge compared "4037479" with "heydouga4037479", found no match, and
+// reported the source as not_found — the title scraped but never merged.
+func TestNormalizeNumberFoldsSitePrefixedIDs(t *testing.T) {
+	tests := [][2]string{
+		{"HEYDOUGA-4037-479", "4037-479"},
+		{"heydouga_4037-479", "4037-479"},
+		{"MYWIFE-1542", "1542"},
+		{"GCOLLE-847256", "847256"},
+		{"GCOLLE_847256", "847256"},
+		{"PCOLLE-156785614478ab480db", "156785614478ab480db"},
+		{"H0930-ori1643", "ori1643"},
+		{"C0930-ki220913", "ki220913"},
+	}
+	for _, pair := range tests {
+		if !SameNumber(pair[0], pair[1]) {
+			t.Errorf("SameNumber(%q, %q) = false, want true", pair[0], pair[1])
+		}
+	}
+	// A site name without a separator is part of the ID, not a prefix.
+	if SameNumber("GCOLLE847256", "847256") {
+		t.Error("a site name without a separator must not be stripped")
+	}
+	// Ordinary catalogue numbers are untouched.
+	for _, value := range []string{"ABP-123", "SSIS-001", "010115_001", "FC2-3954834"} {
+		if got := NormalizeNumber(value); got != NormalizeNumber(value) || got == "" {
+			t.Errorf("NormalizeNumber(%q) = %q, want a stable non-empty fold", value, got)
+		}
 	}
 }

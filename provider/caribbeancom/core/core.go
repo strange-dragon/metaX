@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -53,7 +52,7 @@ func (core *Core) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return path.Base(path.Dir(homepage.Path)), nil
+	return scraper.LastPathSegment(homepage.Path, "index.html"), nil
 }
 
 func (core *Core) GetMovieReviewsByURL(rawURL string) (reviews []*model.MovieReviewDetail, err error) {
@@ -123,6 +122,7 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 	}
 
 	c := core.ClonedCollector()
+	gone := scraper.TrackNotFound(c)
 
 	// Title
 	c.OnXML(`//h1[@itemprop="name"]`, func(e *colly.XMLElement) {
@@ -223,6 +223,6 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 		}
 	})
 
-	err = c.Visit(info.Homepage)
+	err = gone.Resolve(core.Name(), c.Visit(info.Homepage))
 	return
 }

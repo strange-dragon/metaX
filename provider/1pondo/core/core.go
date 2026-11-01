@@ -149,6 +149,9 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 	}
 
 	c := core.ClonedCollector()
+	// A removed record answers with an empty JSON body, which used to leave a
+	// half-filled MovieInfo and a nil error, so the engine reported a 500.
+	gone := scraper.TrackNotFound(c)
 
 	c.OnResponse(func(r *colly.Response) {
 		data := struct {
@@ -174,6 +177,11 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 			}
 		}{}
 		if err = json.Unmarshal(r.Body, &data); err == nil {
+			if data.MovieID == "" {
+				// The detail API answers with an empty object for a product it
+				// no longer carries; there is no page text to scan for a marker.
+				gone.Mark()
+			}
 			info.ID = data.MovieID
 			info.Number = info.ID
 			info.Title = data.Title
@@ -214,18 +222,20 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 				data.ThumbMed, data.ThumbLow,
 			} {
 				if thumb != "" {
-					if re := regexp.MustCompile(`^https?:///`); re.MatchString(thumb) {
+					if brokenSchemeRE.MatchString(thumb) {
 						// Fix a rare case that causes incomplete url issue.
 						// e.g.: "https:///moviepages/071319_870/images/str.jpg"
-						thumb = re.ReplaceAllString(thumb, "/")
+						thumb = brokenSchemeRE.ReplaceAllString(thumb, "/")
 					}
 					info.CoverURL = r.Request.AbsoluteURL(thumb)
+					info.BigCoverURL = info.CoverURL
 					info.ThumbURL = info.CoverURL /* use thumb as cover */
 					break
 				}
 			}
 			if data.MovieThumb != "" {
 				info.ThumbURL = r.Request.AbsoluteURL(data.MovieThumb)
+				info.BigThumbURL = info.ThumbURL
 			}
 			// Gallery Code:
 			// Ref: https://www.1pondo.tv/js/movieDetail.0155a1b9.js:formatted#1452
@@ -290,13 +300,15 @@ func (core *Core) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 		}
 	})
 
-	if vErr := c.Visit(urlJoin(info.Homepage, fmt.Sprintf(movieDetailPath, id))); vErr != nil {
-		err = vErr
-	}
+	err = gone.Resolve(core.Name(), c.Visit(urlJoin(info.Homepage, fmt.Sprintf(movieDetailPath, id))))
 	return
 }
 
 var urlParser = url.NewParser(url.WithPercentEncodeSinglePercentSign())
+
+// brokenSchemeRE matches the malformed "https:///path" prefix the detail API
+// occasionally returns. Compiled once: the detail callback runs per request.
+var brokenSchemeRE = regexp.MustCompile(`^https?:///`)
 
 func urlJoin(url, path string) string {
 	absURL, err := urlParser.ParseRef(url, path)

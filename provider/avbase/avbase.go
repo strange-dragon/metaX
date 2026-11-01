@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -90,7 +90,7 @@ func (ab *AVBase) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return ab.NormalizeMovieID(path.Base(homepage.Path)), nil
+	return ab.NormalizeMovieID(scraper.LastPathSegment(homepage.Path, "")), nil
 }
 
 func (ab *AVBase) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
@@ -113,6 +113,13 @@ func (ab *AVBase) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 			} `json:"pageProps"`
 		}{}
 		if err = json.Unmarshal(r.Body, &data); err == nil {
+			// The API answers with an empty pageProps.work for a work it does not
+			// carry. Without this the provider returned a structurally valid but
+			// empty record and a nil error, which the engine reported as a 500.
+			if data.PageProps.Work.ID == 0 && data.PageProps.Work.WorkID == "" {
+				err = fmt.Errorf("%s: %w", ab.Name(), provider.ErrMovieNotFound)
+				return
+			}
 			workInfo, _ := ab.getMovieInfoFromWork(data.PageProps.Work)
 			srcInfo, srcErr := ab.getMovieInfoFromSource(data.PageProps.Work)
 			if srcErr != nil {
@@ -161,10 +168,34 @@ func (ab *AVBase) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 		}
 	})
 
-	if vErr := c.Visit(fmt.Sprintf(movieAPIURL, buildID, id, url.QueryEscape(id))); vErr != nil {
+	vErr := c.Visit(fmt.Sprintf(movieAPIURL, buildID, id, url.QueryEscape(id)))
+	if isMissingData(vErr) {
+		// The build id is cached for two hours, and a redeploy invalidates it:
+		// every data URL then answers 404, which is indistinguishable from a
+		// work the catalogue does not carry. Refetch it and ask once more before
+		// letting the caller report the work as missing.
+		if freshID, freshErr := ab.refreshBuildID(); freshErr == nil && freshID != buildID {
+			vErr = c.Visit(fmt.Sprintf(movieAPIURL, freshID, id, url.QueryEscape(id)))
+		}
+	}
+	if vErr != nil {
 		err = vErr
 	}
 	return
+}
+
+// refreshBuildID drops the cached build id and fetches the current one.
+func (ab *AVBase) refreshBuildID() (string, error) {
+	ab.single.Reset()
+	return ab.GetBuildID()
+}
+
+// isMissingData reports the bare 404 colly returns for a Next.js data URL.
+// It covers two very different situations: the work is not in the catalogue,
+// or the site was redeployed and the cached build id no longer exists. The
+// caller tells them apart by fetching a fresh build id and asking once more.
+func isMissingData(err error) bool {
+	return err != nil && err.Error() == http.StatusText(http.StatusNotFound)
 }
 
 func (ab *AVBase) getMovieInfoFromWork(work workResponse) (info *model.MovieInfo, err error) {
@@ -267,6 +298,12 @@ func (ab *AVBase) searchWorks(keyword string) (works []workResponse, err error) 
 		}
 	})
 	err = c.Visit(fmt.Sprintf(searchAPIURL, buildID, url.QueryEscape(keyword)))
+	if isMissingData(err) {
+		// Same stale-build-id failure as the detail path; see GetMovieInfoByURL.
+		if freshID, freshErr := ab.refreshBuildID(); freshErr == nil && freshID != buildID {
+			err = c.Visit(fmt.Sprintf(searchAPIURL, freshID, url.QueryEscape(keyword)))
+		}
+	}
 	return
 }
 
@@ -380,15 +417,16 @@ func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResul
 		sort.SliceStable(work.Products, func(i, j int) bool {
 			return work.Products[i].Source > work.Products[j].Source
 		})
-		index := -1
+		// Artwork prefers a product one of the source providers can enrich, but a
+		// work sold only elsewhere is still a work. Skipping it here made search
+		// answer "no result" for a title the detail endpoint serves fine, since
+		// the detail path falls back to the work itself when no source matches.
+		index := 0
 		for i, product := range work.Products {
 			if _, ok := ab.providers[product.Source]; ok {
 				index = i
 				break
 			}
-		}
-		if index < 0 {
-			continue
 		}
 		result := &model.MovieSearchResult{
 			ID:          ab.JoinPrefixID(work.Prefix, work.WorkID),
@@ -396,9 +434,11 @@ func (ab *AVBase) SearchMovie(keyword string) (results []*model.MovieSearchResul
 			Title:       work.Title,
 			Provider:    ab.Name(),
 			Homepage:    ab.movieURLForWork(work.Prefix, work.WorkID),
-			ThumbURL:    work.Products[index].ThumbnailURL,
-			CoverURL:    work.Products[index].ImageURL,
 			ReleaseDate: parser.ParseDate(work.MinDate),
+		}
+		if len(work.Products) > 0 {
+			result.ThumbURL = work.Products[index].ThumbnailURL
+			result.CoverURL = work.Products[index].ImageURL
 		}
 		for _, actor := range work.Actors {
 			result.Actors = append(result.Actors, actor.Name)

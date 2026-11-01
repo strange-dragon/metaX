@@ -142,8 +142,22 @@ func (s *ThePornDBVideo) GetMovieInfoByID(id string) (info *model.MovieInfo, err
 		info.Homepage = fmt.Sprintf(s.pageURL, info.ID)
 		info.Title = resp.Data.Title
 		info.Summary = resp.Data.Description
-		info.ThumbURL = resp.Data.Poster
+		// The API publishes four images and the record only ever used two of
+		// them: `poster` is a small thumbnail, `image` the scene still, and
+		// `poster_image` the full-size box cover that was parsed but dropped.
 		info.CoverURL = resp.Data.Image
+		info.ThumbURL = resp.Data.Poster
+		info.BigCoverURL = resp.Data.PosterImage
+		info.BigThumbURL = resp.Data.PosterImage
+		if info.BigCoverURL == "" {
+			info.BigCoverURL = resp.Data.BackImage
+		}
+		if info.BigCoverURL == "" {
+			info.BigCoverURL = info.CoverURL
+		}
+		if info.BigThumbURL == "" {
+			info.BigThumbURL = info.ThumbURL
+		}
 		info.Score = float64(resp.Data.Rating)
 		info.PreviewVideoURL = resp.Data.Trailer
 		info.Maker = resp.Data.Site.Name
@@ -219,7 +233,7 @@ func (s *ThePornDBVideo) SearchMovie(keyword string) (results []*model.MovieSear
 				Number:      video.Slug,
 				Title:       video.Title,
 				Provider:    s.Name(),
-				Homepage:    fmt.Sprintf(s.apiGetURL, video.Slug),
+				Homepage:    fmt.Sprintf(s.pageURL, video.Slug),
 				ThumbURL:    video.Poster,
 				CoverURL:    video.Image,
 				ReleaseDate: releaseDate,

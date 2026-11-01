@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -63,7 +62,7 @@ func (k8 *KIN8) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return path.Base(path.Dir(homepage.Path)), nil
+	return scraper.LastPathSegment(homepage.Path, "index.html"), nil
 }
 
 func (k8 *KIN8) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
@@ -204,6 +203,12 @@ func (k8 *KIN8) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 					UserRating float64 `json:"user_rating"`
 				}
 				if json.Unmarshal(ss[1], &data) == nil {
+					if len(data) == 0 {
+						// 0/0 is NaN, and encoding/json refuses to marshal NaN:
+						// a title with no reviews would fail the whole response,
+						// not just the score.
+						return
+					}
 					total := 0.0
 					for _, i := range data {
 						total += i.UserRating

@@ -528,8 +528,8 @@ func (p *AVSOX) searchResult(movie map[string]any, lang string) *model.MovieSear
 	title := firstString(anyString(movie["title"]), anyString(movie["title_ja"]), anyString(movie["title_en"]), anyString(movie["title_cn"]), anyString(movie["title_tw"]))
 	return &model.MovieSearchResult{
 		ID: id, Number: number, Title: title, Provider: p.Name(),
-		Homepage: p.detailURL(id, lang), CoverURL: p.absoluteAssetURL(anyString(movie["posterSmall"])),
-		ThumbURL: p.absoluteAssetURL(anyString(movie["posterLarge"])),
+		Homepage: p.detailURL(id, lang), CoverURL: p.absoluteAssetURL(anyString(movie["posterLarge"])),
+		ThumbURL: p.absoluteAssetURL(anyString(movie["posterSmall"])),
 	}
 }
 func (p *AVSOX) GetMovieInfoByID(id string) (*model.MovieInfo, error) {
@@ -583,10 +583,14 @@ func (p *AVSOX) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 	if title == "" {
 		return nil, ErrMovieNotFound
 	}
-	cover := p.absoluteAssetURL(firstString(movie.PosterSmall, movie.PosterLarge))
+	// posterSmall and posterLarge are exactly what they say. The two fields used
+	// to be swapped here, so the cover the API published was the 262px list
+	// thumbnail and the "thumbnail" was the full poster.
+	cover := p.absoluteAssetURL(firstString(movie.PosterLarge, movie.PosterSmall))
 	if cover == "" {
 		return nil, ErrMovieNotFound
 	}
+	thumb := p.absoluteAssetURL(firstString(movie.PosterSmall, movie.PosterLarge))
 	var actors, genres []string
 	for _, star := range movie.Star {
 		if name := namedValue(star, "star"); name != "" {
@@ -602,8 +606,8 @@ func (p *AVSOX) GetMovieInfoByURL(rawURL string) (*model.MovieInfo, error) {
 		ID: id, Number: movie.Number, Title: title,
 		Summary:  firstString(movie.Description, movie.DescriptionCN, movie.DescriptionJA, movie.DescriptionEN, movie.DescriptionTW),
 		Provider: p.Name(), Homepage: rawURL, Director: namedValue(movie.Director, "director"),
-		Actors: pq.StringArray(actors), CoverURL: cover,
-		ThumbURL:      p.absoluteAssetURL(firstString(movie.PosterLarge, movie.PosterSmall)),
+		Actors: pq.StringArray(actors), CoverURL: cover, BigCoverURL: cover,
+		ThumbURL: thumb, BigThumbURL: thumb,
 		PreviewImages: pq.StringArray(p.absoluteAssets(nonEmpty(movie.SampleLarge))),
 		Maker:         namedValue(movie.Studio, "studio"), Label: namedValue(movie.Label, "label"),
 		Series: namedValue(movie.Series, "series"), Genres: pq.StringArray(genres),

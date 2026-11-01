@@ -33,6 +33,7 @@ func New() *DAHLIA {
 			SearchURL:       searchURL,
 			DefaultName:     Name,
 			DefaultPriority: Priority,
+			CompactSlug:     true,
 		}).Init(),
 	}
 }

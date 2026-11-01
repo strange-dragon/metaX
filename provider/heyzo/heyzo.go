@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/url"
-	"path"
 	"regexp"
 	"strings"
 
@@ -30,6 +29,8 @@ const (
 	Name     = "HEYZO"
 	Priority = 1000
 )
+
+var heyzoIDRE = regexp.MustCompile(`^(?i)(?:heyzo[-_])?(\d+)$`)
 
 const (
 	baseURL          = "https://www.heyzo.com/"
@@ -124,9 +125,13 @@ func (hzo *Heyzo) GetMovieReviewsByURL(rawURL string) (reviews []*model.MovieRev
 	return hzo.GetMovieReviewsByID(id)
 }
 
+// NormalizeMovieID zero-pads the numeric ID to the four digits the site uses in
+// its URLs. Leaving "123" as "123" while the URL spells it "0123" meant the
+// catalog was written under one key and read back under another, so the cache
+// never hit and the same title could be stored twice.
 func (hzo *Heyzo) NormalizeMovieID(id string) string {
-	if ss := regexp.MustCompile(`^(?i)(?:heyzo[-_])?(\d+)$`).FindStringSubmatch(id); len(ss) == 2 {
-		return ss[1]
+	if ss := heyzoIDRE.FindStringSubmatch(id); len(ss) == 2 {
+		return fmt.Sprintf("%04s", ss[1])
 	}
 	return ""
 }
@@ -140,7 +145,7 @@ func (hzo *Heyzo) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return path.Base(path.Dir(homepage.Path)), nil
+	return scraper.LastPathSegment(homepage.Path, "index.html"), nil
 }
 
 func (hzo *Heyzo) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
@@ -199,8 +204,14 @@ func (hzo *Heyzo) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 
 	// Title
 	c.OnXML(`//*[@id="movie"]/h1`, func(e *colly.XMLElement) {
-		if info.Title == "" {
-			info.Title = strings.Fields(e.Text)[0]
+		if info.Title != "" {
+			return
+		}
+		// Fields returns an empty slice for a whitespace-only heading, and
+		// indexing it panicked inside the request goroutine — which takes the
+		// whole process down, not just the scrape.
+		if fields := strings.Fields(e.Text); len(fields) > 0 {
+			info.Title = fields[0]
 		}
 	})
 

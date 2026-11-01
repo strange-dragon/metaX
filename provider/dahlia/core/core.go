@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"github.com/strange-dragon/metaX/common/parser"
 	"github.com/strange-dragon/metaX/internal/antibot"
 	"github.com/strange-dragon/metaX/model"
+	"github.com/strange-dragon/metaX/provider"
 	"github.com/strange-dragon/metaX/provider/internal/scraper"
 )
 
@@ -29,6 +31,14 @@ type Core struct {
 	// Values
 	DefaultPriority float64
 	DefaultName     string
+
+	// CompactSlug selects the site's WordPress slug spelling. Dahlia publishes
+	// "DLDSS-339" at /works/dldss339/, so the separator has to be dropped before
+	// the REST route can find it; lowercasing alone produced "dldss-339", which
+	// the route does not carry, so every detail request for a hyphenated number
+	// answered 404 while search found the same title. Faleno keeps the catalog
+	// spelling in its slug, leaves this false, and keeps its old behaviour.
+	CompactSlug bool
 
 	// transport routes every scrape through the shared anti-bot layer: these
 	// sites answer a plain Go client with a Cloudflare 403.
@@ -93,7 +103,20 @@ func (core *Core) Close() error {
 	return nil
 }
 
-func (core *Core) NormalizeMovieID(id string) string { return strings.ToLower(id) }
+// NormalizeMovieID folds an ID to the site's WordPress slug spelling.
+//
+// A compact-slug site publishes "DLDSS-325" at /works/dldss325/, so a hyphenated
+// catalog number has to lose its separator before the REST route can find it.
+// Lowercasing alone produced "dldss-325", which the route does not carry: the
+// detail request answered 404 for a title that SearchMovie (which did slugify)
+// found without trouble. Sites that keep the separator in their slug leave
+// CompactSlug off and keep the plain lowercase form.
+func (core *Core) NormalizeMovieID(id string) string {
+	if core.CompactSlug {
+		return slugifyWordPressNumber(id)
+	}
+	return strings.ToLower(strings.TrimSpace(id))
+}
 
 // restWorksEndpoint builds the WordPress REST URL for one work slug.
 //
@@ -105,55 +128,6 @@ func (core *Core) restWorksEndpoint(id string) string {
 	// has to be normalized before it can match.
 	return strings.TrimRight(core.BaseURL, "/") + "/?rest_route=/wp/v2/works&slug=" +
 		url.QueryEscape(core.NormalizeMovieID(id))
-}
-
-// verifyMovieSlug checks the WordPress REST API before scraping the detail
-// page. A missing slug may otherwise redirect to an unrelated work page.
-func (core *Core) verifyMovieSlug(id string) error {
-	endpoint := core.restWorksEndpoint(id)
-	c := core.ClonedCollector()
-	c.ParseHTTPErrorResponse = true
-	var slugs []struct {
-		Slug string `json:"slug"`
-	}
-	var (
-		decodeErr error
-		// The REST route sits behind the host's WAF, which answers foreign
-		// traffic with 403 even when the work page itself is public. That is a
-		// limitation of the lookup, not a missing work, so the detail page
-		// stays the authority.
-		unavailable bool
-	)
-	c.OnResponse(func(r *colly.Response) {
-		switch {
-		case r.StatusCode == http.StatusForbidden,
-			r.StatusCode == http.StatusUnauthorized,
-			r.StatusCode == http.StatusTooManyRequests,
-			r.StatusCode >= http.StatusInternalServerError:
-			unavailable = true
-			return
-		case r.StatusCode < http.StatusOK || r.StatusCode >= http.StatusMultipleChoices:
-			decodeErr = fmt.Errorf("work slug lookup returned HTTP %d", r.StatusCode)
-			return
-		}
-		decodeErr = json.Unmarshal(r.Body, &slugs)
-	})
-	if err := c.Visit(endpoint); err != nil {
-		// A transport-level failure is also a lookup limitation.
-		unavailable = true
-	}
-	if unavailable {
-		return nil
-	}
-	if decodeErr != nil {
-		return decodeErr
-	}
-	for _, post := range slugs {
-		if core.NormalizeMovieID(post.Slug) == id {
-			return nil
-		}
-	}
-	return fmt.Errorf("work slug %q not found", id)
 }
 
 func (core *Core) GetMovieInfoByID(id string) (info *model.MovieInfo, err error) {
@@ -450,11 +424,23 @@ func (core *Core) applyWordPressWork(info *model.MovieInfo, work *wpWork) {
 		}
 	}
 }
+
+// NormalizeMovieKeyword feeds two callers: the site search, and the engine's
+// local cache lookup keyed by catalog number. A compact-slug site therefore has
+// to keep the catalog spelling ("DLDSS-325") here — the slugified "dldss325"
+// never matches the stored number — and SearchMovie applies the slug rules
+// itself. A site that keeps the separator in its slug needs the old behaviour
+// unchanged.
 func (core *Core) NormalizeMovieKeyword(keyword string) string {
+	if core.CompactSlug {
+		return strings.ToUpper(strings.TrimSpace(keyword))
+	}
 	return strings.ToLower(strings.ReplaceAll(keyword, "-", ""))
 }
 
-var ErrWordPressWorkNotFound = fmt.Errorf("work slug not found")
+// ErrWordPressWorkNotFound is the HTTP-aware sentinel for a slug the REST route
+// does not carry. It used to be a bare error, so a removed work answered 500.
+var ErrWordPressWorkNotFound = fmt.Errorf("%s: %w", "work slug not found", provider.ErrMovieNotFound)
 
 func slugifyWordPressNumber(number string) string {
 	var slug strings.Builder
@@ -505,7 +491,7 @@ func (core *Core) SearchMovie(keyword string) ([]*model.MovieSearchResult, error
 		return nil, nil
 	}
 	work, err := core.fetchWordPressWork(slug)
-	if err == ErrWordPressWorkNotFound {
+	if errors.Is(err, ErrWordPressWorkNotFound) {
 		return nil, nil
 	}
 	if err != nil {

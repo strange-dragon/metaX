@@ -53,11 +53,28 @@ func NewScraper(name, base string, priority float64, lang language.Tag, opts ...
 }
 
 // NewDefaultScraper returns a *Scraper with default options enabled.
+//
+// The defaults are the three defects every colly provider has to work around
+// the hard way, applied once:
+//
+//   - charset detection, because the Japanese and Chinese catalogues still ship
+//     Shift_JIS, EUC-JP, GBK and Big5 pages, and a raw read turns every title
+//     into mojibake that no later step can repair;
+//   - markup sniffing (installed per clone, see ClonedCollector), because colly
+//     skips OnHTML/OnXML in silence when the Content-Type is not html/xml, and a
+//     reader proxy or CDN will happily serve HTML as text/plain;
+//   - a retry transport, because one transient 502 used to fail a whole source
+//     for the request.
+//
+// Options are applied last, so a provider that needs a fingerprinting transport
+// or its own encoding still overrides any of these.
 func NewDefaultScraper(name, baseURL string, priority float64, lang language.Tag, opts ...Option) *Scraper {
 	return NewScraper(name, baseURL, priority, lang, append([]Option{
 		WithAllowURLRevisit(),
 		WithIgnoreRobotsTxt(),
 		WithRandomUserAgent(),
+		WithDetectCharset(),
+		WithRetryTransport(),
 	}, opts...)...)
 }
 
@@ -80,7 +97,17 @@ func (s *Scraper) NormalizeActorID(id string) string { return id /* AS IS */ }
 func (s *Scraper) ParseActorIDFromURL(string) (string, error) { panic("unimplemented") }
 
 // ClonedCollector returns cloned internal collector.
-func (s *Scraper) ClonedCollector() *colly.Collector { return s.c.Clone() }
+//
+// The markup sniffer is installed on the clone, not on the parent, because
+// colly's Clone deliberately starts with empty callback slices: a callback
+// registered once at construction would be dropped by every provider that does
+// what this SDK does (clone, then attach selectors). Installing it here is the
+// only place that reaches all of them.
+func (s *Scraper) ClonedCollector() *colly.Collector {
+	c := s.c.Clone()
+	c.OnResponse(func(r *colly.Response) { sniffMarkupContentType(r) })
+	return c
+}
 
 // SetProxy sets http or socks5 proxy for HTTP requests.
 func (s *Scraper) SetProxy(proxyURL string) error { return s.c.SetProxy(proxyURL) }

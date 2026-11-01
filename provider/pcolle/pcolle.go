@@ -71,7 +71,7 @@ func (pcl *Pcolle) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err 
 
 	info = &model.MovieInfo{
 		ID:            id,
-		Number:        fmt.Sprintf("PCOLLE-%s", id),
+		Number:        id,
 		Provider:      pcl.Name(),
 		Homepage:      rawURL,
 		Actors:        []string{},
@@ -120,10 +120,19 @@ func (pcl *Pcolle) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err 
 		}
 	})
 
-	// Thumb+Cover
+	// Thumb+Cover: the anchor points at the full-size original, the image inside
+	// it is the list thumbnail. Reading the anchor for both made the thumbnail
+	// endpoint download the whole cover.
 	c.OnXML(`//div[@class="item-content"]//div[@class="part1"]/article`, func(e *colly.XMLElement) {
-		info.ThumbURL = e.Request.AbsoluteURL(e.ChildAttr(`.//a`, "href"))
-		info.CoverURL = info.ThumbURL
+		info.CoverURL = e.Request.AbsoluteURL(e.ChildAttr(`.//a`, "href"))
+		info.BigCoverURL = info.CoverURL
+		if thumb := e.Request.AbsoluteURL(e.ChildAttr(`.//a//img`, "src")); thumb != "" {
+			info.ThumbURL = thumb
+			info.BigThumbURL = thumb
+		} else {
+			info.ThumbURL = info.CoverURL
+			info.BigThumbURL = info.CoverURL
+		}
 	})
 
 	// Genres

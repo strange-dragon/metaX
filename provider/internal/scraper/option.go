@@ -8,6 +8,7 @@ import (
 	"github.com/gocolly/colly/v2/debug"
 
 	"github.com/strange-dragon/metaX/common/random"
+	"github.com/strange-dragon/metaX/provider/httpretry"
 )
 
 type Option func(*Scraper) error
@@ -32,6 +33,24 @@ func WithDetectCharset() Option {
 		return nil
 	}
 }
+
+// WithRetryTransport installs the bounded retry transport shared by the
+// hand-rolled HTTP providers. colly's default transport has no retry at all, so
+// a single transient 502 or reset connection used to fail the whole source.
+// Only idempotent methods and replayable bodies are retried; see httpretry.
+//
+// Timeouts are excluded: colly's SetRequestTimeout sets http.Client.Timeout,
+// which bounds the whole request. Retrying after it fires spends the same
+// budget twice more and always fails again, turning a 10s stall into 30s.
+func WithRetryTransport() Option {
+	return WithTransport(retryPolicy.WrapTransport(nil))
+}
+
+var retryPolicy = func() httpretry.Policy {
+	policy := httpretry.DefaultPolicy
+	policy.SkipTimeouts = true
+	return policy
+}()
 
 func WithIgnoreRobotsTxt() Option {
 	return func(s *Scraper) error {
