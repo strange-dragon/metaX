@@ -85,7 +85,7 @@ func (hey *HeyDouga) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, er
 
 	info = &model.MovieInfo{
 		ID:            id,
-		Number:        fmt.Sprintf("HEYDOUGA-%s", id),
+		Number:        id,
 		Provider:      hey.Name(),
 		Homepage:      rawURL,
 		Actors:        []string{},

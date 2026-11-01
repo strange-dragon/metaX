@@ -43,12 +43,12 @@ func apiServer(t *testing.T, searchData, detailData string) *httptest.Server {
 func TestSearchAndDetailParsing(t *testing.T) {
 	search := `{"code":200,"data":[
 		{"movieId":"movie1","movieFanHao":"ABC-1234","title":"Near match"},
-		{"movieId":"movie2","movieFanHao":"abc123","title":"Exact title","posterSmall":"/poster.jpg","posterLarge":"/thumb.jpg"}
+		{"movieId":"movie2","movieFanHao":"abc123","title":"Exact title","posterSmall":"/small.jpg","posterLarge":"/large.jpg"}
 	]}`
 	detail := `{"code":200,"data":{
 		"movieId":"movie2","movieFanHao":"ABC-123","title":"Exact title",
 		"releaseDate":"2024-05-16","length":121,"description_cn":"Plot text",
-		"posterSmall":"/poster.jpg","posterLarge":"/thumb.jpg","sampleLarge":["/sample/1.jpg",""],
+		"posterSmall":"/small.jpg","posterLarge":"/large.jpg","sampleLarge":["/sample/1.jpg",""],
 		"studio":{"studioName":"Studio One"},
 		"star":[{"starName":"Actor One"},{"starName_ja":"Actor Two"},{"starName":"Actor One"}],
 		"genre":[{"genreName_cn":"Drama"},{"genreName":"Drama"}],
@@ -72,8 +72,10 @@ func TestSearchAndDetailParsing(t *testing.T) {
 	require.Equal(t, "movie2", info.ID)
 	require.Equal(t, "ABC-123", info.Number)
 	require.Equal(t, "Exact title", info.Title)
-	require.Equal(t, server.URL+"/poster.jpg", info.CoverURL)
-	require.Equal(t, server.URL+"/thumb.jpg", info.ThumbURL)
+	// posterLarge is the cover and posterSmall is the list thumbnail; the two
+	// used to be swapped, which served the 262px thumbnail as artwork.
+	require.Equal(t, server.URL+"/large.jpg", info.CoverURL)
+	require.Equal(t, server.URL+"/small.jpg", info.ThumbURL)
 	require.Equal(t, []string{"Actor One", "Actor Two"}, []string(info.Actors))
 	require.Equal(t, []string{"Drama"}, []string(info.Genres))
 	require.Equal(t, "Director One", info.Director)

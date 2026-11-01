@@ -208,9 +208,20 @@ func (tht *TokyoHot) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, er
 	return
 }
 
+// tokyoHotKeywordRE accepts the shapes this catalogue actually uses: the n1633
+// series, plain numeric IDs, and hyphenated SKUs such as s2mbd-002.
+var tokyoHotKeywordRE = regexp.MustCompile(`^(?i)[a-z0-9][a-z0-9_-]*$`)
+
+// NormalizeMovieKeyword accepts a hyphenated SKU.
+//
+// The previous pattern was `^[a-z_]*\d+$`, which rejected s2mbd-002 — an ID this
+// provider itself hands out — and returned "". The engine treats an empty
+// normalization as an invalid keyword and answers 400 without falling back to
+// the ID path, so a valid title flipped between scrapable and unscrapable
+// depending on how the caller spelled it.
 func (tht *TokyoHot) NormalizeMovieKeyword(keyword string) string {
-	if regexp.MustCompile(`^(?i)[a-z_]*\d+$`).MatchString(keyword) {
-		return strings.ToLower(keyword)
+	if tokyoHotKeywordRE.MatchString(keyword) {
+		return strings.ToLower(strings.TrimSpace(keyword))
 	}
 	return ""
 }

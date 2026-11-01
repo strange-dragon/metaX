@@ -155,7 +155,12 @@ func (ave *AVE) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err err
 			parser.ParseTexts(htmlquery.FindOne(e.DOM.(*html.Node), `.//span[2]`),
 				(*[]string)(&info.Genres))
 		case "発売日":
-			info.ReleaseDate = parser.ParseDate(strings.Fields(e.ChildText(`.//span[2]`))[0])
+			// A blank release-date cell made Fields return an empty slice and
+			// the index panicked inside the request goroutine, taking the
+			// process down with it.
+			if fields := strings.Fields(e.ChildText(`.//span[2]`)); len(fields) > 0 {
+				info.ReleaseDate = parser.ParseDate(fields[0])
+			}
 		case "収録時間":
 			info.Runtime = parser.ParseRuntime(e.ChildText(`.//span[2]`))
 		}

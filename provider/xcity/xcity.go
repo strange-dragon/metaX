@@ -265,9 +265,14 @@ func (p *XCity) getHTML(raw string) (*goquery.Document, string, error) {
 	return doc, finalURL, nil
 }
 
+// xcityNumberNoise matches the separators XCity is allowed to spell freely. The
+// underscore is deliberately absent: 101926_01 and 101926-01 are two different
+// works, and removing it here used to let a search settle on the wrong one.
+var xcityNumberNoise = regexp.MustCompile(`[- .　]+`)
+
 func normalizeNumber(s string) string {
 	s = strings.ToUpper(norm.NFKC.String(strings.TrimSpace(s)))
-	return regexp.MustCompile(`[-_ .　]+`).ReplaceAllString(s, "")
+	return xcityNumberNoise.ReplaceAllString(s, "")
 }
 func (p *XCity) searchURL(keyword string) string {
 	u := *p.baseURL
@@ -329,11 +334,20 @@ func (p *XCity) parseDetail(raw string) (*detail, string, error) {
 	if title == "" || number == "" {
 		return nil, finalURL, ErrMovieNotFound
 	}
-	cover := strings.TrimSpace(doc.Find("img.photo").First().AttrOr("src", ""))
+	// The detail page carries the cover twice: a small `img.photo` and the
+	// full-size original behind the lightbox link. Taking the small one as the
+	// cover left the aggregation with a thumbnail where it wanted artwork, so
+	// the original wins and the small one becomes the thumbnail.
+	cover := strings.TrimSpace(doc.Find("a.fancy_image").First().AttrOr("href", ""))
+	thumb := strings.TrimSpace(doc.Find("img.photo").First().AttrOr("src", ""))
 	if cover == "" {
-		cover = strings.TrimSpace(doc.Find("a.fancy_image").First().AttrOr("href", ""))
+		cover = thumb
+	}
+	if thumb == "" {
+		thumb = cover
 	}
 	cover = absoluteURL(p.baseURL, cover)
+	thumb = absoluteURL(p.baseURL, thumb)
 	actors := uniqueTexts(doc, `a[href*="/idol/"]`)
 	tags := uniqueTexts(doc, `a[href*="/genres/"]`)
 	studio := strings.TrimSpace(doc.Find(`a[href*="/studios/"]`).First().Text())
@@ -346,8 +360,9 @@ func (p *XCity) parseDetail(raw string) (*detail, string, error) {
 	info := &model.MovieInfo{
 		ID: id, Number: number, Title: title, Provider: p.Name(), Homepage: raw,
 		Actors: pq.StringArray(actors), Maker: studio, Genres: pq.StringArray(tags),
-		CoverURL: cover, ThumbURL: cover, PreviewImages: pq.StringArray{},
-		Runtime: parseRuntime(runtime),
+		CoverURL: cover, BigCoverURL: cover, ThumbURL: thumb, BigThumbURL: thumb,
+		PreviewImages: pq.StringArray{},
+		Runtime:       parseRuntime(runtime),
 	}
 	if release != "" {
 		info.ReleaseDate = parser.ParseDate(release)
@@ -390,6 +405,10 @@ func (p *XCity) SearchMovie(keyword string) ([]*model.MovieSearchResult, error) 
 			continue
 		}
 		results = append(results, d.info.ToSearchResult())
+		// One catalog number names one work, so the first exact match is the
+		// answer. Walking the rest of the result page used to cost one detail
+		// request per card — twenty requests for a search that ends at the first.
+		break
 	}
 	return results, nil
 }
