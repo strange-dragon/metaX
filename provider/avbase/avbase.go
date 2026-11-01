@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -90,7 +89,7 @@ func (ab *AVBase) ParseMovieIDFromURL(rawURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return ab.NormalizeMovieID(path.Base(homepage.Path)), nil
+	return ab.NormalizeMovieID(scraper.LastPathSegment(homepage.Path, "")), nil
 }
 
 func (ab *AVBase) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err error) {
@@ -113,6 +112,13 @@ func (ab *AVBase) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err e
 			} `json:"pageProps"`
 		}{}
 		if err = json.Unmarshal(r.Body, &data); err == nil {
+			// The API answers with an empty pageProps.work for a work it does not
+			// carry. Without this the provider returned a structurally valid but
+			// empty record and a nil error, which the engine reported as a 500.
+			if data.PageProps.Work.ID == 0 && data.PageProps.Work.WorkID == "" {
+				err = fmt.Errorf("%s: %w", ab.Name(), provider.ErrMovieNotFound)
+				return
+			}
 			workInfo, _ := ab.getMovieInfoFromWork(data.PageProps.Work)
 			srcInfo, srcErr := ab.getMovieInfoFromSource(data.PageProps.Work)
 			if srcErr != nil {
