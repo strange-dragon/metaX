@@ -22,11 +22,16 @@ import (
 // was named after, fc2ppvdb.com, is gone (526), but the catalogue moved to
 // ppvdatabank.com, which answers a plain datacenter IP. It is routed because it
 // still archives titles FC2 has delisted.
+//
+// IQQTV and Freejavbt were on this list and are not any more: measured on
+// 2026-11-01 from a plain IP, iqq5.xyz redirects to iqqab.com and returns a
+// 247 kB page, and freejavbt.com returns 200 with 327 parseable card nodes. Both
+// are routed again, including on the direct profile.
 var blockedProviders = []string{
 	"MGS", "SOD", "Prestige", "FALENO", "HEYZO", "Caribbeancom", "CaribbeancomPR",
 	"JAVFREE", "JavLibrary",
 	"H0930", "H4610", "C0930", "KIN8", "HeyDouga",
-	"AVSOX", "Freejavbt", "FC2Club", "fc2hub", "IQQTV", "AVE",
+	"AVSOX", "FC2Club", "fc2hub", "AVE",
 }
 
 // idOnlyProviders resolve a site-local id and have no number search. The engine

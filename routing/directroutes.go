@@ -51,7 +51,13 @@ const (
 //
 //   - Cloudflare JavaScript challenge: JavLibrary.
 //
-//   - Dead or unreachable: AVSOX, Freejavbt, FC2Club, fc2hub, IQQTV, AVE.
+//   - Dead or unreachable: AVSOX (every path answers 200 with a 1.5 kB shell
+//     that carries no result cards), FC2Club, fc2hub (301 to javten.com, which
+//     answers 403), AVE.
+//
+// IQQTV and Freejavbt were on that list and are not any more: iqq5.xyz
+// redirects to iqqab.com and freejavbt.com serves 200 with parseable cards, both
+// from a plain IP. They are routed here again.
 //
 // FC2 (the publisher's own catalogue at adult.contents.fc2.com) is routed: it
 // answers a plain IP with the age cookie its provider already sends, and it is
@@ -85,6 +91,7 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"Jav321",   // DMM covers, used as the image source
 		"FC2",      // publisher catalogue: the only FC2 source without JavDB
 		"FC2PPVDB", // archive at ppvdatabank.com: covers titles FC2 delisted
+		"Freejavbt",
 		"Airav",
 		"TOKYO-HOT",
 		"1Pondo",
@@ -96,8 +103,11 @@ var directRoutes = Config{Routes: map[Category][]string{
 		"Pcolle",
 	},
 	CategoryChinese: {
+		"IQQTV",
 		"JavDB",
 		"Airav",
+		"Freejavbt",
+		"MadouQu",
 	},
 	CategoryAmateur: {
 		"JavDB",

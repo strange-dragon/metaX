@@ -23,8 +23,11 @@ var (
 )
 
 const (
-	Name     = "MadouQu"
-	Priority = 0 // Disabled by default, use `export MT_MOVIE_PROVIDER_MADOUQU__PRIORITY=1000` to enable.
+	Name = "MadouQu"
+	// Sits between Freejavbt (978) and IQQTV (976). The provider used to ship
+	// disabled at priority 0 because the site kept changing under it; the
+	// current templates are parsed by live tests for both search and detail.
+	Priority = 1000 - 23
 )
 
 const (

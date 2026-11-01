@@ -520,7 +520,7 @@ Provider-specific limits observed on the same date:
 - **Official:** withdrawn with the Amane manufacturer router. The default censored route no longer lists it.
 - **Prestige:** native provider implemented as live-unverified; promote only after permitted-region responses or reliable fixtures exist. **R18Dev:** out of scope (2026-10-21); no PostgreSQL/import contract will be added.
 
-The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged for optional providers such as token-gated `ThePornDB` or the experimental `AVBASE` and `MadouQu`.
+The route table now aliases Amane names that differ from SDK package names: `DMM` → `FANZA`, `MGStage` → `MGS`, and `ThePornDB` → `ThePornDBMovie`/`ThePornDBScene`. Startup fails only when a category has no available provider; individual gaps are logged for optional providers such as token-gated `ThePornDB` or the experimental `AVBASE`.
 
 ## Provider access follow-up (2026-10-20)
 
