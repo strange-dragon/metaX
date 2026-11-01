@@ -33,6 +33,18 @@ const (
 	searchURL = "https://madouqu.com/?s=%s"
 )
 
+// The 2026 redesign dropped id="post-N" from <article>, so every selector that
+// anchored on it matched nothing and the provider answered with an empty result
+// set and no error. The class names are the stable hooks now; the id-based
+// selectors are kept alongside them for pages still on the old template.
+//
+// A detail page also carries related-work cards, so the entry article and the
+// search card must not be told apart by "post" alone.
+const (
+	entryArticleXPath = `//article[contains(concat(' ', normalize-space(@class), ' '), ' entry ')]`
+	cardArticleXPath  = `//article[contains(concat(' ', normalize-space(@class), ' '), ' resource-card ')]`
+)
+
 type MadouQu struct {
 	*scraper.Scraper
 }
@@ -75,7 +87,7 @@ func (mdq *MadouQu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err
 	c := mdq.ClonedCollector()
 	gone := scraper.TrackNotFound(c)
 
-	c.OnXML(`//article[starts-with(@id,'post')]//div[@class="container"]//p`, func(e *colly.XMLElement) {
+	paragraph := func(e *colly.XMLElement) {
 		// The image used to return early, so a paragraph that carried both the
 		// artwork and a labelled value lost the value.
 		if src := e.ChildAttr(`./img`, "src"); src != "" {
@@ -100,20 +112,43 @@ func (mdq *MadouQu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err
 				}
 			}
 		}
-	})
+	}
+	c.OnXML(entryArticleXPath+`//div[@class="entry-content"]//p`, paragraph)
+	c.OnXML(`//article[starts-with(@id,'post')]//div[@class="container"]//p`, paragraph)
 
 	actorTags := make([]string, 0, 2)
 
 	// Tags (Actors)
-	c.OnXML(`//article[starts-with(@id,'post')]//div[@class="entry-tags"]/a`, func(e *colly.XMLElement) {
+	actorTag := func(e *colly.XMLElement) {
 		actorTags = append(actorTags, strings.TrimSpace(e.Text))
-	})
+	}
+	c.OnXML(entryArticleXPath+`//a[@class="post-tag-label"]`, actorTag)
+	c.OnXML(`//article[starts-with(@id,'post')]//div[@class="entry-tags"]/a`, actorTag)
 
 	// Maker
+	maker := func(e *colly.XMLElement) {
+		if info.Maker == "" {
+			info.Maker = strings.TrimSpace(e.Text)
+		}
+	}
+	c.OnXML(entryArticleXPath+`//a[@class="category-label"]`, maker)
 	c.OnXML(`//article[starts-with(@id,'post')]//span[@class="meta-category"]`, func(e *colly.XMLElement) {
 		if info.Maker == "" {
 			info.Maker = strings.TrimSpace(e.ChildText(`./a[1]`))
 		}
+	})
+
+	// Release date, and a title for the pages whose body omits the 片名 line.
+	// The heading is only a fallback: it also carries the catalog number, and it
+	// is parsed before the body, so storing it directly would shadow 片名.
+	headline := ""
+	c.OnXML(entryArticleXPath+`//header//time`, func(e *colly.XMLElement) {
+		if time.Time(info.ReleaseDate).IsZero() {
+			info.ReleaseDate = parser.ParseDate(e.Attr("datetime"))
+		}
+	})
+	c.OnXML(entryArticleXPath+`//h1`, func(e *colly.XMLElement) {
+		headline = strings.TrimSpace(e.Text)
 	})
 
 	// Fallback
@@ -121,6 +156,10 @@ func (mdq *MadouQu) GetMovieInfoByURL(rawURL string) (info *model.MovieInfo, err
 		// Number = Upper ID
 		if info.Number == "" {
 			info.Number = parser.ParseIDToNumber(info.ID)
+		}
+
+		if info.Title == "" {
+			info.Title = headline
 		}
 
 		// Thumb Image
@@ -148,22 +187,42 @@ func (mdq *MadouQu) NormalizeMovieKeyword(keyword string) string {
 func (mdq *MadouQu) SearchMovie(keyword string) (results []*model.MovieSearchResult, err error) {
 	c := mdq.ClonedCollector()
 
-	c.OnXML(`//article[starts-with(@id, 'post')]`, func(e *colly.XMLElement) {
+	card := func(e *colly.XMLElement) {
 		link := e.ChildAttr(`.//h2/a`, "href")
 		id, idErr := mdq.ParseMovieIDFromURL(link)
 		if idErr != nil {
 			return
 		}
 
-		origTitle := e.ChildAttr(`.//h2/a`, "title")
+		// The title attribute now holds "新标签页打开" on every link, so the
+		// catalog number and the title have to come from the anchor text.
+		origTitle := strings.TrimSpace(e.ChildText(`.//h2/a`))
+		if origTitle == "" {
+			origTitle = e.ChildAttr(`.//h2/a`, "title")
+		}
 		nb, title, _ := strings.Cut(origTitle, " ")
 
-		if !regexp.MustCompile(`^(?i)[A-Z0-9_-]+$`).MatchString(nb) {
+		if !madouquNumberRE.MatchString(nb) {
 			nb = parser.ParseIDToNumber(id)
 			title = origTitle
 		}
+		// Some works are published without a title at all; the number is the
+		// only thing left to show, and an empty title would fail validation.
+		if title == "" {
+			title = nb
+		}
 
 		thumb := ExtractImgSrc(e.ChildAttr(`.//div[@class="entry-media"]//a/img`, "data-src"))
+		if thumb == "" {
+			thumb = ExtractImgSrc(firstNonEmpty(
+				e.ChildAttr(`.//a[contains(@class,"cover-link")]//img`, "data-src"),
+				e.ChildAttr(`.//a[contains(@class,"cover-link")]//img`, "src"),
+			))
+		}
+		release := e.ChildAttr(`.//li/time`, "datetime")
+		if release == "" {
+			release = e.ChildAttr(`.//div[@class="card-meta"]/time`, "datetime")
+		}
 
 		results = append(results, &model.MovieSearchResult{
 			ID:          id,
@@ -173,14 +232,27 @@ func (mdq *MadouQu) SearchMovie(keyword string) (results []*model.MovieSearchRes
 			Homepage:    link,
 			ThumbURL:    thumb,
 			CoverURL:    thumb, // same as thumb
-			ReleaseDate: parser.ParseDate(e.ChildAttr(`.//li/time`, "datetime")),
+			ReleaseDate: parser.ParseDate(release),
 		})
-	})
+	}
+	c.OnXML(cardArticleXPath, card)
+	c.OnXML(`//article[starts-with(@id, 'post')]`, card)
 
 	if vErr := c.Visit(fmt.Sprintf(searchURL, url.QueryEscape(keyword))); vErr != nil {
 		err = vErr
 	}
 	return
+}
+
+var madouquNumberRE = regexp.MustCompile(`^(?i)[A-Z0-9_-]+$`)
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // wrappedImageRE finds an absolute URL that the site wrapped in its own image
