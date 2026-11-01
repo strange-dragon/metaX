@@ -259,6 +259,10 @@ var defaultRoutes = Config{Routes: map[Category][]string{
 		// providers the route already lists, so an uncensored route without
 		// Jav321 silently served JavDB covers for every title.
 		"Jav321",
+		// AVSOX serves a Vue SPA shell, so an HTML probe sees an empty page and
+		// the site looks dead. The metadata comes from its Yii JSON API, which
+		// answers 200 with real records, so it stays in the route.
+		"AVSOX",
 		"Freejavbt", // live again on freejavbt.com; 200 with parseable cards
 		"FC2PPVDB",
 		"FC2",

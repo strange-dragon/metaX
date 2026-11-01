@@ -21,7 +21,6 @@ var experimentalProviders = map[string]struct{}{
 var unroutedProviders = map[string]struct{}{
 	"FC2Club": {}, // fc2club.com does not resolve; fc2club.top 302s to a parked host
 	"fc2hub":  {}, // 301 to javten.com, which answers 403
-	"AVSOX":   {}, // avsox.click answers 200 with a 1.5 kB shell and no result cards
 }
 
 // TestDefaultRoutesCoverTheRealProviderInventory keeps DefaultConfig honest:

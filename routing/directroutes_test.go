@@ -27,11 +27,16 @@ import (
 // 2026-11-01 from a plain IP, iqq5.xyz redirects to iqqab.com and returns a
 // 247 kB page, and freejavbt.com returns 200 with 327 parseable card nodes. Both
 // are routed again, including on the direct profile.
+//
+// AVSOX leaves the list for a different reason: it was never blocked, only
+// server-side-rendered no longer. Its shell page is empty by design, so an HTML
+// probe cannot tell it apart from a dead host, while its JSON API returns real
+// records from the same IP. Only sites whose *data* is unreachable belong here.
 var blockedProviders = []string{
 	"MGS", "SOD", "Prestige", "FALENO", "HEYZO", "Caribbeancom", "CaribbeancomPR",
 	"JAVFREE", "JavLibrary",
 	"H0930", "H4610", "C0930", "KIN8", "HeyDouga",
-	"AVSOX", "FC2Club", "fc2hub", "AVE",
+	"FC2Club", "fc2hub", "AVE",
 }
 
 // idOnlyProviders resolve a site-local id and have no number search. The engine
