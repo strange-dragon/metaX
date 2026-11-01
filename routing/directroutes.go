@@ -40,7 +40,7 @@ const (
 //
 //   - GeoIP-blocked, 403 for every non-Japanese address (verified from a
 //     Shenzhen residential line as well as from the deployment): MGS, SOD,
-//     Prestige, FALENO, HEYZO, Caribbeancom, FC2PPVDB, JAVFREE, and the
+//     Prestige, FALENO, HEYZO, Caribbeancom, JAVFREE, and the
 //     0930 family plus KIN8 and HeyDouga.
 //
 //     CaribbeancomPR belongs here too, but only on the datacenter side: a
@@ -58,9 +58,15 @@ const (
 // the only source left that returns FC2 entries without JavDB. JavDB used to
 // cover them, but its FC2 detail pages now redirect anonymous clients to
 // /login, so an FC2 number reached JavDB search, failed the detail fetch, and
-// the whole aggregate returned 404. The sibling FC2 sites stay out:
-// FC2PPVDB answers 403 outside Japan, FC2Club is gone, fc2hub redirects to a
-// 403 host.
+// the whole aggregate returned 404.
+//
+// FC2PPVDB is routed too, but it is a different site than the name suggests:
+// fc2ppvdb.com answers 526 to everything now, and the catalogue lives on at
+// ppvdatabank.com, which a plain datacenter IP can read. It sits right after
+// FC2 because it archives titles the publisher has since delisted — exactly
+// the ones the publisher page cannot answer — and because it carries neither
+// genres nor performers, so it must never win over the publisher. FC2Club is
+// gone and fc2hub redirects to a 403 host.
 //
 // A deployment that sets METAX_PROVIDER_PROXY (a Japanese residential proxy)
 // gets DefaultConfig instead, because that proxy unblocks the first group.
@@ -76,8 +82,9 @@ var directRoutes = Config{Routes: map[Category][]string{
 	CategoryUncensored: {
 		"JavDB",
 		"JavBus",
-		"Jav321", // DMM covers, used as the image source
-		"FC2",    // publisher catalogue: the only FC2 source without JavDB
+		"Jav321",   // DMM covers, used as the image source
+		"FC2",      // publisher catalogue: the only FC2 source without JavDB
+		"FC2PPVDB", // archive at ppvdatabank.com: covers titles FC2 delisted
 		"Airav",
 		"TOKYO-HOT",
 		"1Pondo",

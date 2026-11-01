@@ -31,16 +31,18 @@ func TestFC2PPVDBParseMovieIDFromURL(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{url: "https://fc2ppvdb.com/articles/2812904", want: "2812904"},
-		{url: "https://fc2ppvdb.com/articles/4669533/?ref=search", want: "4669533"},
-		{url: "http://fc2ppvdb.com/articles/2812904", wantErr: true},
-		{url: "https://fc2ppvdb.com:8443/articles/2812904", wantErr: true},
-		{url: "https://user@fc2ppvdb.com/articles/2812904", wantErr: true},
-		{url: "https://fc2ppvdb.com.evil.invalid/articles/2812904", wantErr: true},
-		{url: "https://fc2ppvdb.com/articles/abc", wantErr: true},
-		{url: "https://fc2ppvdb.com/articles/2812904/extra", wantErr: true},
-		{url: "https://fc2ppvdb.com/actresses/2812904", wantErr: true},
-		{url: "/articles/2812904", wantErr: true},
+		{url: "https://ppvdatabank.com/article/2812904/", want: "2812904"},
+		{url: "https://ppvdatabank.com/article/4669533/?ref=search", want: "4669533"},
+		{url: "https://ppvdatabank.com/article/2812904", want: "2812904"},
+		{url: "http://ppvdatabank.com/article/2812904/", wantErr: true},
+		{url: "https://ppvdatabank.com:8443/article/2812904/", wantErr: true},
+		{url: "https://user@ppvdatabank.com/article/2812904/", wantErr: true},
+		{url: "https://ppvdatabank.com.evil.invalid/article/2812904/", wantErr: true},
+		{url: "https://fc2ppvdb.com/articles/2812904", wantErr: true}, // the retired host
+		{url: "https://ppvdatabank.com/article/abc/", wantErr: true},
+		{url: "https://ppvdatabank.com/article/2812904/extra", wantErr: true},
+		{url: "https://ppvdatabank.com/actresses/2812904", wantErr: true},
+		{url: "/article/2812904/", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {

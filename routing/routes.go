@@ -442,6 +442,15 @@ func InferCategory(keyword string) (Category, bool) {
 			return CategoryFC2, true
 		}
 	}
+	// FC2's publisher IDs have been seven digits since 2019, and a bare number
+	// is exactly how a file taken from the publisher itself is named — clients
+	// that read the ID off the storefront rather than off a catalogue have no
+	// prefix to match. Six-digit IDs are already covered by the uncensored
+	// family below, whose chain carries FC2; eight or more stay unclassified
+	// because a bare eight-digit run is usually a date.
+	if len(value) == 7 && allDigits(value) {
+		return CategoryFC2, true
+	}
 	if strings.HasPrefix(compact, "KIN8TENGOKU") || strings.HasPrefix(compact, "KIN8") {
 		number := strings.TrimPrefix(strings.TrimPrefix(compact, "KIN8TENGOKU"), "KIN8")
 		if len(number) >= 1 && len(number) <= 4 && allDigits(number) {

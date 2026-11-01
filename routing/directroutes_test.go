@@ -17,9 +17,14 @@ import (
 // FC2 is deliberately absent from this list: the publisher catalogue answers a
 // plain IP, and it is the only source that resolves FC2 numbers without JavDB
 // (JavDB's FC2 detail pages redirect anonymous clients to /login).
+//
+// FC2PPVDB is absent for a different reason than its name suggests. The host it
+// was named after, fc2ppvdb.com, is gone (526), but the catalogue moved to
+// ppvdatabank.com, which answers a plain datacenter IP. It is routed because it
+// still archives titles FC2 has delisted.
 var blockedProviders = []string{
 	"MGS", "SOD", "Prestige", "FALENO", "HEYZO", "Caribbeancom", "CaribbeancomPR",
-	"FC2PPVDB", "JAVFREE", "JavLibrary",
+	"JAVFREE", "JavLibrary",
 	"H0930", "H4610", "C0930", "KIN8", "HeyDouga",
 	"AVSOX", "Freejavbt", "FC2Club", "fc2hub", "IQQTV", "AVE",
 }

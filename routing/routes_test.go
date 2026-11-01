@@ -226,6 +226,9 @@ func TestInferCategoryRecognizesAmaneNumberFamilies(t *testing.T) {
 		{keyword: "fc2-ppv3954834", want: CategoryFC2},
 		{keyword: "FC2PPV3954834", want: CategoryFC2},
 		{keyword: "fc2-ppv-3954834", want: CategoryFC2},
+		// A bare publisher ID: how a file scraped from FC2 itself is named.
+		{keyword: "5001937", want: CategoryFC2},
+		{keyword: " 4861886 ", want: CategoryFC2},
 		{keyword: "101926_01", want: CategoryUncensored},
 		{keyword: "KIN8-1234", want: CategoryWestern},
 		{keyword: "kin8tengoku_42", want: CategoryWestern},
