@@ -22,6 +22,10 @@ const (
 	imageAggregateSmallProvider   = "MetaXImageAggregateSmall"
 	imageAggregateLargeProvider   = "MetaXImageAggregateLarge"
 	imageAggregateMissingProvider = "MetaXImageAggregateMissing"
+	// Two providers that share one picture host, used to check that a host
+	// which refuses this client is not asked twice.
+	imageAggregateSharedHostA = "MetaXImageAggregateSharedA"
+	imageAggregateSharedHostB = "MetaXImageAggregateSharedB"
 )
 
 // Covers are served from an httptest server, so these hold the URL handed out
@@ -29,6 +33,8 @@ const (
 var (
 	imageAggregateSmallCover   string
 	imageAggregateLargeCover   string
+	imageAggregateSharedCoverA string
+	imageAggregateSharedCoverB string
 	imageAggregateLargeFetches atomic.Int32
 )
 
@@ -55,6 +61,10 @@ func (p *imageAggregateMovieProvider) GetMovieInfoByID(id string) (*model.MovieI
 		return imageAggregateInfo(p.name, id, imageAggregateSmallCover), nil
 	case imageAggregateLargeProvider:
 		return imageAggregateInfo(p.name, id, imageAggregateLargeCover), nil
+	case imageAggregateSharedHostA:
+		return imageAggregateInfo(p.name, id, imageAggregateSharedCoverA), nil
+	case imageAggregateSharedHostB:
+		return imageAggregateInfo(p.name, id, imageAggregateSharedCoverB), nil
 	}
 	// The provider answers the search but has no detail: the image chain must
 	// skip it instead of failing the request.
@@ -80,6 +90,8 @@ func init() {
 		imageAggregateSmallProvider,
 		imageAggregateLargeProvider,
 		imageAggregateMissingProvider,
+		imageAggregateSharedHostA,
+		imageAggregateSharedHostB,
 	} {
 		name := name
 		mt.Register(name, func() *imageAggregateMovieProvider {
@@ -88,15 +100,22 @@ func init() {
 	}
 }
 
-// imageServer serves a solid PNG of the requested size and counts requests.
-func imageServer(t *testing.T, width, height int, hits *atomic.Int32) *httptest.Server {
-	t.Helper()
+// solidImage returns a picture of the requested size, so a test can control the
+// resolution a candidate is judged on.
+func solidImage(width, height int) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
 			img.Set(x, y, color.RGBA{R: 20, G: 90, B: 160, A: 255})
 		}
 	}
+	return img
+}
+
+// imageServer serves a solid PNG of the requested size and counts requests.
+func imageServer(t *testing.T, width, height int, hits *atomic.Int32) *httptest.Server {
+	t.Helper()
+	img := solidImage(width, height)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if hits != nil {
 			hits.Add(1)
@@ -172,6 +191,85 @@ func TestGetAggregatedMovieImageSkipsCandidatesWithoutArtwork(t *testing.T) {
 	}
 	if got.Bounds().Dx() < 300 {
 		t.Fatalf("width = %d, want the remaining provider's artwork", got.Bounds().Dx())
+	}
+}
+
+// TestGetAggregatedMovieImageAsksADeadHostOnce covers the case that decides how
+// many picture sources a chain really reaches: providers share image CDNs, so a
+// host that refuses this client fails every provider on it. Walking the window
+// provider by provider without remembering that spends the budget on the same
+// CDN and never reaches the independent source behind it.
+func TestGetAggregatedMovieImageAsksADeadHostOnce(t *testing.T) {
+	var forbiddenHits atomic.Int32
+	forbidden := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forbiddenHits.Add(1)
+		http.Error(w, "hotlinking is not allowed", http.StatusForbidden)
+	}))
+	t.Cleanup(forbidden.Close)
+	large := imageServer(t, 800, 538, nil)
+	imageAggregateSharedCoverA = forbidden.URL + "/a.jpg"
+	imageAggregateSharedCoverB = forbidden.URL + "/b.jpg"
+	imageAggregateLargeCover = large.URL + "/cover.png"
+	t.Cleanup(func() {
+		imageAggregateSharedCoverA = ""
+		imageAggregateSharedCoverB = ""
+		imageAggregateLargeCover = ""
+	})
+
+	e := New(openAggregateTestDB(t))
+	got, err := e.GetAggregatedMovieImage([]providerid.ProviderID{
+		{Provider: imageAggregateSharedHostA, ID: "abp-image-5"},
+		{Provider: imageAggregateSharedHostB, ID: "abp-image-5"},
+		{Provider: imageAggregateLargeProvider, ID: "abp-image-5"},
+	}, MovieImagePrimary, -1, -1)
+	if err != nil {
+		t.Fatalf("aggregated image: %v", err)
+	}
+	if hit := forbiddenHits.Load(); hit != 1 {
+		t.Fatalf("dead host was asked %d times, want exactly 1", hit)
+	}
+	if got.Bounds().Dx() < 300 {
+		t.Fatalf("width = %d, want the independent host's artwork", got.Bounds().Dx())
+	}
+}
+
+// TestGetAggregatedMovieImageKeepsTryingAHostOnAMissingPicture is the other side
+// of the rule: a 404 is about one picture, not about the host, so the next
+// provider on that host still gets its turn.
+func TestGetAggregatedMovieImageKeepsTryingAHostOnAMissingPicture(t *testing.T) {
+	var hostHits atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hostHits.Add(1)
+		if strings.HasSuffix(r.URL.Path, "/a.jpg") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		if err := png.Encode(w, solidImage(800, 538)); err != nil {
+			t.Errorf("encode image: %v", err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	imageAggregateSharedCoverA = server.URL + "/a.jpg"
+	imageAggregateSharedCoverB = server.URL + "/b.jpg"
+	t.Cleanup(func() {
+		imageAggregateSharedCoverA = ""
+		imageAggregateSharedCoverB = ""
+	})
+
+	e := New(openAggregateTestDB(t))
+	got, err := e.GetAggregatedMovieImage([]providerid.ProviderID{
+		{Provider: imageAggregateSharedHostA, ID: "abp-image-6"},
+		{Provider: imageAggregateSharedHostB, ID: "abp-image-6"},
+	}, MovieImagePrimary, -1, -1)
+	if err != nil {
+		t.Fatalf("aggregated image: %v", err)
+	}
+	if hit := hostHits.Load(); hit != 2 {
+		t.Fatalf("host was asked %d times, want 2 (a 404 must not condemn the host)", hit)
+	}
+	if got.Bounds().Dx() < 300 {
+		t.Fatalf("width = %d, want the sibling picture on the same host", got.Bounds().Dx())
 	}
 }
 

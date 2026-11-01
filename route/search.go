@@ -107,7 +107,7 @@ func prependAggregatedCandidateWithPreference(results []*model.MovieSearchResult
 			merged.Actors = append(merged.Actors, actor)
 		}
 	}
-	for _, result := range engine.OrderByProviderPreference(results, pref.Image, searchResultProviderName) {
+	for _, result := range engine.OrderByProviderPreferences(results, pref.Images, searchResultProviderName) {
 		if result == nil {
 			continue
 		}

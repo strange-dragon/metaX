@@ -343,7 +343,7 @@ func (e *Engine) resolveAggregatedProviderIDs(number string, category routing.Ca
 	if err != nil {
 		return nil, err
 	}
-	providers = OrderByProviderPreference(providers, ActiveMergePreference().Image, func(name string) string {
+	providers = OrderByProviderPreferences(providers, ActiveMergePreference().Images, func(name string) string {
 		return name
 	})
 	// The image endpoint walks this chain from the front, so a demoted provider
@@ -380,13 +380,20 @@ func (e *Engine) resolveAggregatedProviderIDs(number string, category routing.Ca
 		}
 	}
 
+	// Sites that are not already in the catalog have to be searched, and a
+	// search costs a round trip on a site that may not carry the title at
+	// all. The window is therefore filled from the catalog first, and the
+	// searches behind it are capped: a wide window must not turn one image
+	// request into a fan-out.
+	searches := 0
 	for _, name := range primary {
-		if len(candidates) >= limit {
+		if len(candidates) >= limit || searches >= AggregateImageSearchLimit {
 			break
 		}
 		if _, done := seen[strings.ToLower(strings.TrimSpace(name))]; done {
 			continue
 		}
+		searches++
 		results, err := e.SearchMovie(number, name, false)
 		if err != nil {
 			continue
@@ -517,7 +524,7 @@ func mergeMovieInfoWithPreference(identity *model.MovieInfo, infos []*model.Movi
 	// reorder would otherwise pull a demoted source straight back to the front,
 	// which is exactly how JavDB kept winning covers.
 	imageOrder := DemoteProviders(
-		preferLargeArtwork(OrderByProviderPreference(infos, pref.Image, movieInfoProviderName)),
+		preferLargeArtwork(OrderByProviderPreferences(infos, pref.Images, movieInfoProviderName)),
 		ActiveArtworkLastResort(),
 		movieInfoProviderName,
 	)

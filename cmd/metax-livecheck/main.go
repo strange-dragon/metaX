@@ -99,6 +99,7 @@ func main() {
 		conc      = flag.Int("concurrency", 4, "how many providers to probe at once")
 		egress    = flag.Bool("egress", false, "print the public egress address, ASN and country, then exit")
 		search    = flag.Bool("search", false, "probe the number-search path instead of the detail path")
+		artwork   = flag.Bool("artwork", false, "probe the artwork path: download each provider's best picture and report its host and size")
 	)
 	flag.Parse()
 
@@ -144,6 +145,10 @@ func main() {
 	}
 
 	_ = engine.DefaultEngineName // keep engine import for provider registration
+
+	if *artwork {
+		os.Exit(runArtworkProbe(ctx, factories, selected, *id, *timeout, *conc))
+	}
 
 	results := make([]result, len(selected))
 	var wg sync.WaitGroup
@@ -226,30 +231,17 @@ func probe(ctx context.Context, factory mt.MovieFactory, name, override string, 
 		return res
 	}
 
-	p := factory()
+	p, err := newProvider(factory, timeout)
+	if err != nil {
+		res.stage = "proxy"
+		res.err = err
+		return res
+	}
 	// Providers that fall back to Chromium own a browser process; closing it
 	// keeps a probe run from leaving stray Chrome instances behind.
 	if closer, ok := p.(io.Closer); ok {
 		defer func() { _ = closer.Close() }()
 	}
-	if setter, ok := p.(mt.RequestTimeoutSetter); ok {
-		setter.SetRequestTimeout(timeout)
-	}
-	if setter, ok := p.(mt.ProxySetter); ok && os.Getenv("METAX_PROVIDER_PROXY") != "" {
-		if err := setter.SetProxy(os.Getenv("METAX_PROVIDER_PROXY")); err != nil {
-			res.stage = "proxy"
-			res.err = err
-			return res
-		}
-	}
-	if setter, ok := p.(interface{ SetCookies(string) error }); ok && os.Getenv("METAX_PROVIDER_COOKIES") != "" {
-		_ = setter.SetCookies(os.Getenv("METAX_PROVIDER_COOKIES"))
-	}
-	// Measure what the deployment would do, not what this machine can do with a
-	// browser. `METAX_BROWSER_MODE=off metax-livecheck -providers javlibrary`
-	// therefore answers the only question that matters when buying a proxy:
-	// does this egress pass Cloudflare without Chromium?
-	applyBrowserMode(p)
 
 	done := make(chan error, 1)
 	go func() {
@@ -301,6 +293,30 @@ func probe(ctx context.Context, factory mt.MovieFactory, name, override string, 
 		res.err = errors.New("probe timed out")
 	}
 	return res
+}
+
+// newProvider builds a provider the way the server would: same timeout, same
+// proxy, same cookies, same browser decision. Both the metadata probe and the
+// artwork probe go through it so a result here describes the deployment.
+func newProvider(factory mt.MovieFactory, timeout time.Duration) (mt.MovieProvider, error) {
+	p := factory()
+	if setter, ok := p.(mt.RequestTimeoutSetter); ok {
+		setter.SetRequestTimeout(timeout)
+	}
+	if setter, ok := p.(mt.ProxySetter); ok && os.Getenv("METAX_PROVIDER_PROXY") != "" {
+		if err := setter.SetProxy(os.Getenv("METAX_PROVIDER_PROXY")); err != nil {
+			return p, err
+		}
+	}
+	if setter, ok := p.(interface{ SetCookies(string) error }); ok && os.Getenv("METAX_PROVIDER_COOKIES") != "" {
+		_ = setter.SetCookies(os.Getenv("METAX_PROVIDER_COOKIES"))
+	}
+	// Measure what the deployment would do, not what this machine can do with a
+	// browser. `METAX_BROWSER_MODE=off metax-livecheck -providers javlibrary`
+	// therefore answers the only question that matters when buying a proxy:
+	// does this egress pass Cloudflare without Chromium?
+	applyBrowserMode(p)
+	return p, nil
 }
 
 // runURLCheck reports how the shared fetch layer behaves for one URL: which

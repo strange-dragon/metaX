@@ -25,7 +25,7 @@ func TestMergePrefersArtworkFromASourceThatHasALargeVariant(t *testing.T) {
 		BigCoverURL: "https://rich.example/cover-1600.jpg",
 	}
 
-	got := mergeMovieInfoWithPreference(identity, []*model.MovieInfo{identity, rich}, MergePreference{Image: "ThumbOnly"})
+	got := mergeMovieInfoWithPreference(identity, []*model.MovieInfo{identity, rich}, MergePreference{Images: []string{"ThumbOnly"}})
 	if got.CoverURL != rich.CoverURL {
 		t.Fatalf("cover = %q, want the source with a distinct large variant (%q)", got.CoverURL, rich.CoverURL)
 	}
@@ -50,7 +50,7 @@ func TestMergeKeepsPreferenceOrderWhenNoSourceHasALargerCopy(t *testing.T) {
 		BigCoverURL: "https://other.example/cover.jpg",
 	}
 
-	got := mergeMovieInfoWithPreference(preferred, []*model.MovieInfo{other, preferred}, MergePreference{Image: "Preferred"})
+	got := mergeMovieInfoWithPreference(preferred, []*model.MovieInfo{other, preferred}, MergePreference{Images: []string{"Preferred"}})
 	if got.CoverURL != preferred.CoverURL {
 		t.Fatalf("cover = %q, want the preferred source %q", got.CoverURL, preferred.CoverURL)
 	}
@@ -71,7 +71,7 @@ func TestMergeKeepsPreferredSourceWhenItAlsoHasALargeVariant(t *testing.T) {
 		BigCoverURL: "https://other.example/big.jpg",
 	}
 
-	got := mergeMovieInfoWithPreference(preferred, []*model.MovieInfo{other, preferred}, MergePreference{Image: "Preferred"})
+	got := mergeMovieInfoWithPreference(preferred, []*model.MovieInfo{other, preferred}, MergePreference{Images: []string{"Preferred"}})
 	if got.CoverURL != preferred.CoverURL {
 		t.Fatalf("cover = %q, want the preferred source %q", got.CoverURL, preferred.CoverURL)
 	}
@@ -100,7 +100,7 @@ func TestMergeUsesJavDBArtworkOnlyAsLastResort(t *testing.T) {
 
 	got := mergeMovieInfoWithPreference(javdb, []*model.MovieInfo{javdb, other}, MergePreference{
 		Detail: "JavDB",
-		Image:  "JavDB",
+		Images: []string{"JavDB"},
 	})
 	if got.CoverURL != other.CoverURL {
 		t.Fatalf("cover = %q, want the non-JavDB source %q", got.CoverURL, other.CoverURL)
@@ -130,7 +130,7 @@ func TestMergeFallsBackToJavDBArtworkWhenNoOtherSourceHasOne(t *testing.T) {
 
 	got := mergeMovieInfoWithPreference(javdb, []*model.MovieInfo{javdb, bare}, MergePreference{
 		Detail: "JavDB",
-		Image:  "Bare",
+		Images: []string{"Bare"},
 	})
 	if got.CoverURL != javdb.CoverURL {
 		t.Fatalf("cover = %q, want the JavDB fallback %q", got.CoverURL, javdb.CoverURL)

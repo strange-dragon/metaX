@@ -2,6 +2,7 @@ package engine
 
 import (
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -41,13 +42,14 @@ func unsetEnvForTest(t *testing.T, key string) {
 	})
 }
 
-func TestActiveMergePreferenceDefaultsToJav321ArtworkAndJavDBMetadata(t *testing.T) {
+func TestActiveMergePreferenceDefaultsToTheArtworkChainAndJavDBMetadata(t *testing.T) {
 	unsetEnvForTest(t, EnvMergeImageProvider)
 	unsetEnvForTest(t, EnvMergeDetailProvider)
 
 	got := ActiveMergePreference()
-	if got.Image != "Jav321" || got.Detail != "JavDB" {
-		t.Fatalf("defaults = %+v, want image Jav321 and detail JavDB", got)
+	want := []string{"Jav321", "JavBus", "Airav", "7MMTV"}
+	if !reflect.DeepEqual(got.Images, want) || got.Detail != "JavDB" {
+		t.Fatalf("defaults = %+v, want images %v and detail JavDB", got, want)
 	}
 }
 
@@ -56,13 +58,14 @@ func TestActiveMergePreferenceAcceptsOverridesAndOff(t *testing.T) {
 		name       string
 		image      string
 		detail     string
-		wantImage  string
+		wantImages []string
 		wantDetail string
 	}{
-		{name: "explicit providers", image: "JavBus", detail: "JavDb", wantImage: "JavBus", wantDetail: "JavDb"},
-		{name: "route keyword disables", image: "route", detail: "default", wantImage: "", wantDetail: ""},
-		{name: "off keyword disables", image: "off", detail: "none", wantImage: "", wantDetail: ""},
-		{name: "empty value disables", image: "", detail: "", wantImage: "", wantDetail: ""},
+		{name: "explicit providers", image: "JavBus", detail: "JavDb", wantImages: []string{"JavBus"}, wantDetail: "JavDb"},
+		{name: "artwork chain keeps its order", image: "JavBus, Airav ,7MMTV", detail: "JavDB", wantImages: []string{"JavBus", "Airav", "7MMTV"}, wantDetail: "JavDB"},
+		{name: "route keyword disables", image: "route", detail: "default", wantImages: nil, wantDetail: ""},
+		{name: "off keyword disables", image: "off", detail: "none", wantImages: nil, wantDetail: ""},
+		{name: "empty value disables", image: "", detail: "", wantImages: nil, wantDetail: ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,8 +73,8 @@ func TestActiveMergePreferenceAcceptsOverridesAndOff(t *testing.T) {
 			t.Setenv(EnvMergeDetailProvider, tc.detail)
 
 			got := ActiveMergePreference()
-			if got.Image != tc.wantImage || got.Detail != tc.wantDetail {
-				t.Fatalf("preference = %+v, want image %q detail %q", got, tc.wantImage, tc.wantDetail)
+			if !reflect.DeepEqual(got.Images, tc.wantImages) || got.Detail != tc.wantDetail {
+				t.Fatalf("preference = %+v, want images %v detail %q", got, tc.wantImages, tc.wantDetail)
 			}
 		})
 	}
@@ -100,7 +103,7 @@ func TestMergeMovieInfoWithPreferenceSplitsArtworkFromMetadata(t *testing.T) {
 	}
 
 	got := mergeMovieInfoWithPreference(identity, routeOrder, MergePreference{
-		Image: "Jav321", Detail: "JavDB",
+		Images: []string{"Jav321"}, Detail: "JavDB",
 	})
 
 	// Metadata follows the detail preference even though another provider
@@ -145,7 +148,7 @@ func TestMergeMovieInfoWithPreferenceFallsBackToRouteOrder(t *testing.T) {
 	// Jav321 did not answer for this title, so both passes must fall back to
 	// route order instead of leaving the fields empty.
 	got := mergeMovieInfoWithPreference(identity, routeOrder, MergePreference{
-		Image: "Jav321", Detail: "Jav321",
+		Images: []string{"Jav321"}, Detail: "Jav321",
 	})
 	if got.CoverURL != "https://fanza.invalid/cover.jpg" || got.ThumbURL != "https://fanza.invalid/thumb.jpg" {
 		t.Fatalf("artwork = %q / %q, want route order fallback", got.CoverURL, got.ThumbURL)

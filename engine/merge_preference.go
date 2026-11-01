@@ -15,9 +15,18 @@ import (
 // metadata is fine), whereas text metadata benefits from the provider with the
 // most complete catalogue entry.
 type MergePreference struct {
-	// Image prefers this provider for ThumbURL, BigThumbURL, CoverURL,
-	// BigCoverURL and PreviewImages.
-	Image string
+	// Images lists, in order, the providers whose artwork wins: the first one
+	// that actually published a picture supplies it, and the rest are the
+	// fallbacks tried before route order takes over.
+	//
+	// It is a list rather than a single name because artwork is the field
+	// where one provider routinely has nothing: a site may carry the title and
+	// still serve no cover, or serve it from a CDN that refuses this client.
+	// Naming the sources that do publish a distinct picture — and letting them
+	// come before the sites that only carry metadata — is what makes the image
+	// chain reach a picture instead of walking a list of sites that all share
+	// one unreachable image host.
+	Images []string
 	// Detail prefers this provider for Title, Summary, Director, Actors,
 	// Genres, Maker, Label, Series and the other scalar metadata.
 	Detail string
@@ -33,12 +42,22 @@ const (
 	EnvArtworkLastResort = "METAX_ARTWORK_LAST_RESORT"
 )
 
-// Defaults match the deployment these were tuned for: Jav321 serves artwork
-// from the DMM picture CDN, which stays reachable where JavDB's image host is
-// not, while JavDB carries the most complete Chinese metadata for the same
-// catalog number.
+// Defaults match the deployment these were tuned for. The image list names the
+// sources that publish a picture on a host of their own, in the order a live
+// probe found them reliable:
+//
+//   - Jav321 serves the DMM picture CDN, which stays reachable where JavDB's
+//     image host does not.
+//   - JavBus serves its own 800px artwork from its own host, so it answers when
+//     DMM does not.
+//   - Airav and 7MMTV cover the uncensored and Chinese catalogues, whose
+//     pictures the two sites above do not have at all.
+//
+// JavDB carries the most complete Chinese metadata for the same catalog number,
+// which is why it stays the detail preference while its hotlink-protected
+// artwork is demoted to the end of the chain.
 const (
-	defaultMergeImageProvider  = "Jav321"
+	defaultMergeImageProvider  = "Jav321,JavBus,Airav,7MMTV"
 	defaultMergeDetailProvider = "JavDB"
 )
 
@@ -57,9 +76,24 @@ const defaultArtworkLastResort = "JavDB"
 // environment between calls without restarting the process.
 func ActiveMergePreference() MergePreference {
 	return MergePreference{
-		Image:  mergeProviderFromEnv(EnvMergeImageProvider, defaultMergeImageProvider),
+		Images: splitProviderList(mergeProviderFromEnv(EnvMergeImageProvider, defaultMergeImageProvider)),
 		Detail: mergeProviderFromEnv(EnvMergeDetailProvider, defaultMergeDetailProvider),
 	}
+}
+
+// splitProviderList turns a comma separated provider list into names, keeping
+// the order. An empty entry is ignored so "Jav321,,JavBus" still works.
+func splitProviderList(raw string) []string {
+	names := make([]string, 0, 4)
+	for _, part := range strings.Split(raw, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			names = append(names, part)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	return names
 }
 
 // mergeProviderFromEnv returns the configured provider name, or "" when the
@@ -136,6 +170,17 @@ func DemoteProviders[T any](items []T, providers []string, providerOf func(T) st
 		return items
 	}
 	return append(kept, last...)
+}
+
+// OrderByProviderPreferences applies a whole preference chain: the first name
+// ends up in front, the second right behind it, and everything else keeps its
+// previous order. Applying the promotions back to front is what makes the
+// listed order the resulting order.
+func OrderByProviderPreferences[T any](items []T, providers []string, providerOf func(T) string) []T {
+	for i := len(providers) - 1; i >= 0; i-- {
+		items = OrderByProviderPreference(items, providers[i], providerOf)
+	}
+	return items
 }
 
 // OrderByProviderPreference moves the entry produced by provider to the front

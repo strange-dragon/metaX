@@ -98,7 +98,7 @@ func TestPrependAggregatedCandidateUsesImageAndDetailPreferences(t *testing.T) {
 	}
 
 	got := prependAggregatedCandidateWithPreference(results, engine.MergePreference{
-		Image: "Jav321", Detail: "JavDB",
+		Images: []string{"Jav321"}, Detail: "JavDB",
 	})
 	merged := got[0]
 	if merged.Provider != engine.AggregatedProviderName || merged.ID != "ABP-123" {
